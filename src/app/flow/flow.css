@@ -6920,9 +6920,9 @@ button.chat-result-top {
 }
 
 .details-q-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-size: 13px;
 }
 

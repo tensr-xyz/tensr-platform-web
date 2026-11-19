@@ -369,7 +369,9 @@ export function guardUserText(text: string): string {
   const kept = source
     .split(/(?<=[.!?])\s+|\n+/)
     .map(part => part.trim())
-    .filter(part => part && !dropUserSentence(part));
+    .filter(Boolean)
+    .map(part => (/\bfreq:/i.test(part) ? 'Check not run for this table.' : part))
+    .filter(part => !dropUserSentence(part));
   return kept.join(' ').trim();
 }
 
@@ -380,6 +382,14 @@ function dropUserSentence(part: string): boolean {
     /\b(?:brand_duplication|banner_table|paired_brand_test|row_filters|analysis_type)\b/i.test(
       folded
     )
+  ) {
+    return true;
+  }
+  if (
+    (folded.includes('option column') || folded.includes('option columns')) &&
+    (folded.includes('passed') ||
+      (folded.includes('lists') && folded.includes('but')) ||
+      folded.includes('check that the list matches'))
   ) {
     return true;
   }

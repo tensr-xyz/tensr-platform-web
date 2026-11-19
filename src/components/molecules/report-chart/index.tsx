@@ -214,6 +214,11 @@ function AxisFrame({
 }
 
 function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
+  const maxChars = Math.max(
+    24,
+    Math.floor((layout.width - layout.padL - layout.padR) / (layout.titleSize * 0.55))
+  );
+  const shown = truncateLabel(title, maxChars);
   return (
     <text
       x={layout.padL}
@@ -221,7 +226,8 @@ function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
       fill="#3f3f46"
       style={{ fontSize: layout.titleSize, fontWeight: 500 }}
     >
-      {title}
+      {shown !== title ? <title>{title}</title> : null}
+      {shown}
     </text>
   );
 }

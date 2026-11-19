@@ -35,17 +35,32 @@ function questionLabel(title: unknown): string {
     : text || 'Question';
 }
 
+function isFrequencySummaryRow(label: string): boolean {
+  const folded = label.trim().toLowerCase();
+  return (
+    folded === 'total' ||
+    folded === 'total respondents' ||
+    folded === 'missing' ||
+    folded === 'base'
+  );
+}
+
 function categoryShares(table: Record<string, unknown>): Array<{ label: string; percent: number }> {
   const headers = Array.isArray(table.columns) ? table.columns.map(String) : [];
-  const validAt = headers.findIndex(
+  let validAt = headers.findIndex(
     header => /valid/i.test(header) && (/%|percent/i.test(header) || header.trim() === 'Valid %')
   );
+  if (validAt < 0) {
+    validAt = headers.findIndex(
+      header => /respondent/i.test(header) && (/%|percent/i.test(header) || header.includes('%'))
+    );
+  }
   const rows = Array.isArray(table.rows) ? table.rows : [];
   const shares: Array<{ label: string; percent: number }> = [];
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 2) continue;
     const label = String(row[0] ?? '').trim();
-    if (!label || label === 'Total' || label === 'Missing') continue;
+    if (!label || isFrequencySummaryRow(label)) continue;
     const percent = validAt >= 0 ? parsePercent(row[validAt]) : parsePercent(row[3] ?? row[2]);
     if (percent == null) continue;
     shares.push({ label, percent });
@@ -103,13 +118,16 @@ export function chartFromFrequencyTables(
   const shares = categoryShares(blocks[0]);
   if (!shares.length) return null;
   const question = questionLabel(blocks[0].title);
+  const multi =
+    Boolean(blocks[0].multiple_response) || blocks[0].mr_base === 'percent_of_respondents';
+  const seriesName = multi ? 'Percent of respondents' : 'Valid percent';
   return {
     kind: 'bar_grouped',
     title: question,
     x_label: question,
-    y_label: 'Valid percent',
+    y_label: seriesName,
     categories: shares.map(item => item.label),
-    series: [{ name: 'Valid percent', values: shares.map(item => item.percent) }],
+    series: [{ name: seriesName, values: shares.map(item => item.percent) }],
     weighting,
   };
 }
