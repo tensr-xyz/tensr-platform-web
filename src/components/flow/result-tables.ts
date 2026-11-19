@@ -385,7 +385,8 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
       ),
       columns: means
         ? ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n']
-        : ['Answer', 'Frequency', 'Percent'],
+        : // Frequency summary quotes valid percent of who answered, not % of all.
+          ['Answer', 'Frequency', 'Valid %'],
       rows: body,
     });
   }
@@ -941,6 +942,9 @@ type SampleBits = {
 };
 
 function wholeNumber(value: unknown): number | null {
+  // null/undefined/'' must stay absent. Number(null) is 0 and would mark an
+  // unweighted frequency base as "0 weighted".
+  if (value == null || value === '') return null;
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(number)) return null;
   return Math.round(number);
@@ -1169,6 +1173,7 @@ function sampleLine(sample: SampleBits): string {
     : sample.sawN
       ? sample.n
       : sample.total;
+  // Kish ESS only when the engine sent one. Do not invent "100%" for unweighted runs.
   if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
     const shown =
@@ -1176,8 +1181,6 @@ function sampleLine(sample: SampleBits): string {
         ? String(Math.round(sample.ess))
         : sample.ess.toFixed(1);
     parts.push(`effective base = ${shown} (${percent}%)`);
-  } else if (!sample.weight && denom) {
-    parts.push(`effective base = ${denom} (100%)`);
   }
   parts.push('95% confidence level');
   const line = `${parts.join('; ')}.`;
