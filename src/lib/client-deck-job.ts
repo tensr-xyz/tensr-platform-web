@@ -13,6 +13,8 @@ export type ClientDeckJobSnapshot = {
   message?: string;
   tables_done?: number;
   tables_total?: number;
+  n_saved_tables?: number;
+  question_tables_total?: number;
   report_pages?: number;
   error?: string;
   result?: Record<string, unknown>;
@@ -46,8 +48,21 @@ export function clientDeckProgressLine(job: ClientDeckJobSnapshot | null | undef
   const stage = String(job.stage || '');
   const done = Number(job.tables_done || 0);
   const total = Number(job.tables_total || 0);
-  if (stage === 'tables' && total > 0) return `Computing tables ${done} of ${total}`;
-  if (stage === 'narrative') return 'Writing insights';
+  const saved = Number(job.n_saved_tables || 0);
+  const savedNote =
+    saved > 0 && total > 0 && saved > total
+      ? `; ${saved} saved tables including ${saved - total} insight crosstabs`
+      : '';
+  // Prefer the API message when it already explains the plan vs saved difference.
+  const apiMessage = String(job.message || '').trim();
+  if (stage === 'tables' && total > 0) {
+    if (apiMessage && /computing tables/i.test(apiMessage)) return apiMessage;
+    return `Computing tables ${done} of ${total}${savedNote}`;
+  }
+  if (stage === 'narrative') {
+    if (apiMessage && /writing insights/i.test(apiMessage)) return apiMessage;
+    return `Writing insights${savedNote}`;
+  }
   if (stage === 'pptx') return 'Building the PowerPoint file';
   if (String(job.status || '') === 'complete') return 'Deck build complete';
   if (String(job.status || '') === 'failed') {
