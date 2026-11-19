@@ -722,7 +722,7 @@ export function ExportDialog({
               <div className="xr-pages-head">
                 <span className="xp-label">Pages to include</span>
                 {reportPages.length > 0 ? (
-                  <button
+                  <Button
                     type="button"
                     className="xr-select-all"
                     onClick={() =>
@@ -732,7 +732,7 @@ export function ExportDialog({
                     }
                   >
                     {allPagesSelected ? 'Deselect all' : 'Select all'}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               <div className="xr-page-groups" data-testid="export-page-groups">
@@ -759,7 +759,7 @@ export function ExportDialog({
                             }
                             aria-label={`Include ${group.label}`}
                           />
-                          <button
+                          <Button
                             type="button"
                             className="xr-group-toggle"
                             onClick={() =>
@@ -773,7 +773,7 @@ export function ExportDialog({
                             <span>
                               {selected} of {group.pages.length}
                             </span>
-                          </button>
+                          </Button>
                         </label>
                         {open || group.key === 'insights' || preview.length > 0 ? (
                           <div className="xr-group-pages">
@@ -797,7 +797,7 @@ export function ExportDialog({
                               </label>
                             ))}
                             {!open && hidden > 0 ? (
-                              <button
+                              <Button
                                 type="button"
                                 className="xr-more"
                                 onClick={() =>
@@ -810,7 +810,7 @@ export function ExportDialog({
                                 {group.key === 'appendix'
                                   ? 'Collapsed by default, expand to pick questions'
                                   : `+ ${hidden} more`}
-                              </button>
+                              </Button>
                             ) : null}
                           </div>
                         ) : null}
