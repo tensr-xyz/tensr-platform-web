@@ -1,0 +1,241 @@
+import { apiClient } from '@/lib/api-client';
+import type { AgentLoopResponse, AgentLoopToolResult } from '@/lib/run-agent-loop';
+
+const CLIENT_DECK_POLL_MS = 1500;
+const CLIENT_DECK_POLL_LIMIT = 90;
+
+export type ClientDeckJobSnapshot = {
+  ok?: boolean;
+  job_id?: string;
+  status?: string;
+  stage?: string;
+  message?: string;
+  tables_done?: number;
+  tables_total?: number;
+  report_pages?: number;
+  error?: string;
+  result?: Record<string, unknown>;
+};
+
+/** Pending build_client_deck result that still needs a background job poll. */
+export function pendingClientDeckFromToolResults(
+  results: AgentLoopToolResult[] | undefined
+): { datasetId: string; jobId: string; entryIndex: number } | null {
+  if (!results?.length) return null;
+  for (let index = 0; index < results.length; index += 1) {
+    const entry = results[index];
+    const result = entry?.result;
+    if (!result || typeof result !== 'object') continue;
+    const procedure = String(entry.name || result.procedure || '');
+    if (procedure !== 'build_client_deck' && result.procedure !== 'build_client_deck') continue;
+    const pending = result.pending === true || String(result.status || '') === 'pending';
+    const jobId = String(result.job_id || '').trim();
+    const datasetId = String(
+      result.dataset_id || entry.args?.dataset_id || entry.args?.input || ''
+    ).trim();
+    if (pending && jobId && datasetId) {
+      return { datasetId, jobId, entryIndex: index };
+    }
+  }
+  return null;
+}
+
+export function clientDeckProgressLine(job: ClientDeckJobSnapshot | null | undefined): string {
+  if (!job) return 'Building the deck';
+  const stage = String(job.stage || '');
+  const done = Number(job.tables_done || 0);
+  const total = Number(job.tables_total || 0);
+  if (stage === 'tables' && total > 0) return `Computing tables ${done} of ${total}`;
+  if (stage === 'narrative') return 'Writing insights';
+  if (stage === 'pptx') return 'Building the PowerPoint file';
+  if (String(job.status || '') === 'complete') return 'Deck build complete';
+  if (String(job.status || '') === 'failed') {
+    return String(job.error || job.message || 'The deck build failed.');
+  }
+  return String(job.message || 'Building the deck');
+}
+
+export async function fetchClientDeckJob(
+  datasetId: string,
+  jobId: string
+): Promise<ClientDeckJobSnapshot | null> {
+  try {
+    return await apiClient.datasets.clientDeckJob(datasetId, jobId);
+  } catch {
+    return null;
+  }
+}
+
+/** Wait until a pending client-deck job is complete or failed. */
+export async function waitForClientDeckJob(
+  datasetId: string,
+  jobId: string,
+  opts?: {
+    intervalMs?: number;
+    attempts?: number;
+    signal?: AbortSignal;
+    onProgress?: (message: string) => void;
+  }
+): Promise<ClientDeckJobSnapshot | null> {
+  const intervalMs = opts?.intervalMs ?? CLIENT_DECK_POLL_MS;
+  const attempts = opts?.attempts ?? CLIENT_DECK_POLL_LIMIT;
+  let last = '';
+  for (let i = 0; i < attempts; i += 1) {
+    if (opts?.signal?.aborted) return null;
+    const job = await fetchClientDeckJob(datasetId, jobId);
+    const status = String(job?.status || 'pending');
+    const line = clientDeckProgressLine(job);
+    if (line && line !== last) {
+      opts?.onProgress?.(line);
+      last = line;
+    }
+    if (job && status !== 'pending' && status !== 'running') return job;
+    if (i + 1 >= attempts) return job;
+    await new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, intervalMs);
+      opts?.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true }
+      );
+    });
+  }
+  return null;
+}
+
+function answerFromClientDeckResult(result: Record<string, unknown>): string {
+  const key = String((result.exports as { key?: string } | undefined)?.key || result.key || '');
+  const filename = String(
+    (result.exports as { filename?: string } | undefined)?.filename || result.filename || ''
+  );
+  const pages = result.report_pages;
+  const bits: string[] = [];
+  if (key) bits.push(`PowerPoint: ${filename || 'client-deck.pptx'}`);
+  if (typeof pages === 'number' && pages > 0) bits.push(`Report pages: ${pages}`);
+  if (typeof result.n_insights === 'number') bits.push(`Insight slides: ${result.n_insights}`);
+  if (typeof result.n_questions === 'number') {
+    bits.push(`Appendix questions: ${result.n_questions}`);
+  }
+  if (bits.length) {
+    bits.push('Open the Report tab to edit the pages.');
+    return bits.join('\n');
+  }
+  return String(result.message || result.error || 'The PowerPoint file could not be built.');
+}
+
+/**
+ * If the loop returned a pending client-deck job, keep polling until the file
+ * exists (or the job fails). Never invent a PowerPoint line without a key.
+ */
+export async function resolvePendingClientDeckInResponse(
+  response: AgentLoopResponse,
+  opts?: {
+    datasetId?: string | null;
+    signal?: AbortSignal;
+    onProgress?: (step: string, message: string) => void;
+  }
+): Promise<AgentLoopResponse> {
+  const found = pendingClientDeckFromToolResults(response.tool_results);
+  if (!found) return response;
+  const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
+  if (!datasetId) return response;
+
+  const job = await waitForClientDeckJob(datasetId, found.jobId, {
+    signal: opts?.signal,
+    onProgress: message => opts?.onProgress?.('build_client_deck', message),
+  });
+  if (!job) return response;
+
+  const results = [...(response.tool_results || [])];
+  const entry = { ...(results[found.entryIndex] || { name: 'build_client_deck' }) };
+  const prior = { ...(entry.result || {}) };
+
+  if (String(job.status || '') === 'failed') {
+    const message = String(job.error || job.message || 'The deck build failed.');
+    entry.result = {
+      ...prior,
+      ok: false,
+      pending: false,
+      status: 'failed',
+      message,
+      answer_markdown: message,
+      report_pages: job.report_pages ?? prior.report_pages,
+    };
+    results[found.entryIndex] = entry;
+    return {
+      ...response,
+      answer_markdown: message,
+      tool_results: results,
+    };
+  }
+
+  if (String(job.status || '') !== 'complete' || !job.result) {
+    const line = clientDeckProgressLine(job);
+    const pages = job.report_pages;
+    const answer = [
+      line,
+      typeof pages === 'number' && pages > 0 ? `Report pages: ${pages}` : '',
+      'Report pages already saved will stay. Ask me to continue when you want the PowerPoint file.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    entry.result = {
+      ...prior,
+      ok: true,
+      pending: true,
+      status: 'pending',
+      progress_message: line,
+      answer_markdown: answer,
+      report_pages: pages ?? prior.report_pages,
+      deliver_exports: false,
+    };
+    delete (entry.result as { exports?: unknown }).exports;
+    results[found.entryIndex] = entry;
+    return { ...response, answer_markdown: answer, tool_results: results };
+  }
+
+  const payload = job.result;
+  const key = String(payload.key || '').trim();
+  const filename = String(payload.filename || 'client-deck.pptx');
+  const merged: Record<string, unknown> = {
+    ...prior,
+    ...payload,
+    ok: true,
+    pending: false,
+    status: 'complete',
+    procedure: 'build_client_deck',
+    deliver_exports: Boolean(key),
+    job_id: found.jobId,
+  };
+  if (key) {
+    merged.exports = {
+      filename,
+      key,
+      expires_in: Number(payload.expires_in || 900),
+      media_type: String(
+        payload.media_type ||
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      ),
+      ...(payload.export_id ? { export_id: String(payload.export_id) } : {}),
+    };
+  } else {
+    delete merged.exports;
+  }
+  merged.answer_markdown = answerFromClientDeckResult(merged);
+  entry.result = merged;
+  const patched: AgentLoopToolResult & {
+    downloads?: Array<{ filename: string; key: string; expires: number }>;
+  } = { ...entry };
+  if (key) {
+    patched.downloads = [{ filename, key, expires: Number(payload.expires_in || 900) }];
+  }
+  results[found.entryIndex] = patched;
+  return {
+    ...response,
+    answer_markdown: String(merged.answer_markdown),
+    tool_results: results,
+  };
+}
