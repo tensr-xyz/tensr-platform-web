@@ -122,4 +122,40 @@ describe('client-deck-job', () => {
     expect(out.answer_markdown || '').not.toContain('PowerPoint:');
     expect(out.tool_results?.[0]?.result?.pending).toBe(true);
   });
+
+  it('failed jobs with saved tables ask to continue and resume', async () => {
+    clientDeckJob.mockResolvedValueOnce({
+      status: 'failed',
+      stage: 'tables',
+      tables_done: 15,
+      tables_total: 31,
+      error: 'The deck build stopped before it finished',
+      report_pages: 12,
+    });
+
+    const out = await resolvePendingClientDeckInResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: 'Computing tables 15 of 31',
+        tool_results: [
+          {
+            name: 'build_client_deck',
+            result: {
+              pending: true,
+              job_id: 'job-f',
+              dataset_id: 'ds-f',
+            },
+          },
+        ],
+      },
+      { datasetId: 'ds-f' }
+    );
+
+    expect(out.answer_markdown || '').toMatch(/continue/i);
+    expect(out.answer_markdown || '').toMatch(/resume/i);
+    expect(out.answer_markdown || '').not.toContain('PowerPoint:');
+    expect(out.tool_results?.[0]?.result?.ok).toBe(false);
+    expect(out.tool_results?.[0]?.result?.tables_done).toBe(15);
+  });
 });

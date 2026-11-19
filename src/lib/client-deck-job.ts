@@ -2,7 +2,8 @@ import { apiClient } from '@/lib/api-client';
 import type { AgentLoopResponse, AgentLoopToolResult } from '@/lib/run-agent-loop';
 
 const CLIENT_DECK_POLL_MS = 1500;
-const CLIENT_DECK_POLL_LIMIT = 90;
+/** ~5 minutes: multi-chunk table builds on the 180s worker need room to finish. */
+const CLIENT_DECK_POLL_LIMIT = 200;
 
 export type ClientDeckJobSnapshot = {
   ok?: boolean;
@@ -154,7 +155,13 @@ export async function resolvePendingClientDeckInResponse(
   const prior = { ...(entry.result || {}) };
 
   if (String(job.status || '') === 'failed') {
-    const message = String(job.error || job.message || 'The deck build failed.');
+    let message = String(job.error || job.message || 'The deck build failed.');
+    const tablesDone = Number(job.tables_done || 0);
+    if (tablesDone > 0 && !/continue/i.test(message)) {
+      message = `${message.replace(/\.\s*$/, '')}. Ask me to continue to resume from the saved tables.`;
+    } else if (!/continue/i.test(message)) {
+      message = `${message.replace(/\.\s*$/, '')}. Ask me to continue to try again.`;
+    }
     entry.result = {
       ...prior,
       ok: false,
@@ -163,6 +170,8 @@ export async function resolvePendingClientDeckInResponse(
       message,
       answer_markdown: message,
       report_pages: job.report_pages ?? prior.report_pages,
+      tables_done: job.tables_done ?? prior.tables_done,
+      tables_total: job.tables_total ?? prior.tables_total,
     };
     results[found.entryIndex] = entry;
     return {
