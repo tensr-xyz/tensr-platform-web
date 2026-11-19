@@ -93,6 +93,58 @@ describe('picker columns', () => {
     expect(outline[0].columns).toEqual(['q_6_1', 'q_6_2', 'q_6_3']);
   });
 
+  it('keeps questionnaire order and groups open-end boxes as one open question', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'region', label: 'Region' },
+        {
+          name: 'q_12_1',
+          label: 'Can you share some of your favourite sources - 1',
+          type: 'string',
+        },
+        {
+          name: 'q_12_2',
+          label: 'Can you share some of your favourite sources - 2',
+          type: 'string',
+        },
+        {
+          name: 'q_12_3',
+          label: 'Can you share some of your favourite sources - 3',
+          type: 'string',
+        },
+        { name: 'q_9_1_1', label: 'Source A - Price' },
+        { name: 'q_9_1_2', label: 'Source A - Speed' },
+        { name: 'q_9_2_1', label: 'Source B - Price' },
+        { name: 'q_9_2_2', label: 'Source B - Speed' },
+      ],
+      [
+        {
+          id: 'q_9',
+          name: 'Sources grid',
+          label: 'Sources grid',
+          kind: 'grid',
+          columns: ['q_9_1_1', 'q_9_1_2', 'q_9_2_1', 'q_9_2_2'],
+        },
+        {
+          id: 'q_12',
+          name: 'Can you share some of your favourite sources',
+          label: 'Can you share some of your favourite sources',
+          kind: 'group',
+          structure: 'open_end',
+          columns: ['q_12_1', 'q_12_2', 'q_12_3'],
+        },
+      ],
+      { kinds: { region: 'single' } }
+    );
+    expect(outline.map(item => item.kind)).toEqual(['single', 'open', 'grid']);
+    expect(outline.map(item => item.label)).toEqual([
+      'Region',
+      'Can you share some of your favourite sources',
+      'Sources grid',
+    ]);
+    expect(outline[1].columns).toEqual(['q_12_1', 'q_12_2', 'q_12_3']);
+  });
+
   it('offers coded open ends by their open-end name', () => {
     const { themeColumns } = jest.requireActual('./flow-columns');
     expect(
