@@ -51,6 +51,15 @@ describe('client-deck-job', () => {
     expect(clientDeckProgressLine({ status: 'running', stage: 'narrative' })).toBe(
       'Writing insights'
     );
+    expect(
+      clientDeckProgressLine({
+        status: 'running',
+        stage: 'tables',
+        tables_done: 5,
+        tables_total: 23,
+        n_saved_tables: 30,
+      })
+    ).toBe('Computing tables 5 of 23; 30 saved tables including 7 insight crosstabs');
   });
 
   it('resolves a completed job into a download without inventing a file when missing', async () => {
