@@ -4960,6 +4960,7 @@ function ReportScreen({
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
+        let openFailed = false;
         const opened = liveRows.length
           ? await flowJson<{
               tables?: {
@@ -4976,7 +4977,11 @@ function ReportScreen({
                   dataset_id: row.dataset_id,
                 })),
               }),
-            }).catch(() => null)
+              signal: AbortSignal.timeout(45_000),
+            }).catch(() => {
+              openFailed = true;
+              return null;
+            })
           : { tables: [] };
         if (!live) return;
         const staleFromOpen = new Set(
@@ -5001,7 +5006,9 @@ function ReportScreen({
         const settled = await loadTablesSettled(rows, row => {
           const cached = byId.get(row.id);
           if (cached) return Promise.resolve(cached);
-          return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`);
+          return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`, {
+            signal: AbortSignal.timeout(30_000),
+          });
         });
         if (!live) return;
         const ready = settled.ready.map(({ row, detail }) => {
@@ -5018,6 +5025,18 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
+        // A failed tables/open with nothing else to show must not leave a skeleton.
+        if (
+          liveRows.length > 0 &&
+          ready.length === 0 &&
+          (openFailed || settled.failed.length > 0)
+        ) {
+          throw new Error(
+            openFailed
+              ? 'Could not open saved tables. Try again.'
+              : 'Could not load saved tables. Try again.'
+          );
+        }
         setSpecs(
           ready.map(row => ({
             id: row.id,
@@ -5417,6 +5436,17 @@ function ReportScreen({
     return (
       <section className="report-page">
         <p className="flow-error">{error || 'Could not load this report.'}</p>
+        <Button
+          className="flow-btn"
+          type="button"
+          onClick={() => {
+            setError('');
+            setPhase('loading');
+            setRefreshKey(key => key + 1);
+          }}
+        >
+          Try again
+        </Button>
       </section>
     );
   }

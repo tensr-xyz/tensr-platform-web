@@ -263,6 +263,7 @@ export async function watchClientDeckJobInBackground(
   );
   if (lastPages > 0) opts?.onReportPages?.(lastPages);
 
+  let lastProgressKey = '';
   const job = await waitForClientDeckJob(datasetId, found.jobId, {
     signal: opts?.signal,
     onProgress: message => {
@@ -270,9 +271,23 @@ export async function watchClientDeckJobInBackground(
     },
     onJob: snapshot => {
       const pages = Number(snapshot.report_pages || 0);
-      if (pages > lastPages) {
+      const progressKey = [
+        String(snapshot.status || ''),
+        String(snapshot.stage || ''),
+        String(snapshot.tables_done || 0),
+        String(snapshot.tables_total || 0),
+        String(pages),
+        String(snapshot.message || ''),
+      ].join('|');
+      const pagesGrew = pages > lastPages;
+      if (pagesGrew) {
         lastPages = pages;
         opts?.onReportPages?.(pages);
+      }
+      // Refresh chat whenever progress moves — not only when Report pages grow.
+      // Otherwise a silent 0/0 start never updates the turn until the poll ends.
+      if (pagesGrew || progressKey !== lastProgressKey) {
+        lastProgressKey = progressKey;
         latest = applyClientDeckJobSnapshot(response, snapshot);
         opts?.onUpdate?.(latest);
       }

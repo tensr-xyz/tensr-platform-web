@@ -256,4 +256,60 @@ describe('client-deck-job', () => {
         ?.result?.pending
     ).toBe(true);
   });
+
+  it('background watch updates chat when tables_total appears with zero report pages', async () => {
+    clientDeckJob
+      .mockResolvedValueOnce({
+        status: 'running',
+        stage: 'tables',
+        tables_done: 0,
+        tables_total: 0,
+        message: 'Computing tables',
+        report_pages: 0,
+      })
+      .mockResolvedValueOnce({
+        status: 'running',
+        stage: 'tables',
+        tables_done: 0,
+        tables_total: 7,
+        message: 'Computing tables 0 of 7',
+        report_pages: 0,
+      })
+      .mockResolvedValueOnce({
+        status: 'failed',
+        stage: 'tables',
+        tables_done: 0,
+        tables_total: 7,
+        error: 'The deck build never started computing tables',
+        report_pages: 0,
+      });
+
+    const updates: string[] = [];
+    const pending = {
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Starting the deck build',
+      tool_results: [
+        {
+          name: 'build_client_deck',
+          result: {
+            pending: true,
+            job_id: 'job-zero',
+            dataset_id: 'ds-zero',
+            procedure: 'build_client_deck',
+            report_pages: 0,
+          },
+        },
+      ],
+    };
+
+    const out = await watchClientDeckJobInBackground(pending, {
+      datasetId: 'ds-zero',
+      onUpdate: next => updates.push(String(next.answer_markdown || '')),
+    });
+
+    expect(updates.some(line => /Computing tables 0 of 7/.test(line))).toBe(true);
+    expect(out.answer_markdown || '').toMatch(/continue/i);
+    expect(out.answer_markdown || '').not.toContain('PowerPoint:');
+  });
 });
