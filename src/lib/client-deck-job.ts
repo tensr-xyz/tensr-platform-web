@@ -128,8 +128,9 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
 }
 
 /**
- * If the loop returned a pending client-deck job, keep polling until the file
- * exists (or the job fails). Never invent a PowerPoint line without a key.
+ * If the loop returned a pending client-deck job, check once (or briefly) and
+ * return. Do not hold the chat turn for minutes — a stuck job must not block
+ * follow-up questions. Ask the user to continue when the file is ready.
  */
 export async function resolvePendingClientDeckInResponse(
   response: AgentLoopResponse,
@@ -137,6 +138,8 @@ export async function resolvePendingClientDeckInResponse(
     datasetId?: string | null;
     signal?: AbortSignal;
     onProgress?: (step: string, message: string) => void;
+    /** When true, poll until complete (Report tab / resume). Chat turns stay quick. */
+    waitForComplete?: boolean;
   }
 ): Promise<AgentLoopResponse> {
   const found = pendingClientDeckFromToolResults(response.tool_results);
@@ -144,10 +147,18 @@ export async function resolvePendingClientDeckInResponse(
   const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
   if (!datasetId) return response;
 
-  const job = await waitForClientDeckJob(datasetId, found.jobId, {
-    signal: opts?.signal,
-    onProgress: message => opts?.onProgress?.('build_client_deck', message),
-  });
+  const job = opts?.waitForComplete
+    ? await waitForClientDeckJob(datasetId, found.jobId, {
+        signal: opts?.signal,
+        onProgress: message => opts?.onProgress?.('build_client_deck', message),
+      })
+    : await waitForClientDeckJob(datasetId, found.jobId, {
+        signal: opts?.signal,
+        // One quick look so a finished job still resolves; otherwise return pending.
+        attempts: 2,
+        intervalMs: 400,
+        onProgress: message => opts?.onProgress?.('build_client_deck', message),
+      });
   if (!job) return response;
 
   const results = [...(response.tool_results || [])];

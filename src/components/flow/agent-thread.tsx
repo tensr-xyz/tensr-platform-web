@@ -603,7 +603,12 @@ export function useAgentThread({
         return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
-        shown(() => setStatus(message));
+        // Clear the live panel so a failed follow-up does not keep an old deck preview.
+        shown(() => {
+          setStatus(message);
+          setTurn(null);
+          setPlan(null);
+        });
         publish({ running: false, status: message });
         return true;
       } finally {

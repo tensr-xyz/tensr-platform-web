@@ -276,6 +276,7 @@ export function answerResultTables(answer: string): RunTable[] {
 
 /** Shared frequency headers. A blank first cell used to shift counts under Percent. */
 const FREQUENCY_HEADERS = ['Label', 'Count', '%', 'Valid %', 'Cumulative %'];
+const MR_FREQUENCY_HEADERS = ['Label', 'Count', '% of respondents'];
 
 function looksLikeFrequencyHeaders(columns: string[]): boolean {
   if (columns.length < 2) return false;
@@ -296,8 +297,15 @@ function looksLikeFrequencyHeaders(columns: string[]): boolean {
   return false;
 }
 
-function normalizeFrequencyColumns(columns: string[]): string[] {
+function normalizeFrequencyColumns(
+  columns: string[],
+  opts?: { multipleResponse?: boolean }
+): string[] {
   if (!looksLikeFrequencyHeaders(columns)) return columns;
+  if (opts?.multipleResponse) {
+    if (columns.some(column => /respondent/i.test(column))) return [...columns];
+    return [...MR_FREQUENCY_HEADERS];
+  }
   if (columns.length >= FREQUENCY_HEADERS.length) return [...FREQUENCY_HEADERS];
   return FREQUENCY_HEADERS.slice(0, Math.max(columns.length, 2));
 }
@@ -305,7 +313,8 @@ function normalizeFrequencyColumns(columns: string[]): string[] {
 /** Frequency % / Valid % / Cumulative %, or a header that names percent/share. Not "% of base". */
 function isPercentHeader(column: string): boolean {
   const name = column.trim().toLowerCase();
-  if (name.includes('percent') || name.includes('share')) return true;
+  if (name.includes('percent') || name.includes('share') || name.includes('respondent'))
+    return true;
   return name === '%' || name === 'valid %' || name === 'cumulative %' || /(?:^|\s)%$/.test(name);
 }
 
@@ -319,14 +328,18 @@ function asTable(value: unknown): RunTable | null {
     variable_names?: unknown;
     note?: unknown;
     superseded?: unknown;
+    multiple_response?: unknown;
+    mr_base?: unknown;
   };
   if (record.superseded) return null;
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const titleText = cell(record.title);
   const title = questionTitle(titleText);
+  const multipleResponse =
+    Boolean(record.multiple_response) || record.mr_base === 'percent_of_respondents';
   if (looksLikeFrequencyHeaders(columns) || /^frequency table:/i.test(titleText)) {
-    columns = normalizeFrequencyColumns(columns);
+    columns = normalizeFrequencyColumns(columns, { multipleResponse });
   }
   const percentAt = columns.map(isPercentHeader);
   const rows = Array.isArray(record.rows)
@@ -363,7 +376,15 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
     const body: string[][] = [];
     for (const record of records) {
       const label = cell(record.label ?? record.value ?? record.variable);
-      if (!label || label === 'Total' || label === 'Missing') continue;
+      const folded = label.toLowerCase();
+      if (
+        !label ||
+        folded === 'total' ||
+        folded === 'total respondents' ||
+        folded === 'missing' ||
+        folded === 'base'
+      )
+        continue;
       body.push(
         means
           ? [

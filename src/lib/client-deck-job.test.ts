@@ -123,6 +123,42 @@ describe('client-deck-job', () => {
     expect(out.tool_results?.[0]?.result?.pending).toBe(true);
   });
 
+  it('returns pending quickly without long-polling so chat follow-ups are not blocked', async () => {
+    clientDeckJob.mockResolvedValue({
+      status: 'running',
+      stage: 'tables',
+      tables_done: 15,
+      tables_total: 31,
+      report_pages: 12,
+    });
+
+    const started = Date.now();
+    const out = await resolvePendingClientDeckInResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: 'Computing tables 15 of 31',
+        tool_results: [
+          {
+            name: 'build_client_deck',
+            result: {
+              pending: true,
+              job_id: 'job-stall',
+              dataset_id: 'ds-stall',
+              procedure: 'build_client_deck',
+            },
+          },
+        ],
+      },
+      { datasetId: 'ds-stall' }
+    );
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(clientDeckJob.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(out.tool_results?.[0]?.result?.pending).toBe(true);
+    expect(out.answer_markdown || '').toMatch(/continue/i);
+    expect(out.answer_markdown || '').not.toContain('PowerPoint:');
+  });
+
   it('failed jobs with saved tables ask to continue and resume', async () => {
     clientDeckJob.mockResolvedValueOnce({
       status: 'failed',

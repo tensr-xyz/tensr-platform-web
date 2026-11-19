@@ -191,10 +191,13 @@ export function planCategoryLabels(
     Math.round(fontSize * 0.55 * Math.min(rotChars, longest) * 0.75 + 18)
   );
 
+  // Floor so multi-select charts still show readable stems, not 2–3 letters.
+  const minChars = density === 'comfortable' ? 24 : 14;
+
   if (density === 'comfortable' || longest <= rotChars + 2) {
     return {
       rotate: true,
-      maxChars: Math.max(rotChars, density === 'comfortable' ? 24 : 12),
+      maxChars: Math.max(rotChars, minChars),
       showEvery: 1,
       padB: rotatePad,
     };
@@ -205,7 +208,7 @@ export function planCategoryLabels(
   const showEvery = Math.max(1, Math.ceil(labels.length / targetSlots));
   return {
     rotate: true,
-    maxChars: rotChars,
+    maxChars: Math.max(rotChars, minChars),
     showEvery,
     padB: rotatePad,
   };

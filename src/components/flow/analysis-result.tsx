@@ -139,12 +139,16 @@ export function AnalysisResult({
       : shownCheck === 'mismatch' || shownCheck === 'not_verified'
         ? 'R mismatch'
         : shownCheck === 'unknown'
-          ? 'R check unavailable'
+          ? 'Check not run for this table'
           : shownCheck
             ? 'Checked in R'
             : '';
   const checkDetail =
-    shownStatement && shownStatement !== 'R check unavailable.' ? ` · ${shownStatement}` : '';
+    shownCheck === 'unknown'
+      ? ''
+      : shownStatement && shownStatement !== 'R check unavailable.'
+        ? ` · ${shownStatement}`
+        : '';
   const checkNote = checkLabel ? `${checkLabel}${checkDetail}` : '';
   const leadText =
     lead && shownStatement && lead.includes(shownStatement)
