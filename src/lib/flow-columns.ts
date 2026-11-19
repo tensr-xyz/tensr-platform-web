@@ -90,10 +90,25 @@ export type OutlineQuestion = {
   measureColumn?: string;
 };
 
-/** One outline row per question: multi/grid sets collapse; admin and ids stay out. */
+export type OutlineSetWithStructure = OutlineSet & { structure?: string };
+
+/** Outline pill for a stored set: open-end boxes, grids, and multi-selects. */
+function outlineSetKind(
+  set: OutlineSetWithStructure,
+  members: string[],
+  kinds: Record<string, string>
+): string {
+  const structure = String(set.structure || '').toLowerCase();
+  if (structure === 'open_end') return 'open';
+  if (set.kind === 'grid') return 'grid';
+  if (set.kind === 'multiple_response' || set.kind === 'brand_list') return 'multi';
+  return kinds[members[0]] || 'multi';
+}
+
+/** One outline row per question in file order; sets collapse; admin and ids stay out. */
 export function questionnaireOutline(
   columns: FlowColumn[],
-  sets: OutlineSet[] = [],
+  sets: OutlineSetWithStructure[] = [],
   options: { weightName?: string; kinds?: Record<string, string> } = {}
 ): OutlineQuestion[] {
   const weightName = String(options.weightName || '').trim();
@@ -107,7 +122,7 @@ export function questionnaireOutline(
   const byName = new Map(visible.map(column => [column.name, column]));
   const covered = new Set<string>();
   const linkedText = new Set<string>();
-  const units: OutlineQuestion[] = [];
+  const setByColumn = new Map<string, { set: OutlineSetWithStructure; members: string[] }>();
 
   for (const set of sets) {
     const members = (set.columns || []).map(name => String(name)).filter(name => byName.has(name));
@@ -116,27 +131,40 @@ export function questionnaireOutline(
       if (name) linkedText.add(name);
     }
     if (members.length < 2) continue;
-    members.forEach(name => covered.add(name));
-    for (const text of set.text_columns || []) {
-      const name = String(text.column || '');
-      if (name) covered.add(name);
+    for (const name of members) {
+      if (!setByColumn.has(name)) {
+        setByColumn.set(name, { set, members });
+      }
     }
-    const kind =
-      set.kind === 'grid'
-        ? 'grid'
-        : set.kind === 'multiple_response' || set.kind === 'brand_list'
-          ? 'multi'
-          : kinds[members[0]] || 'multi';
-    units.push({
-      key: String(set.id || set.name || members[0]),
-      label: String(set.label || set.name || byName.get(members[0])?.label || members[0]),
-      kind,
-      columns: members,
-    });
   }
 
+  const units: OutlineQuestion[] = [];
   for (const column of visible) {
     if (covered.has(column.name) || linkedText.has(column.name)) continue;
+    const found = setByColumn.get(column.name);
+    if (found) {
+      if (found.members.some(name => covered.has(name))) {
+        covered.add(column.name);
+        continue;
+      }
+      found.members.forEach(name => covered.add(name));
+      for (const text of found.set.text_columns || []) {
+        const name = String(text.column || '');
+        if (name) covered.add(name);
+      }
+      units.push({
+        key: String(found.set.id || found.set.name || found.members[0]),
+        label: String(
+          found.set.label ||
+            found.set.name ||
+            byName.get(found.members[0])?.label ||
+            found.members[0]
+        ),
+        kind: outlineSetKind(found.set, found.members, kinds),
+        columns: found.members,
+      });
+      continue;
+    }
     units.push({
       key: column.name,
       label: String(column.label || column.name),

@@ -227,13 +227,38 @@ describe('result tables', () => {
       'What is your gender?',
       'Which region do you live in?',
     ]);
-    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Percent']);
+    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Valid %']);
     expect(view.tables[0].rows[0]).toEqual(['Female', '12', '60']);
     expect(view.tables[1].rows[0][2]).toBe('55.5');
     expect(view.filter).toBe('region = London');
     expect(resultFootnote(view, 'Unweighted base 191.', 'Frequencies')).toBe(
       'Unweighted base 191. · Filter: region = London · Unweighted · Frequencies'
     );
+  });
+
+  it('TEN-214: unweighted frequency bases say Unweighted, not Weighted (0 weighted)', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'frequencies',
+      statistics_block: { 'N Valid': 379, 'N Missing': 1 },
+      bases: [{ column: 'Q', unweighted: 379, weighted: null }],
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Role years',
+          columns: ['Label', 'Count', '%', 'Valid %', 'Cumulative %'],
+          rows: [
+            ['A', '153', '40.3', '40.4', '40.4'],
+            ['B', '94', '24.7', '24.8', '65.2'],
+            ['Missing', '1', '0.3', '', ''],
+            ['Total', '380', '100', '', ''],
+          ],
+        },
+      ],
+    });
+    expect(view.baseDetail).toMatch(/^Weight: Unweighted; base = 379;/);
+    expect(view.baseDetail).not.toContain('Weighted');
+    expect(view.baseDetail).not.toContain('0 weighted');
+    expect(view.baseDetail).not.toContain('effective base');
+    expect(view.weight).toBe('');
   });
 
   it('states the audience definition, the wave, and the source', () => {
