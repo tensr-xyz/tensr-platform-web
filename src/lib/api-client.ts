@@ -1148,6 +1148,20 @@ class ApiClient {
         }),
     },
 
+    clientDeckJob: (datasetId: string, jobId: string) =>
+      this.request<{
+        ok?: boolean;
+        job_id?: string;
+        status?: string;
+        stage?: string;
+        message?: string;
+        tables_done?: number;
+        tables_total?: number;
+        report_pages?: number;
+        error?: string;
+        result?: Record<string, unknown>;
+      }>(`/datasets/${datasetId}/export/client-deck/jobs/${encodeURIComponent(jobId)}`),
+
     openEnd: {
       propose: (
         datasetId: string,

@@ -7,6 +7,7 @@ export type FlowColumn = {
   measure?: string;
   measure_source?: string | null;
   role?: string | null;
+  linked_set?: string | null;
   value_labels?: Record<string, string> | null;
 };
 
@@ -116,6 +117,7 @@ export function questionnaireOutline(
   const visible = pickerColumns(columns).filter(column => {
     if (column.name === weightName || column.name.toLowerCase() === 'weight') return false;
     if (String(column.role || '').toLowerCase() === 'weight') return false;
+    if (column.linked_set) return false;
     if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
     return true;
   });
@@ -243,6 +245,7 @@ export function isIdColumn(name: string, values: unknown[] = []): boolean {
     /^(resp|respondent|record|case|response|participant|panel|user|row|serial|unique)?(id|uuid|no|number|serial)$/.test(
       key
     ) ||
+    /^(respondent|pid|psid|panelid|respid)$/.test(key) ||
     /(^|[_\s-])id$/i.test(name.trim())
   ) {
     return true;

@@ -160,7 +160,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      return await streamAgentLoop(
+      const response = await streamAgentLoop(
         {
           message: params.message,
           mode: params.mode,
@@ -187,6 +187,12 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           signal: params.signal,
         }
       );
+      const { resolvePendingClientDeckInResponse } = await import('@/lib/client-deck-job');
+      return await resolvePendingClientDeckInResponse(response, {
+        datasetId: params.datasetId,
+        signal: params.signal,
+        onProgress: (step, message) => params.onProgress?.({ type: 'progress', step, message }),
+      });
     } catch (error) {
       if (
         error instanceof Error &&

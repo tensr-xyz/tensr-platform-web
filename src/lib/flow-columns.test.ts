@@ -182,7 +182,10 @@ describe('id columns', () => {
   it('skips respondent ids by name or by every value being distinct', () => {
     const { isIdColumn } = jest.requireActual('./flow-columns');
     expect(isIdColumn('Respondent id')).toBe(true);
+    expect(isIdColumn('Respondent')).toBe(true);
     expect(isIdColumn('resp_id')).toBe(true);
+    expect(isIdColumn('pid')).toBe(true);
+    expect(isIdColumn('psid')).toBe(true);
     expect(isIdColumn('ID')).toBe(true);
     expect(isIdColumn('_row_uid')).toBe(true);
     expect(isIdColumn('serial_no')).toBe(true);
@@ -196,5 +199,51 @@ describe('id columns', () => {
         distinct.map(value => value % 5)
       )
     ).toBe(false);
+  });
+});
+
+describe('outline linked other-choice and full stems', () => {
+  it('hides id columns and linked Other Choice text from the outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'Respondent', label: 'Respondent' },
+        { name: 'pid', label: 'pid' },
+        { name: 'psid', label: 'psid' },
+        {
+          name: 'q_5',
+          label: 'Please select the profession you currently hold.',
+        },
+        {
+          name: 'q_5_text',
+          label: 'Please select the profession you currently hold. - Other Choice',
+          type: 'string',
+          linked_set: 'q_5',
+          role: 'helper',
+        },
+        {
+          name: 'q_3_1',
+          label: 'Which of the following best describes your race and ethnic background? - Asian',
+        },
+        {
+          name: 'q_3_2',
+          label: 'Which of the following best describes your race and ethnic background? - Black',
+        },
+      ],
+      [
+        {
+          id: 'q_3',
+          name: 'Which of the following best describes your race and ethnic background?',
+          label: 'Which of the following best describes your race and ethnic background?',
+          kind: 'multiple_response',
+          columns: ['q_3_1', 'q_3_2'],
+        },
+      ],
+      { kinds: { q_5: 'single' } }
+    );
+    expect(outline.map(item => item.label)).toEqual([
+      'Please select the profession you currently hold.',
+      'Which of the following best describes your race and ethnic background?',
+    ]);
+    expect(outline[1].kind).toBe('multi');
   });
 });
