@@ -30,8 +30,19 @@ function runIds(results: unknown[] | undefined): string {
   return (results || [])
     .map(item => {
       if (!item || typeof item !== 'object') return '';
-      const record = item as { run_id?: unknown; result?: { run_id?: unknown } };
-      return String(record.run_id || record.result?.run_id || '');
+      const record = item as {
+        name?: unknown;
+        run_id?: unknown;
+        result?: { run_id?: unknown; procedure?: unknown; job_id?: unknown; pending?: unknown };
+      };
+      const nested = record.result && typeof record.result === 'object' ? record.result : null;
+      const procedure = String(record.name || nested?.procedure || '');
+      // Deck progress is polled via the client-deck job endpoint; the run id is
+      // the same job id and stays pending until the worker finishes.
+      if (procedure === 'build_client_deck' || nested?.procedure === 'build_client_deck') {
+        if (nested?.pending === true || nested?.job_id) return '';
+      }
+      return String(record.run_id || nested?.run_id || '');
     })
     .filter(Boolean)
     .join('|');
