@@ -310,6 +310,7 @@ export function DetailsScreen({
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
   const [weightName, setWeightName] = useState('');
+  const [weightLabel, setWeightLabel] = useState('');
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
@@ -406,6 +407,8 @@ export function DetailsScreen({
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setWeightName('');
+      setWeightLabel('');
       return;
     }
     let cancelled = false;
@@ -443,7 +446,11 @@ export function DetailsScreen({
         }
         setKinds(kinds);
         setColumns(meta.columns || []);
-        setWeightName(meta.active_weight_column || '');
+        const activeWeight = meta.active_weight_column || '';
+        const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
+        // Audience tags show the weight by its label, never the variable code.
+        setWeightName(activeWeight);
+        setWeightLabel(String(weightColumn?.label || '').trim() || activeWeight);
       })
       .catch(() => {
         if (!cancelled) setColumns([]);
@@ -786,7 +793,7 @@ export function DetailsScreen({
                       {active.n_rows ? (
                         <span>{active.n_rows.toLocaleString('en-GB')} respondents</span>
                       ) : null}
-                      {weightName ? <span>{weightName}</span> : null}
+                      {weightName ? <span>{weightLabel || weightName}</span> : null}
                     </div>
                   ) : null}
                 </>
