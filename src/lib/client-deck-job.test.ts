@@ -1,7 +1,9 @@
 import {
+  applyClientDeckJobSnapshot,
   clientDeckProgressLine,
   pendingClientDeckFromToolResults,
   resolvePendingClientDeckInResponse,
+  watchClientDeckJobInBackground,
 } from '@/lib/client-deck-job';
 
 jest.mock('@/lib/api-client', () => ({
@@ -193,5 +195,65 @@ describe('client-deck-job', () => {
     expect(out.answer_markdown || '').not.toContain('PowerPoint:');
     expect(out.tool_results?.[0]?.result?.ok).toBe(false);
     expect(out.tool_results?.[0]?.result?.tables_done).toBe(15);
+  });
+
+  it('background watch refreshes chat and report pages when the job finishes', async () => {
+    clientDeckJob
+      .mockResolvedValueOnce({
+        status: 'running',
+        stage: 'tables',
+        tables_done: 5,
+        tables_total: 10,
+        report_pages: 4,
+      })
+      .mockResolvedValueOnce({
+        status: 'complete',
+        result: {
+          ok: true,
+          key: 'exports/excel/x/client-deck.pptx',
+          filename: 'client-deck.pptx',
+          report_pages: 12,
+          n_saved_tables: 8,
+          n_questions: 8,
+          n_insights: 4,
+        },
+      });
+
+    const pages: number[] = [];
+    const updates: string[] = [];
+    const pending = {
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Computing tables 5 of 10',
+      tool_results: [
+        {
+          name: 'build_client_deck',
+          result: {
+            pending: true,
+            job_id: 'job-watch',
+            dataset_id: 'ds-watch',
+            procedure: 'build_client_deck',
+            report_pages: 2,
+          },
+        },
+      ],
+    };
+
+    const out = await watchClientDeckJobInBackground(pending, {
+      datasetId: 'ds-watch',
+      onReportPages: n => pages.push(n),
+      onUpdate: next => updates.push(String(next.answer_markdown || '')),
+    });
+
+    expect(pages[0]).toBe(2);
+    expect(pages).toContain(4);
+    expect(pages).toContain(12);
+    expect(out.answer_markdown || '').toContain('PowerPoint: client-deck.pptx');
+    expect(out.answer_markdown || '').toContain('Saved tables: 8');
+    expect(updates.some(line => line.includes('PowerPoint:'))).toBe(true);
+    expect(
+      applyClientDeckJobSnapshot(pending, { status: 'running', report_pages: 3 }).tool_results?.[0]
+        ?.result?.pending
+    ).toBe(true);
   });
 });

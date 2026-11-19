@@ -15,6 +15,7 @@ import {
   addPage,
   applyDefaultLabels,
   copyStyles,
+  deletePage,
   documentFromPins,
   hideTableRow,
   insertDynamicText,
@@ -932,6 +933,21 @@ export function ReportEditor({
           >
             Add page
           </Button>
+          {page && document.pages.length > 1 ? (
+            <Button
+              type="button"
+              className="flow-btn report-editor-add-page"
+              onClick={() => {
+                const next = deletePage(document, page.id);
+                if (!next.pages.length) return;
+                commit(next);
+                setPageId(next.pages[0]?.id || '');
+                setSelectedId(null);
+              }}
+            >
+              Remove page
+            </Button>
+          ) : null}
         </aside>
 
         <div

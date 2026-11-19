@@ -865,6 +865,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 pendingAsk={pendingAsk}
                 onAsked={() => setPendingAsk(null)}
                 onChanged={reload}
+                onReportUpdated={() => setFindReplaceTick(tick => tick + 1)}
               />
             )}
           </div>
@@ -2513,6 +2514,7 @@ function ChatScreen({
   pendingAsk,
   onAsked,
   onChanged,
+  onReportUpdated,
 }: {
   project?: FlowProject;
   datasets: DatasetRow[];
@@ -2520,6 +2522,7 @@ function ChatScreen({
   pendingAsk?: string | null;
   onAsked?: () => void;
   onChanged?: () => void;
+  onReportUpdated?: () => void;
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
@@ -2584,6 +2587,7 @@ function ChatScreen({
     syncAddress: true,
     pendingAsk,
     onAsked,
+    onReportUpdated,
     onFinished: result => {
       // A rake / edit / stack saves a working version. Refresh so Sources lists it.
       if (toolResultsSavedWorkingVersion(result.tool_results)) onChanged?.();
@@ -5055,7 +5059,15 @@ function ReportScreen({
     return () => {
       live = false;
     };
-  }, [datasetId, writeFindings, refreshKey, projectId, reportLoadKey, reportFileKey]);
+  }, [
+    datasetId,
+    writeFindings,
+    refreshKey,
+    projectId,
+    reportLoadKey,
+    reportFileKey,
+    labelsRevision,
+  ]);
 
   const selected = specs.filter(
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0

@@ -107,6 +107,8 @@ export type AgentThreadOptions = {
   onAsked?: () => void;
   onSession?: (session: AgentChatSession) => void;
   onFinished?: (result: AgentLoopResponse) => void;
+  /** Report pages/tables changed mid-deck — bump Report reload. */
+  onReportUpdated?: () => void;
 };
 
 /** A list key. The same step name can run twice, so the index keeps the rows apart. */
@@ -197,6 +199,29 @@ function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
   return downloadsFromToolResults(entries);
 }
 
+function clientDeckStillPending(result: AgentLoopResponse): boolean {
+  return (result.tool_results || []).some(item => {
+    const payload = item.result;
+    if (!payload || typeof payload !== 'object') return false;
+    const procedure = String(item.name || payload.procedure || '');
+    if (
+      procedure !== 'build_client_deck' &&
+      String(payload.procedure || '') !== 'build_client_deck'
+    ) {
+      return false;
+    }
+    return payload.pending === true || String(payload.status || '') === 'pending';
+  });
+}
+
+function reportPagesFromResult(result: AgentLoopResponse): number {
+  for (const item of result.tool_results || []) {
+    const pages = item.result?.report_pages;
+    if (typeof pages === 'number' && pages > 0) return pages;
+  }
+  return 0;
+}
+
 export function useAgentThread({
   projectId,
   datasetId,
@@ -207,6 +232,7 @@ export function useAgentThread({
   onAsked,
   onSession,
   onFinished,
+  onReportUpdated,
 }: AgentThreadOptions) {
   const [question, setQuestion] = useState('');
   const [sent, setSent] = useState('');
@@ -256,7 +282,9 @@ export function useAgentThread({
   const openAbort = useRef<AbortController | null>(null);
   const onSessionRef = useRef(onSession);
   const onFinishedRef = useRef(onFinished);
+  const onReportUpdatedRef = useRef(onReportUpdated);
   const onAskedRef = useRef(onAsked);
+  const deckWatchAbort = useRef<AbortController | null>(null);
   const openChatRef = useRef<(sessionId: string) => void>(() => undefined);
   const reportPins = useProjectPins(projectId || '', datasetId ? [datasetId] : []);
   const reportPinsRef = useRef(reportPins);
@@ -267,6 +295,7 @@ export function useAgentThread({
   modeRef.current = mode;
   onSessionRef.current = onSession;
   onFinishedRef.current = onFinished;
+  onReportUpdatedRef.current = onReportUpdated;
   onAskedRef.current = onAsked;
 
   useEffect(() => {
@@ -275,6 +304,7 @@ export function useAgentThread({
       aliveRef.current = false;
       openToken.current += 1;
       openAbort.current?.abort();
+      deckWatchAbort.current?.abort();
     };
   }, []);
 
@@ -588,8 +618,48 @@ export function useAgentThread({
         });
         if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          if (reportPagesFromResult(result) > 0) onReportUpdatedRef.current?.();
           if (notifyFinishedTurn(result, startedAt)) {
             shown(() => setAwayNote(true));
+          }
+          if (clientDeckStillPending(result)) {
+            deckWatchAbort.current?.abort();
+            const watch = new AbortController();
+            deckWatchAbort.current = watch;
+            const watchToken = turnToken;
+            void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
+              watchClientDeckJobInBackground(result, {
+                datasetId: datasetIdRef.current,
+                signal: watch.signal,
+                onProgress: (_step, message) => {
+                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+                  shown(() => {
+                    setSteps(current =>
+                      current.includes(message) ? current : [...current, message]
+                    );
+                  });
+                },
+                onReportPages: () => {
+                  if (aliveRef.current) onReportUpdatedRef.current?.();
+                },
+                onUpdate: next => {
+                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+                  const nextAnswer = visibleTurnAnswer(
+                    next.status,
+                    keptModelAnswer('', next.answer_markdown || '')
+                  );
+                  shown(() => {
+                    setAnswer(nextAnswer);
+                    setTurn(next);
+                    setDownloads(downloadEntries(next));
+                    setNextSteps(
+                      nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
+                    );
+                  });
+                  onFinishedRef.current?.(next);
+                },
+              })
+            );
           }
         }
         publish({
@@ -734,8 +804,40 @@ export function useAgentThread({
         });
         if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          if (reportPagesFromResult(result) > 0) onReportUpdatedRef.current?.();
           if (notifyFinishedTurn(result, startedAt)) {
             shown(() => setAwayNote(true));
+          }
+          if (clientDeckStillPending(result)) {
+            deckWatchAbort.current?.abort();
+            const watch = new AbortController();
+            deckWatchAbort.current = watch;
+            const watchToken = turnToken;
+            void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
+              watchClientDeckJobInBackground(result, {
+                datasetId: datasetIdRef.current,
+                signal: watch.signal,
+                onReportPages: () => {
+                  if (aliveRef.current) onReportUpdatedRef.current?.();
+                },
+                onUpdate: next => {
+                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+                  const nextAnswer = visibleTurnAnswer(
+                    next.status,
+                    keptModelAnswer('', next.answer_markdown || '')
+                  );
+                  shown(() => {
+                    setAnswer(nextAnswer);
+                    setTurn(next);
+                    setDownloads(downloadEntries(next));
+                    setNextSteps(
+                      nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
+                    );
+                  });
+                  onFinishedRef.current?.(next);
+                },
+              })
+            );
           }
         }
         const current = liveChatRun();

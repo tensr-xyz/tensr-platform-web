@@ -76,20 +76,25 @@ export async function waitForClientDeckJob(
     attempts?: number;
     signal?: AbortSignal;
     onProgress?: (message: string) => void;
+    onJob?: (job: ClientDeckJobSnapshot) => void;
   }
 ): Promise<ClientDeckJobSnapshot | null> {
   const intervalMs = opts?.intervalMs ?? CLIENT_DECK_POLL_MS;
   const attempts = opts?.attempts ?? CLIENT_DECK_POLL_LIMIT;
   let last = '';
+  let lastPages = -1;
   for (let i = 0; i < attempts; i += 1) {
     if (opts?.signal?.aborted) return null;
     const job = await fetchClientDeckJob(datasetId, jobId);
+    if (job) opts?.onJob?.(job);
     const status = String(job?.status || 'pending');
     const line = clientDeckProgressLine(job);
     if (line && line !== last) {
       opts?.onProgress?.(line);
       last = line;
     }
+    const pages = Number(job?.report_pages || 0);
+    if (pages > lastPages) lastPages = pages;
     if (job && status !== 'pending' && status !== 'running') return job;
     if (i + 1 >= attempts) return job;
     await new Promise<void>(resolve => {
@@ -116,6 +121,9 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
   const bits: string[] = [];
   if (key) bits.push(`PowerPoint: ${filename || 'client-deck.pptx'}`);
   if (typeof pages === 'number' && pages > 0) bits.push(`Report pages: ${pages}`);
+  if (typeof result.n_saved_tables === 'number' && result.n_saved_tables > 0) {
+    bits.push(`Saved tables: ${result.n_saved_tables}`);
+  }
   if (typeof result.n_insights === 'number') bits.push(`Insight slides: ${result.n_insights}`);
   if (typeof result.n_questions === 'number') {
     bits.push(`Appendix questions: ${result.n_questions}`);
@@ -127,40 +135,13 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
   return String(result.message || result.error || 'The PowerPoint file could not be built.');
 }
 
-/**
- * If the loop returned a pending client-deck job, check once (or briefly) and
- * return. Do not hold the chat turn for minutes — a stuck job must not block
- * follow-up questions. Ask the user to continue when the file is ready.
- */
-export async function resolvePendingClientDeckInResponse(
+/** Patch a pending build_client_deck tool result from a job snapshot. */
+export function applyClientDeckJobSnapshot(
   response: AgentLoopResponse,
-  opts?: {
-    datasetId?: string | null;
-    signal?: AbortSignal;
-    onProgress?: (step: string, message: string) => void;
-    /** When true, poll until complete (Report tab / resume). Chat turns stay quick. */
-    waitForComplete?: boolean;
-  }
-): Promise<AgentLoopResponse> {
+  job: ClientDeckJobSnapshot
+): AgentLoopResponse {
   const found = pendingClientDeckFromToolResults(response.tool_results);
   if (!found) return response;
-  const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
-  if (!datasetId) return response;
-
-  const job = opts?.waitForComplete
-    ? await waitForClientDeckJob(datasetId, found.jobId, {
-        signal: opts?.signal,
-        onProgress: message => opts?.onProgress?.('build_client_deck', message),
-      })
-    : await waitForClientDeckJob(datasetId, found.jobId, {
-        signal: opts?.signal,
-        // One quick look so a finished job still resolves; otherwise return pending.
-        attempts: 2,
-        intervalMs: 400,
-        onProgress: message => opts?.onProgress?.('build_client_deck', message),
-      });
-  if (!job) return response;
-
   const results = [...(response.tool_results || [])];
   const entry = { ...(results[found.entryIndex] || { name: 'build_client_deck' }) };
   const prior = { ...(entry.result || {}) };
@@ -185,11 +166,7 @@ export async function resolvePendingClientDeckInResponse(
       tables_total: job.tables_total ?? prior.tables_total,
     };
     results[found.entryIndex] = entry;
-    return {
-      ...response,
-      answer_markdown: message,
-      tool_results: results,
-    };
+    return { ...response, answer_markdown: message, tool_results: results };
   }
 
   if (String(job.status || '') !== 'complete' || !job.result) {
@@ -258,4 +235,96 @@ export async function resolvePendingClientDeckInResponse(
     answer_markdown: String(merged.answer_markdown),
     tool_results: results,
   };
+}
+
+/**
+ * Keep polling a pending deck job in the background so chat and Report can
+ * refresh themselves without blocking the turn for follow-up questions.
+ */
+export async function watchClientDeckJobInBackground(
+  response: AgentLoopResponse,
+  opts?: {
+    datasetId?: string | null;
+    signal?: AbortSignal;
+    onProgress?: (step: string, message: string) => void;
+    onUpdate?: (next: AgentLoopResponse) => void;
+    onReportPages?: (pages: number) => void;
+  }
+): Promise<AgentLoopResponse> {
+  const found = pendingClientDeckFromToolResults(response.tool_results);
+  if (!found) return response;
+  const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
+  if (!datasetId) return response;
+
+  let latest = response;
+  let lastPages = Number(
+    (response.tool_results?.[found.entryIndex]?.result as { report_pages?: number } | undefined)
+      ?.report_pages || 0
+  );
+  if (lastPages > 0) opts?.onReportPages?.(lastPages);
+
+  const job = await waitForClientDeckJob(datasetId, found.jobId, {
+    signal: opts?.signal,
+    onProgress: message => {
+      opts?.onProgress?.('build_client_deck', message);
+    },
+    onJob: snapshot => {
+      const pages = Number(snapshot.report_pages || 0);
+      if (pages > lastPages) {
+        lastPages = pages;
+        opts?.onReportPages?.(pages);
+        latest = applyClientDeckJobSnapshot(response, snapshot);
+        opts?.onUpdate?.(latest);
+      }
+    },
+  });
+  if (!job) return latest;
+
+  latest = applyClientDeckJobSnapshot(response, job);
+  opts?.onUpdate?.(latest);
+  const finalPages = Number(
+    (latest.tool_results?.[found.entryIndex]?.result as { report_pages?: number } | undefined)
+      ?.report_pages ||
+      job.report_pages ||
+      0
+  );
+  if (finalPages > 0) opts?.onReportPages?.(finalPages);
+  return latest;
+}
+
+/**
+ * If the loop returned a pending client-deck job, check once (or briefly) and
+ * return. Do not hold the chat turn for minutes — a stuck job must not block
+ * follow-up questions. Ask the user to continue when the file is ready.
+ * Use ``watchClientDeckJobInBackground`` to refresh chat/Report afterward.
+ */
+export async function resolvePendingClientDeckInResponse(
+  response: AgentLoopResponse,
+  opts?: {
+    datasetId?: string | null;
+    signal?: AbortSignal;
+    onProgress?: (step: string, message: string) => void;
+    /** When true, poll until complete (Report tab / resume). Chat turns stay quick. */
+    waitForComplete?: boolean;
+  }
+): Promise<AgentLoopResponse> {
+  const found = pendingClientDeckFromToolResults(response.tool_results);
+  if (!found) return response;
+  const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
+  if (!datasetId) return response;
+
+  const job = opts?.waitForComplete
+    ? await waitForClientDeckJob(datasetId, found.jobId, {
+        signal: opts?.signal,
+        onProgress: message => opts?.onProgress?.('build_client_deck', message),
+      })
+    : await waitForClientDeckJob(datasetId, found.jobId, {
+        signal: opts?.signal,
+        // One quick look so a finished job still resolves; otherwise return pending.
+        attempts: 2,
+        intervalMs: 400,
+        onProgress: message => opts?.onProgress?.('build_client_deck', message),
+      });
+  if (!job) return response;
+  return applyClientDeckJobSnapshot(response, job);
 }
