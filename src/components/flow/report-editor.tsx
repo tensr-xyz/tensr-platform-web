@@ -155,52 +155,167 @@ function defaultCellKeys(table: ReportObject | null, defaults: DefaultLabels) {
   return { rowKey, colKey };
 }
 
-function TableObjectPreview({ obj }: { obj: ReportObject }) {
+/** Compact percent grid from a saved banner book. Never invents placeholder rows. */
+export function previewGridFromBannerBook(
+  book: Record<string, unknown> | null | undefined
+): string[][] {
+  if (!book || typeof book !== 'object') return [];
+  const banners = (Array.isArray(book.banner_columns) ? book.banner_columns : []).filter(
+    col => col && typeof col === 'object'
+  ) as Array<{ id?: string; label?: string }>;
+  const header = ['', ...banners.map(col => String(col.label || col.id || '').trim() || 'Column')];
+  const rowsOut: string[][] = [header];
+
+  const formatPct = (value: unknown): string => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return `${Math.round(n * 10) / 10}%`;
+  };
+
+  const bookRows = Array.isArray(book.rows) ? book.rows : [];
+  if (bookRows.length) {
+    for (const raw of bookRows.slice(0, 12)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const row = raw as {
+        label?: string;
+        id?: string;
+        kind?: string;
+        cells?: Array<{ banner_id?: string; percent?: number | null }>;
+      };
+      if (String(row.kind || '') === 'header') continue;
+      const cells = Array.isArray(row.cells) ? row.cells : [];
+      const byBanner = new Map(
+        cells.map(cell => [String(cell.banner_id || ''), formatPct(cell.percent)] as const)
+      );
+      rowsOut.push([
+        String(row.label || row.id || '').trim() || 'Row',
+        ...banners.map(col => byBanner.get(String(col.id || '')) || '—'),
+      ]);
+    }
+    return rowsOut.length > 1 ? rowsOut : [];
+  }
+
+  const cells = (Array.isArray(book.cells) ? book.cells : []).filter(
+    cell => cell && typeof cell === 'object'
+  ) as Array<{
+    stub_row_id?: string;
+    stub_label?: string;
+    banner_id?: string;
+    percent?: number | null;
+  }>;
+  if (!cells.length || !banners.length) return [];
+  const stubOrder: string[] = [];
+  const stubLabels = new Map<string, string>();
+  for (const cell of cells) {
+    const stubId = String(cell.stub_row_id || cell.stub_label || '').trim();
+    if (!stubId) continue;
+    if (!stubLabels.has(stubId)) {
+      stubOrder.push(stubId);
+      stubLabels.set(stubId, String(cell.stub_label || stubId).trim() || stubId);
+    }
+  }
+  for (const stubId of stubOrder.slice(0, 12)) {
+    rowsOut.push([
+      stubLabels.get(stubId) || stubId,
+      ...banners.map(col => {
+        const hit = cells.find(
+          cell =>
+            String(cell.stub_row_id || cell.stub_label || '') === stubId &&
+            String(cell.banner_id || '') === String(col.id || '')
+        );
+        return hit ? formatPct(hit.percent) : '—';
+      }),
+    ]);
+  }
+  return rowsOut.length > 1 ? rowsOut : [];
+}
+
+function TableObjectPreview({ obj, datasetId }: { obj: ReportObject; datasetId: string | null }) {
   const style = obj.tableStyle;
   const banded = style.preset === 'banded';
   const minimal = style.preset === 'compact';
-  const rows = [
-    ['', 'Total', 'Group A', 'Group B'],
-    ['Row one', '42%', '51%', '33%'],
-    ['Row two', '28%', '22%', '35%'],
-    ['Row three', '18%', '14%', '21%'],
-  ];
+  const specId = String(obj.tableSpecId || '').trim();
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    specId && datasetId ? 'loading' : 'idle'
+  );
+  const [rows, setRows] = useState<string[][]>([]);
+
+  useEffect(() => {
+    if (!specId || !datasetId) {
+      setPhase('idle');
+      setRows([]);
+      return;
+    }
+    let live = true;
+    setPhase('loading');
+    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${specId}`)
+      .then(book => {
+        if (!live) return;
+        const grid = previewGridFromBannerBook(book);
+        setRows(grid);
+        setPhase(grid.length ? 'ready' : 'error');
+      })
+      .catch(() => {
+        if (!live) return;
+        setRows([]);
+        setPhase('error');
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, specId]);
+
   const ruleCount = obj.tableRules.filter(rule => rule.enabled).length;
+  const showGrid = phase === 'ready' && rows.length > 0;
   return (
-    <div className="report-editor-table-preview" data-preset={style.preset}>
-      <table
-        style={{
-          fontFamily: style.fontFamily,
-          fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
-          color: style.bodyColor,
-          borderColor: style.borderColor,
-          borderWidth: minimal ? 0 : style.borderWidthPt,
-        }}
-      >
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, colIndex) => {
-                const isHeader = rowIndex === 0;
-                const shade = banded && !isHeader && rowIndex % 2 === 0;
-                return (
-                  <td
-                    key={colIndex}
-                    style={{
-                      background: isHeader ? style.headerFill : shade ? '#F6F6F3' : style.bodyFill,
-                      color: isHeader ? style.headerColor : style.bodyColor,
-                      borderColor: style.borderColor,
-                      fontWeight: isHeader ? 600 : 400,
-                    }}
-                  >
-                    {cell}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="report-editor-table-preview" data-preset={style.preset} data-phase={phase}>
+      {showGrid ? (
+        <table
+          style={{
+            fontFamily: style.fontFamily,
+            fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
+            color: style.bodyColor,
+            borderColor: style.borderColor,
+            borderWidth: minimal ? 0 : style.borderWidthPt,
+          }}
+        >
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, colIndex) => {
+                  const isHeader = rowIndex === 0;
+                  const shade = banded && !isHeader && rowIndex % 2 === 0;
+                  return (
+                    <td
+                      key={colIndex}
+                      style={{
+                        background: isHeader
+                          ? style.headerFill
+                          : shade
+                            ? '#F6F6F3'
+                            : style.bodyFill,
+                        color: isHeader ? style.headerColor : style.bodyColor,
+                        borderColor: style.borderColor,
+                        fontWeight: isHeader ? 600 : 400,
+                      }}
+                    >
+                      {cell}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="report-editor-table-empty">
+          {phase === 'loading'
+            ? 'Loading table…'
+            : phase === 'error'
+              ? 'Could not load this table.'
+              : 'Link a saved table to preview numbers.'}
+        </p>
+      )}
       <span className="report-editor-table-meta">
         {tableStylePresetLabel(style.preset)}
         {ruleCount ? ` · ${ruleCount} rule${ruleCount === 1 ? '' : 's'}` : ''}
@@ -213,11 +328,13 @@ function CanvasObjectView({
   obj,
   selected,
   paintArmed,
+  datasetId,
   onSelect,
 }: {
   obj: ReportObject;
   selected: boolean;
   paintArmed: boolean;
+  datasetId: string | null;
   onSelect: () => void;
 }) {
   const style = obj.textStyle;
@@ -297,7 +414,7 @@ function CanvasObjectView({
           )}
         </span>
       ) : obj.kind === 'table' ? (
-        <TableObjectPreview obj={obj} />
+        <TableObjectPreview obj={obj} datasetId={datasetId} />
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}
@@ -968,6 +1085,7 @@ export function ReportEditor({
                   obj={obj}
                   selected={obj.id === selectedId}
                   paintArmed={Boolean(paintSourceId)}
+                  datasetId={datasetId}
                   onSelect={() => selectObject(obj.id)}
                 />
               ))}

@@ -12649,6 +12649,13 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   line-height: 14px;
 }
 
+.report-editor-table-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .report-editor-style-grid {
   display: flex;
   gap: 8px;

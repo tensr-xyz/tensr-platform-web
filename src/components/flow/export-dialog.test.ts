@@ -1,4 +1,8 @@
-import { deckBatchPayload, pipelineExportPayload } from '@/components/flow/export-dialog';
+import {
+  deckBatchPayload,
+  pipelineExportPayload,
+  tableSpecIdsFromReportDocument,
+} from '@/components/flow/export-dialog';
 
 describe('pipelineExportPayload', () => {
   it('sends the project id so the study brief can be a context page', () => {
@@ -35,5 +39,35 @@ describe('deckBatchPayload', () => {
     expect(body.group_column).toBe('region');
     expect(body.values).toEqual(['North', 'South']);
     expect(body.name).toBe('Overview');
+  });
+});
+
+describe('tableSpecIdsFromReportDocument', () => {
+  it('collects unique table_spec_id values in page order', () => {
+    const ids = tableSpecIdsFromReportDocument({
+      pages: [
+        {
+          title: 'Exec',
+          objects: [{ kind: 'text', text: 'Summary' }],
+        },
+        {
+          title: 'Region',
+          objects: [{ kind: 'table', table_spec_id: 'spec-region' }],
+        },
+        {
+          title: 'Age',
+          objects: [
+            { kind: 'table', tableSpecId: 'spec-age' },
+            { kind: 'table', table_spec_id: 'spec-region' },
+          ],
+        },
+      ],
+    });
+    expect(ids).toEqual(['spec-region', 'spec-age']);
+  });
+
+  it('returns an empty list when the document has no linked tables', () => {
+    expect(tableSpecIdsFromReportDocument({ pages: [{ objects: [] }] })).toEqual([]);
+    expect(tableSpecIdsFromReportDocument(null)).toEqual([]);
   });
 });
