@@ -226,7 +226,7 @@ function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
       fill="#3f3f46"
       style={{ fontSize: layout.titleSize, fontWeight: 500 }}
     >
-      <title>{title}</title>
+      {shown !== title ? <title>{title}</title> : null}
       {shown}
     </text>
   );
