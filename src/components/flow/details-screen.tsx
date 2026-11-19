@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
-import { pickerColumns, questionKind, type FlowColumn } from '@/lib/flow-columns';
+import {
+  questionKind,
+  questionnaireOutline,
+  type FlowColumn,
+  type OutlineSet,
+} from '@/lib/flow-columns';
 import { datasetRowId, downloadExport, fileToBase64 } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -309,7 +314,9 @@ export function DetailsScreen({
   const [docs, setDocs] = useState<BriefDoc[] | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
+  const [variableSets, setVariableSets] = useState<OutlineSet[]>([]);
   const [weightName, setWeightName] = useState('');
+  const [weightLabel, setWeightLabel] = useState('');
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
@@ -406,6 +413,9 @@ export function DetailsScreen({
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setVariableSets([]);
+      setWeightName('');
+      setWeightLabel('');
       return;
     }
     let cancelled = false;
@@ -414,7 +424,13 @@ export function DetailsScreen({
       flowJson<{
         columns?: FlowColumn[];
         active_weight_column?: string | null;
-        multiple_response_sets?: { columns?: string[]; variables?: string[] }[] | null;
+        variable_sets?: OutlineSet[] | null;
+        multiple_response_sets?:
+          | {
+              columns?: (string | { column?: string })[];
+              variables?: string[];
+            }[]
+          | null;
       }>(`/datasets/${datasetId}/metadata`),
       flowJson<{ rows?: unknown[][]; headers?: string[] }>(
         `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
@@ -426,10 +442,15 @@ export function DetailsScreen({
         const rows = page.rows || [];
         const multi = new Set(
           (meta.multiple_response_sets || []).flatMap(set => [
-            ...(set.columns || []),
+            ...(set.columns || []).map(entry =>
+              typeof entry === 'string' ? entry : String(entry.column || '')
+            ),
             ...(set.variables || []),
           ])
         );
+        for (const set of meta.variable_sets || []) {
+          for (const column of set.columns || []) multi.add(String(column));
+        }
         const kinds: Record<string, string> = {};
         for (const column of meta.columns || []) {
           const index = headers.findIndex(
@@ -443,10 +464,18 @@ export function DetailsScreen({
         }
         setKinds(kinds);
         setColumns(meta.columns || []);
-        setWeightName(meta.active_weight_column || '');
+        setVariableSets(Array.isArray(meta.variable_sets) ? meta.variable_sets : []);
+        const activeWeight = meta.active_weight_column || '';
+        const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
+        // Audience tags show the weight by its label, never the variable code.
+        setWeightName(activeWeight);
+        setWeightLabel(String(weightColumn?.label || '').trim() || activeWeight);
       })
       .catch(() => {
-        if (!cancelled) setColumns([]);
+        if (!cancelled) {
+          setColumns([]);
+          setVariableSets([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -459,9 +488,7 @@ export function DetailsScreen({
   const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
   const parts = splitBrief(briefText);
   const ready = docs !== null && members !== null && columns !== null;
-  const outline = pickerColumns(columns || []).filter(
-    column => column.name !== weightName && column.name.toLowerCase() !== 'weight'
-  );
+  const outline = questionnaireOutline(columns || [], variableSets, { weightName, kinds });
 
   const save = () => {
     if (!projectId || busy) return;
@@ -786,7 +813,7 @@ export function DetailsScreen({
                       {active.n_rows ? (
                         <span>{active.n_rows.toLocaleString('en-GB')} respondents</span>
                       ) : null}
-                      {weightName ? <span>{weightName}</span> : null}
+                      {weightName ? <span>{weightLabel || weightName}</span> : null}
                     </div>
                   ) : null}
                 </>
@@ -923,46 +950,60 @@ export function DetailsScreen({
             {labelsNote ? <p className="flow-muted">{labelsNote}</p> : null}
             {outline.length ? (
               <div className="details-q">
-                {outline.map((column, index) => {
-                  const kind = kinds[column.name] || columnKind(column);
-                  const shown = displayedMeasure(column);
+                {outline.map((question, index) => {
+                  const measureColumnName = question.measureColumn || question.columns[0] || '';
+                  const column =
+                    (columns || []).find(item => item.name === measureColumnName) || null;
+                  const kind = question.kind || (column ? columnKind(column) : 'single');
+                  const shown = column
+                    ? displayedMeasure(column)
+                    : { measure: 'nominal', source: '' };
+                  const setOnly = question.columns.length > 1;
                   return (
-                    <div key={column.name} className="details-q-row">
+                    <div key={question.key} className="details-q-row">
                       <span className="details-q-num">Q{index + 1}</span>
-                      <span className="details-q-name">{column.label || column.name}</span>
+                      <span className="details-q-name">{question.label}</span>
                       <span
                         className="details-q-kind"
                         data-kind={kind.startsWith('scale') ? 'scale' : kind}
                       >
                         {kind}
                       </span>
-                      <ChoiceSelect
-                        aria-label={`Measurement level for ${column.label || column.name}`}
-                        value={shown.measure}
-                        options={[
-                          { value: 'nominal', label: 'Nominal' },
-                          { value: 'ordinal', label: 'Ordinal' },
-                          { value: 'scale', label: 'Scale' },
-                        ]}
-                        onValueChange={measure => {
-                          setColumns(
-                            current =>
-                              current?.map(item =>
-                                item.name === column.name
-                                  ? { ...item, measure, measure_source: 'override' }
-                                  : item
-                              ) || current
-                          );
-                          if (!datasetId) return;
-                          void flowJson(`/datasets/${datasetId}/metadata`, {
-                            method: 'PUT',
-                            body: JSON.stringify({
-                              columns: { [column.name]: { measure_override: measure } },
-                            }),
-                          });
-                        }}
-                      />
-                      <span className="flow-muted">{measureSourceLabel(shown.source)}</span>
+                      {setOnly || !column ? (
+                        <span className="flow-muted">
+                          {question.columns.length > 1 ? `${question.columns.length} items` : '—'}
+                        </span>
+                      ) : (
+                        <ChoiceSelect
+                          aria-label={`Measurement level for ${question.label}`}
+                          value={shown.measure}
+                          options={[
+                            { value: 'nominal', label: 'Nominal' },
+                            { value: 'ordinal', label: 'Ordinal' },
+                            { value: 'scale', label: 'Scale' },
+                          ]}
+                          onValueChange={measure => {
+                            setColumns(
+                              current =>
+                                current?.map(item =>
+                                  item.name === column.name
+                                    ? { ...item, measure, measure_source: 'override' }
+                                    : item
+                                ) || current
+                            );
+                            if (!datasetId) return;
+                            void flowJson(`/datasets/${datasetId}/metadata`, {
+                              method: 'PUT',
+                              body: JSON.stringify({
+                                columns: { [column.name]: { measure_override: measure } },
+                              }),
+                            });
+                          }}
+                        />
+                      )}
+                      <span className="flow-muted">
+                        {setOnly ? '' : measureSourceLabel(shown.source)}
+                      </span>
                     </div>
                   );
                 })}

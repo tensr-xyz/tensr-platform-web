@@ -1,4 +1,4 @@
-import { dependentColumns, openEndColumns } from './flow-columns';
+import { dependentColumns, openEndColumns, questionnaireOutline } from './flow-columns';
 
 describe('ANOVA dependent columns', () => {
   it('keeps a numeric companion when the preview type is text and id is the only numeric type', () => {
@@ -34,7 +34,7 @@ describe('code frame open ends', () => {
 });
 
 describe('picker columns', () => {
-  it('drops row ids, coding scratch, and stored codes', () => {
+  it('drops row ids, coding scratch, stored codes, and admin fields', () => {
     const { pickerColumns, isInternalColumn } = jest.requireActual('./flow-columns');
     expect(
       pickerColumns([
@@ -42,6 +42,7 @@ describe('picker columns', () => {
         { name: 'comments_coding' },
         { name: 'comments_codes' },
         { name: 'region' },
+        { name: 'ResponseId', role: 'admin' },
       ]).map((column: { name: string }) => column.name)
     ).toEqual(['region']);
     expect(isInternalColumn('source_wave')).toBe(false);
@@ -50,6 +51,46 @@ describe('picker columns', () => {
         (column: { name: string }) => column.name
       )
     ).toEqual(['region']);
+  });
+
+  it('collapses multi-select sets and skips admin columns in the outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'ResponseId', label: 'Response ID', role: 'admin' },
+        { name: 'q_6_1', label: 'Which types of media do you prefer? - Email' },
+        { name: 'q_6_2', label: 'Which types of media do you prefer? - Social' },
+        { name: 'q_6_3', label: 'Which types of media do you prefer? - Podcasts' },
+        {
+          name: 'q_6_4_text',
+          label: 'Which types of media do you prefer? - Other (please specify)',
+          type: 'string',
+        },
+        { name: 'region', label: 'Region' },
+        { name: 'weight', label: 'Weight', role: 'weight' },
+      ],
+      [
+        {
+          id: 'q_6',
+          name: 'Which types of media do you prefer?',
+          label: 'Which types of media do you prefer?',
+          kind: 'multiple_response',
+          columns: ['q_6_1', 'q_6_2', 'q_6_3'],
+          text_columns: [
+            {
+              column: 'q_6_4_text',
+              label: 'Which types of media do you prefer? - Other (please specify)',
+            },
+          ],
+        },
+      ],
+      { weightName: 'weight', kinds: { region: 'single', q_6_1: 'multi' } }
+    );
+    expect(outline.map(item => item.label)).toEqual([
+      'Which types of media do you prefer?',
+      'Region',
+    ]);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].columns).toEqual(['q_6_1', 'q_6_2', 'q_6_3']);
   });
 
   it('offers coded open ends by their open-end name', () => {

@@ -184,6 +184,8 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const text = await res.text();
     expect(text).toContain('"status":"continuing"');
     expect(text).toContain('sess-503');
+    expect(text).toContain('"response"');
+    expect(text).toContain('still running');
   });
 });
 

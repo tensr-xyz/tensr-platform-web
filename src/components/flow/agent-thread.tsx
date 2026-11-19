@@ -32,7 +32,9 @@ import {
   outputChecks,
   hasSummaryTable,
   isProcedurePlaceholder,
+  EMPTY_TURN_ANSWER,
   keptModelAnswer,
+  visibleTurnAnswer,
   outputKind,
   outputRunIds,
   outputStat,
@@ -565,7 +567,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = keptModelAnswer(draft, result.answer_markdown || '');
+        const kept = visibleTurnAnswer(
+          result.status,
+          keptModelAnswer(draft, result.answer_markdown || '')
+        );
         const suggestions =
           result.status === 'awaiting_approval'
             ? []
@@ -703,7 +708,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
+        const kept = visibleTurnAnswer(
+          result.status,
+          keptModelAnswer(streamedRef.current, result.answer_markdown || '')
+        );
         const suggestions =
           result.status === 'awaiting_approval'
             ? []
@@ -802,7 +810,8 @@ export function useAgentThread({
                   {
                     user: item.user,
                     note: '',
-                    answer: item.answer || '',
+                    answer:
+                      (item.answer || '').trim() || (item.steps?.length ? EMPTY_TURN_ANSWER : ''),
                     toolResults: item.tool_results,
                     steps: item.steps,
                   },
@@ -810,11 +819,13 @@ export function useAgentThread({
               : []
           );
           const last = exchanges[exchanges.length - 1];
+          const restoredAnswer =
+            (last?.answer || '').trim() || (last?.steps?.length ? EMPTY_TURN_ANSWER : '');
           shown(() => {
             setPast(last ? exchanges.slice(0, -1) : exchanges);
             setSent(last?.user || '');
             setAttachedNote('');
-            setAnswer(last?.answer || '');
+            setAnswer(restoredAnswer);
             if (!questionRef.current && projectId) {
               setQuestion(window.sessionStorage.getItem(draftKey(projectId)) || '');
             }
@@ -824,7 +835,7 @@ export function useAgentThread({
                 ? {
                     status: 'ok',
                     mode: 'agent',
-                    answer_markdown: last.answer,
+                    answer_markdown: restoredAnswer,
                     session_id: sessionId,
                     tool_results: last.toolResults,
                   }
@@ -838,7 +849,7 @@ export function useAgentThread({
                     {
                       status: 'ok',
                       mode: 'agent',
-                      answer_markdown: last.answer,
+                      answer_markdown: restoredAnswer,
                       tool_results: last.toolResults,
                     },
                     columnLabels,
