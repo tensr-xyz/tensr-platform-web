@@ -210,7 +210,13 @@ function clientDeckStillPending(result: AgentLoopResponse): boolean {
     ) {
       return false;
     }
-    return payload.pending === true || String(payload.status || '') === 'pending';
+    const status = String(payload.status || '');
+    return (
+      payload.pending === true ||
+      status === 'pending' ||
+      status === 'running' ||
+      Boolean(String(payload.job_id || '').trim() && status !== 'complete' && status !== 'failed')
+    );
   });
 }
 

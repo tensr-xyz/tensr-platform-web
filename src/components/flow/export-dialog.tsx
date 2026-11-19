@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,13 @@ import { exportDatasetSavAndSps } from '@/lib/dataset-data-export';
 import { flowJson } from '@/lib/flow-api';
 import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
 import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-logic';
+import {
+  estimateOfficeDeckSeconds,
+  exportOfficeDeckAndDownload,
+  groupReportExportPages,
+  pagesFromReportDocument,
+  type ReportExportPage,
+} from '@/lib/office-deck-job';
 import {
   documentApa,
   documentCsv,
@@ -113,8 +120,16 @@ export function tableSpecIdsFromReportDocument(
 /**
  * PowerPoint from the Report: prefer tables linked on Report pages, else every
  * saved table. Always send the stored report document so page order is kept.
+ * When the gateway queues a background job, poll until the file is ready.
  */
-export async function deckFromTables(datasetId: string, stem: string) {
+export async function deckFromTables(
+  datasetId: string,
+  stem: string,
+  opts?: {
+    pageIds?: string[];
+    onProgress?: (message: string) => void;
+  }
+) {
   let reportDocument: Record<string, unknown> | null = null;
   try {
     const stored = await flowJson<{
@@ -126,6 +141,20 @@ export async function deckFromTables(datasetId: string, stem: string) {
     }
   } catch {
     /* Fall back to saved tables when the document route fails. */
+  }
+  const pageIds = (opts?.pageIds || []).map(id => String(id || '').trim()).filter(Boolean);
+  if (reportDocument && pageIds.length) {
+    const pages = Array.isArray(reportDocument.pages) ? reportDocument.pages : [];
+    const wanted = new Set(pageIds);
+    reportDocument = {
+      ...reportDocument,
+      pages: pages.filter(
+        page =>
+          page &&
+          typeof page === 'object' &&
+          wanted.has(String((page as { id?: string }).id || '').trim())
+      ),
+    };
   }
   const fromReport = tableSpecIdsFromReportDocument(reportDocument);
   let ids = fromReport;
@@ -140,18 +169,16 @@ export async function deckFromTables(datasetId: string, stem: string) {
       'Add Report pages with tables, or save a table in Tables, before building a deck.'
     );
   }
-  const created = await flowJson<{ export_id?: string; filename?: string }>(
-    `/datasets/${datasetId}/export/deck`,
+  await exportOfficeDeckAndDownload(
+    datasetId,
+    stem,
     {
-      method: 'POST',
-      body: JSON.stringify({
-        spec_ids: ids,
-        ...(reportDocument ? { report_document: reportDocument } : {}),
-      }),
-    }
+      spec_ids: ids,
+      ...(reportDocument ? { report_document: reportDocument } : {}),
+      ...(pageIds.length ? { page_ids: pageIds } : {}),
+    },
+    { onProgress: opts?.onProgress }
   );
-  if (!created.export_id) throw new Error('The deck did not build. Try again.');
-  await downloadExport(`/exports/${created.export_id}`, created.filename || `${stem}.pptx`);
 }
 
 /** Body for /export/deck/batch — one PowerPoint per group value. */
@@ -268,35 +295,80 @@ export function ExportDialog({
   const [groupOptions, setGroupOptions] = useState<{ value: string; label: string }[]>([]);
   const [groupValues, setGroupValues] = useState<ColumnValues | null>(null);
   const [pickedGroups, setPickedGroups] = useState<Record<string, boolean>>({});
-  const [reportPageTitles, setReportPageTitles] = useState<string[]>([]);
+  const [reportPages, setReportPages] = useState<ReportExportPage[]>([]);
+  const [pickedPages, setPickedPages] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [fileStats, setFileStats] = useState<{ rows: number; questions: number } | null>(null);
   const stem = caption.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
   const current = { ...document, title: caption, summary: note };
+  const reportGroups = useMemo(() => groupReportExportPages(reportPages), [reportPages]);
+  const selectedPageCount = reportPages.filter(page => pickedPages[page.id] !== false).length;
+  const totalPageCount = reportPages.length;
 
   useEffect(() => {
     if (!datasetId || kind !== 'report') {
-      setReportPageTitles([]);
+      setReportPages([]);
+      setPickedPages({});
+      setFileStats(null);
       return;
     }
     let live = true;
     void flowJson<{
-      document?: { pages?: { title?: string }[] } | null;
+      document?: { pages?: unknown[] } | null;
       has_document?: boolean;
     }>(`/datasets/${datasetId}/report/document`)
       .then(body => {
         if (!live) return;
         if (!body.has_document || !body.document?.pages?.length) {
-          setReportPageTitles([]);
+          setReportPages([]);
+          setPickedPages({});
           return;
         }
-        setReportPageTitles(
-          body.document.pages.map(
-            (page, index) => String(page.title || '').trim() || `Page ${index + 1}`
+        const pages = pagesFromReportDocument(body.document);
+        setReportPages(pages);
+        setPickedPages(Object.fromEntries(pages.map(page => [page.id, true])));
+        setExpandedGroups(
+          Object.fromEntries(
+            groupReportExportPages(pages).map(group => [group.key, group.defaultExpanded])
           )
         );
       })
       .catch(() => {
-        if (live) setReportPageTitles([]);
+        if (live) {
+          setReportPages([]);
+          setPickedPages({});
+        }
       });
+    void Promise.all([
+      flowJson<{ n_rows?: number; n_cols?: number }>(`/datasets/${datasetId}/schema`).catch(() => ({
+        n_rows: 0,
+        n_cols: 0,
+      })),
+      flowJson<{
+        columns?: unknown[];
+        variable_sets?: unknown[];
+        multiple_response_sets?: unknown[];
+      }>(`/datasets/${datasetId}/metadata`).catch(
+        (): {
+          columns?: unknown[];
+          variable_sets?: unknown[];
+          multiple_response_sets?: unknown[];
+        } => ({})
+      ),
+    ]).then(([schema, meta]) => {
+      if (!live) return;
+      const rows = Number(schema.n_rows || 0);
+      const setCount = Array.isArray(meta.variable_sets)
+        ? meta.variable_sets.length
+        : Array.isArray(meta.multiple_response_sets)
+          ? meta.multiple_response_sets.length
+          : 0;
+      const colCount = Array.isArray(meta.columns)
+        ? meta.columns.length
+        : Number(schema.n_cols || 0);
+      // Prefer set count when present (closer to “questions”); else column count.
+      setFileStats({ rows, questions: setCount || colCount });
+    });
     return () => {
       live = false;
     };
@@ -403,8 +475,11 @@ export function ExportDialog({
     const chosen = current.tables.filter((_, index) => included[index] !== false);
     const reportDoc = { ...current, tables: chosen };
     const chosenRuns = runIds.filter((_, index) => included[index] !== false);
-    const reportPageCount = reportPageTitles.length;
-    const findingCount = reportPageCount || current.tables.length;
+    const selectedPageIds = reportPages
+      .filter(page => pickedPages[page.id] !== false)
+      .map(page => page.id);
+    const allPagesSelected =
+      totalPageCount > 0 && selectedPageCount === totalPageCount && selectedPageCount > 0;
     const formats: {
       id: string;
       ext: string;
@@ -417,7 +492,7 @@ export function ExportDialog({
         id: 'docx',
         ext: '.DOCX',
         label: 'Word',
-        note: 'Manuscript or topline, tables stay editable',
+        note: 'Manuscript or topline',
         run: () => serverFor('docx', `${stem}.docx`, chosenRuns),
       },
       {
@@ -427,9 +502,7 @@ export function ExportDialog({
         note: datasetId
           ? perGroup
             ? 'One PowerPoint per group value'
-            : reportPageCount
-              ? 'One slide per Report page table'
-              : 'One slide per saved table'
+            : 'One slide per finding'
           : 'Open a file to build a deck',
         soon: !datasetId,
         run: () => {
@@ -439,53 +512,49 @@ export function ExportDialog({
               .map(([value]) => value);
             return deckBatchFromTables(datasetId || '', stem, groupColumn, values);
           }
-          return deckFromTables(datasetId || '', stem);
+          return deckFromTables(datasetId || '', stem, {
+            pageIds: selectedPageIds,
+            onProgress: message => setBusy(message),
+          });
         },
       },
       {
         id: 'xlsx',
         ext: '.XLSX',
-        label: 'Excel banner book',
-        note: datasetId
-          ? 'Every table, sig letters, real numbers'
-          : 'Open a file to build a banner book',
+        label: 'Excel',
+        note: datasetId ? 'Every table, real numbers' : 'Open a file to build a banner book',
         soon: !datasetId,
         run: () => bannerBookFromTables(datasetId || '', stem),
       },
-      {
-        id: 'pdf',
-        ext: '.PDF',
-        label: 'PDF',
-        note: 'Fixed layout, ready to send',
-        run: () => serverFor('pdf', `${stem}.pdf`, chosenRuns),
-      },
-      {
-        id: 'md',
-        ext: '.MD',
-        label: 'Markdown',
-        note: 'Plain text, tables as Markdown',
-        run: () => downloadText(`${stem}.md`, documentMarkdown(reportDoc), 'text/markdown'),
-      },
-      {
-        id: 'sav',
-        ext: '.SAV + .SPS',
-        label: 'Data for SPSS',
-        note: datasetId ? 'Dataset with an .sps weight file' : 'Open a file first',
-        soon: !datasetId,
-        run: () => savAndSyntax(datasetId || '', stem),
-      },
     ];
     const format = formats.find(item => item.id === reportFormat) || formats[0];
+    const headerBits = [
+      title,
+      fileStats?.rows
+        ? `${fileStats.rows.toLocaleString('en-GB')} respondent${fileStats.rows === 1 ? '' : 's'}`
+        : '',
+      fileStats?.questions
+        ? `${fileStats.questions.toLocaleString('en-GB')} question${
+            fileStats.questions === 1 ? '' : 's'
+          }`
+        : totalPageCount
+          ? `${totalPageCount} page${totalPageCount === 1 ? '' : 's'}`
+          : '',
+    ].filter(Boolean);
+    const estimatedSeconds =
+      format.id === 'pptx' ? estimateOfficeDeckSeconds(selectedPageCount || totalPageCount) : 0;
+    const setGroupChecked = (pageIds: string[], on: boolean) => {
+      setPickedPages(currentMap => {
+        const next = { ...currentMap };
+        for (const id of pageIds) next[id] = on;
+        return next;
+      });
+    };
     return (
       <Dialog open onOpenChange={open => !open && onClose()}>
         <DialogContent className="export-dialog xr">
           <DialogHeader className="xp-head">
-            <p className="xp-eyebrow">
-              {title} · {findingCount}{' '}
-              {reportPageCount
-                ? `page${findingCount === 1 ? '' : 's'}`
-                : `finding${findingCount === 1 ? '' : 's'}`}
-            </p>
+            <p className="xp-eyebrow">{headerBits.join(' · ')}</p>
             <DialogTitle>Export report</DialogTitle>
             <DialogDescription className="sr-only">
               Choose a format and what to include.
@@ -522,57 +591,90 @@ export function ExportDialog({
                     data-active={style === item}
                     onClick={() => setStyle(item)}
                   >
-                    {item === 'apa'
-                      ? 'APA 7 manuscript'
-                      : item === 'client'
-                        ? 'Client template'
-                        : 'Plain'}
+                    {item === 'apa' ? 'Research report' : item === 'client' ? 'Client' : 'Plain'}
                   </Button>
                 ))}
               </div>
               <div className="xr-toggles">
-                <label className="xp-toggle">
-                  <span>
-                    <strong>Results paragraphs in APA style</strong>
-                  </span>
-                  <Switch
-                    checked={withNote}
-                    onCheckedChange={setWithNote}
-                    aria-label="Results paragraphs"
-                  />
-                </label>
-                <label className="xp-toggle">
-                  <span>
-                    <strong>Include methods appendix</strong>
-                  </span>
-                  <Switch
-                    checked={methodsOn}
-                    onCheckedChange={setMethodsOn}
-                    aria-label="Methods appendix"
-                  />
-                </label>
-                <label className="xp-toggle">
-                  <span>
-                    <strong>Keep live link back to Tensr in captions</strong>
-                  </span>
-                  <Switch checked={liveOn} onCheckedChange={setLiveOn} aria-label="Live link" />
-                </label>
-                {datasetId && reportFormat === 'pptx' ? (
-                  <label className="xp-toggle">
-                    <span>
-                      <strong>One copy per group</strong>
-                      <span className="flow-muted">
-                        {' '}
-                        Separate PowerPoint for each value (country, region, …)
+                {reportFormat === 'pptx' ? (
+                  <>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Executive summary slide</strong>
                       </span>
-                    </span>
-                    <Switch
-                      checked={perGroup}
-                      onCheckedChange={setPerGroup}
-                      aria-label="One copy per group"
-                    />
-                  </label>
-                ) : null}
+                      <Switch
+                        checked={withNote}
+                        onCheckedChange={setWithNote}
+                        aria-label="Executive summary slide"
+                      />
+                    </label>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Question appendix, one slide per question</strong>
+                      </span>
+                      <Switch
+                        checked={methodsOn}
+                        onCheckedChange={setMethodsOn}
+                        aria-label="Question appendix"
+                      />
+                    </label>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Show unweighted base on every slide</strong>
+                      </span>
+                      <Switch
+                        checked={liveOn}
+                        onCheckedChange={setLiveOn}
+                        aria-label="Show unweighted base"
+                      />
+                    </label>
+                    {datasetId ? (
+                      <label className="xp-toggle">
+                        <span>
+                          <strong>One copy per group</strong>
+                          <span className="flow-muted">
+                            {' '}
+                            Separate PowerPoint for each value (country, region, …)
+                          </span>
+                        </span>
+                        <Switch
+                          checked={perGroup}
+                          onCheckedChange={setPerGroup}
+                          aria-label="One copy per group"
+                        />
+                      </label>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Results paragraphs in APA style</strong>
+                      </span>
+                      <Switch
+                        checked={withNote}
+                        onCheckedChange={setWithNote}
+                        aria-label="Results paragraphs"
+                      />
+                    </label>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Include methods appendix</strong>
+                      </span>
+                      <Switch
+                        checked={methodsOn}
+                        onCheckedChange={setMethodsOn}
+                        aria-label="Methods appendix"
+                      />
+                    </label>
+                    <label className="xp-toggle">
+                      <span>
+                        <strong>Keep live link back to Tensr in captions</strong>
+                      </span>
+                      <Switch checked={liveOn} onCheckedChange={setLiveOn} aria-label="Live link" />
+                    </label>
+                  </>
+                )}
               </div>
               {datasetId && reportFormat === 'pptx' && perGroup ? (
                 <div className="xr-per-group" data-testid="export-per-group">
@@ -586,7 +688,7 @@ export function ExportDialog({
                     placeholder="Choose a column"
                   />
                   <span className="xp-label">Values</span>
-                  <div className="xr-include">
+                  <div className="xr-include xr-include-scroll">
                     {(groupValues?.values || []).length === 0 ? (
                       <p className="flow-muted">
                         {groupColumn ? 'Loading values…' : 'Choose a column first.'}
@@ -597,8 +699,8 @@ export function ExportDialog({
                           <Checkbox
                             checked={pickedGroups[value] !== false}
                             onCheckedChange={on =>
-                              setPickedGroups(current => ({
-                                ...current,
+                              setPickedGroups(currentMap => ({
+                                ...currentMap,
                                 [value]: on === true,
                               }))
                             }
@@ -617,17 +719,104 @@ export function ExportDialog({
               ) : null}
             </div>
             <div className="xr-right">
-              <span className="xp-label">What to include</span>
-              <div className="xr-include">
-                {reportPageTitles.length > 0 ? (
-                  reportPageTitles.map((pageTitle, index) => (
-                    <label key={`report-page-${index}`} className="xr-item">
-                      <Checkbox checked disabled aria-label={`Include ${pageTitle}`} />
-                      <span>
-                        P{index + 1} · {pageTitle}
-                      </span>
-                    </label>
-                  ))
+              <div className="xr-pages-head">
+                <span className="xp-label">Pages to include</span>
+                {reportPages.length > 0 ? (
+                  <button
+                    type="button"
+                    className="xr-select-all"
+                    onClick={() =>
+                      setPickedPages(
+                        Object.fromEntries(reportPages.map(page => [page.id, !allPagesSelected]))
+                      )
+                    }
+                  >
+                    {allPagesSelected ? 'Deselect all' : 'Select all'}
+                  </button>
+                ) : null}
+              </div>
+              <div className="xr-page-groups" data-testid="export-page-groups">
+                {reportGroups.length > 0 ? (
+                  reportGroups.map(group => {
+                    const selected = group.pages.filter(
+                      page => pickedPages[page.id] !== false
+                    ).length;
+                    const open = expandedGroups[group.key] !== false;
+                    const preview = open
+                      ? group.pages
+                      : group.pages.slice(0, group.key === 'appendix' ? 2 : 3);
+                    const hidden = Math.max(0, group.pages.length - preview.length);
+                    return (
+                      <div key={group.key} className="xr-page-group">
+                        <label className="xr-group-row">
+                          <Checkbox
+                            checked={selected === group.pages.length && group.pages.length > 0}
+                            onCheckedChange={value =>
+                              setGroupChecked(
+                                group.pages.map(page => page.id),
+                                value === true
+                              )
+                            }
+                            aria-label={`Include ${group.label}`}
+                          />
+                          <button
+                            type="button"
+                            className="xr-group-toggle"
+                            onClick={() =>
+                              setExpandedGroups(currentMap => ({
+                                ...currentMap,
+                                [group.key]: !open,
+                              }))
+                            }
+                          >
+                            <strong>{group.label}</strong>
+                            <span>
+                              {selected} of {group.pages.length}
+                            </span>
+                          </button>
+                        </label>
+                        {open || group.key === 'insights' || preview.length > 0 ? (
+                          <div className="xr-group-pages">
+                            {preview.map((page, index) => (
+                              <label key={page.id} className="xr-item">
+                                <Checkbox
+                                  checked={pickedPages[page.id] !== false}
+                                  onCheckedChange={value =>
+                                    setPickedPages(currentMap => ({
+                                      ...currentMap,
+                                      [page.id]: value === true,
+                                    }))
+                                  }
+                                  aria-label={`Include ${page.title}`}
+                                />
+                                <span>
+                                  {group.key === 'appendix'
+                                    ? `Q${index + 1} · ${page.title}`
+                                    : `${String(index + 1).padStart(2, '0')} · ${page.title}`}
+                                </span>
+                              </label>
+                            ))}
+                            {!open && hidden > 0 ? (
+                              <button
+                                type="button"
+                                className="xr-more"
+                                onClick={() =>
+                                  setExpandedGroups(currentMap => ({
+                                    ...currentMap,
+                                    [group.key]: true,
+                                  }))
+                                }
+                              >
+                                {group.key === 'appendix'
+                                  ? 'Collapsed by default, expand to pick questions'
+                                  : `+ ${hidden} more`}
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
                 ) : current.tables.length === 0 ? (
                   <p className="flow-muted">
                     Open Report after a deck build, or pin a finding with Add to report.
@@ -648,20 +837,6 @@ export function ExportDialog({
                   ))
                 )}
               </div>
-              <span className="xp-label">Preview</span>
-              <div className="xr-previews">
-                {['Title page', 'Results', 'Notes'].map((label, index) => (
-                  <div key={label} className="xr-thumb" data-active={index === 1 || undefined}>
-                    <div className="xr-page">
-                      <i style={{ width: '60%' }} />
-                      <i />
-                      <i />
-                      <i style={{ width: '70%' }} />
-                    </div>
-                    <span>{label}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
           <div className="xp-foot">
@@ -670,6 +845,11 @@ export function ExportDialog({
                 <span className="flow-error">{error}</span>
               ) : saved ? (
                 <span>{saved}</span>
+              ) : format.id === 'pptx' ? (
+                <span>
+                  Figures export as editable charts.
+                  {estimatedSeconds ? ` Estimated time about ${estimatedSeconds} seconds.` : ''}
+                </span>
               ) : (
                 <span>Tables stay editable in Word.</span>
               )}
@@ -686,18 +866,28 @@ export function ExportDialog({
                 (format.id === 'pptx' &&
                   perGroup &&
                   (!groupColumn || !Object.values(pickedGroups).some(Boolean))) ||
+                (format.id === 'pptx' &&
+                  !perGroup &&
+                  totalPageCount > 0 &&
+                  selectedPageCount === 0) ||
                 (!chosen.length &&
                   format.id !== 'pptx' &&
-                  format.id !== 'sav' &&
-                  format.id !== 'xlsx')
+                  format.id !== 'xlsx' &&
+                  totalPageCount === 0)
               }
               onClick={() => format.run && save(format.label, format.run)}
             >
               {busy
-                ? 'Working…'
+                ? busy === format.label
+                  ? 'Working…'
+                  : busy
                 : format.id === 'pptx' && perGroup
-                  ? '↓ Export copies'
-                  : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}
+                  ? 'Export copies'
+                  : format.id === 'pptx'
+                    ? `Export .pptx · ${selectedPageCount || totalPageCount} of ${
+                        totalPageCount || selectedPageCount || 0
+                      } pages`
+                    : `Export ${format.ext.toLowerCase().split(' ')[0]}`}
             </Button>
           </div>
         </DialogContent>

@@ -2,7 +2,6 @@
 
 import type { RunTable } from '@/components/flow/run-document';
 import { downloadExport } from '@/components/flow/survey-screens';
-import { flowJson } from '@/lib/flow-api';
 
 function parsePercent(value: string): number | null {
   const cleaned = value.replace(/%/g, '').replace(/,/g, '').trim();
@@ -128,28 +127,21 @@ export async function appendResultToDeck(args: {
       return { label: row.label, percent };
     })
     .filter((row): row is { label: string; percent: number } => Boolean(row));
-  const created = await flowJson<{ export_id?: string; filename?: string }>(
-    `/datasets/${args.datasetId}/export/deck`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        spec_ids: [],
-        outputs: [
-          {
-            title: String((book as { title?: string }).title || args.lead || 'Finding'),
-            support: (args.footnote || args.lead || '').trim(),
-            bars,
-          },
-        ],
-        headlines: args.lead
-          ? [{ title: String((book as { title?: string }).title || 'Finding'), text: args.lead }]
-          : [],
-        ...(args.templateBase64 ? { template_base64: args.templateBase64 } : {}),
-        ...(args.templateName ? { template_name: args.templateName } : {}),
-        name: 'Added from an output',
-      }),
-    }
-  );
-  if (!created.export_id) throw new Error('The deck did not build. Try again.');
-  await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
+  const { exportOfficeDeckAndDownload } = await import('@/lib/office-deck-job');
+  await exportOfficeDeckAndDownload(args.datasetId, 'slide', {
+    spec_ids: [],
+    outputs: [
+      {
+        title: String((book as { title?: string }).title || args.lead || 'Finding'),
+        support: (args.footnote || args.lead || '').trim(),
+        bars,
+      },
+    ],
+    headlines: args.lead
+      ? [{ title: String((book as { title?: string }).title || 'Finding'), text: args.lead }]
+      : [],
+    ...(args.templateBase64 ? { template_base64: args.templateBase64 } : {}),
+    ...(args.templateName ? { template_name: args.templateName } : {}),
+    name: 'Added from an output',
+  });
 }

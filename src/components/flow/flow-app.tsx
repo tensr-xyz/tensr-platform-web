@@ -5250,65 +5250,26 @@ function ReportScreen({
     } catch {
       /* Fall back to pins when no reshaped document is stored. */
     }
-    const created = await flowJson<{
-      export_id?: string;
-      filename?: string;
-      low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
-      recipe?: { id?: string };
-    }>(`/datasets/${exportFileId}/export/deck`, {
-      method: 'POST',
-      body: JSON.stringify({
-        spec_ids: selected.map(row => row.id),
-        outputs,
-        report_document: reportDocument,
-        headlines: findings
-          .filter(finding => finding.headline)
-          .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
-        ...(template ? { template_base64: template } : {}),
-        ...(templateName ? { template_name: templateName } : {}),
-        ...(recipe
-          ? {
-              name: overviewName,
-              audience: recipe.audience,
-              slides: recipe.slides,
-              options: overviewOptions,
-            }
-          : {}),
-      }),
+    const { exportOfficeDeckAndDownload } = await import('@/lib/office-deck-job');
+    await exportOfficeDeckAndDownload(exportFileId, 'deck', {
+      spec_ids: selected.map(row => row.id),
+      outputs,
+      report_document: reportDocument,
+      headlines: findings
+        .filter(finding => finding.headline)
+        .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
+      ...(template ? { template_base64: template } : {}),
+      ...(templateName ? { template_name: templateName } : {}),
+      ...(recipe
+        ? {
+            name: overviewName,
+            audience: recipe.audience,
+            slides: recipe.slides,
+            options: overviewOptions,
+          }
+        : {}),
     });
-    if (!created.export_id) throw new Error('The deck export did not return a file.');
-    const low = created.low_bases || [];
-    if (low.length) {
-      setOverviewSlides(current =>
-        current.map(slide => {
-          const hit = low.find(
-            note =>
-              String(note.title || '')
-                .toLowerCase()
-                .includes(slide.title.toLowerCase().slice(0, 12)) ||
-              slide.title.toLowerCase().includes(
-                String(note.title || '')
-                  .toLowerCase()
-                  .slice(0, 12)
-              )
-          );
-          if (!hit) return slide;
-          return {
-            ...slide,
-            lowBase: true,
-            lowBaseNote: String(
-              hit.note || `One group has a base of ${hit.base} · shown with a low-base note`
-            ),
-          };
-        })
-      );
-    }
-    await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
-    setNote(
-      recipe
-        ? `Overview deck downloaded${created.recipe?.id ? ' and saved as a recipe' : ''}.`
-        : 'Deck downloaded.'
-    );
+    setNote(recipe ? 'Overview deck downloaded and saved as a recipe.' : 'Deck downloaded.');
     setDecksTick(value => value + 1);
   };
 
