@@ -21,6 +21,8 @@ import {
   resultLead,
   outputOpenHref,
   outputRunIds,
+  isClientDeckResult,
+  clientDeckReportHref,
 } from './chat-output';
 
 const answer = [
@@ -515,5 +517,30 @@ describe('chat output panel', () => {
         { procedure: 'funnel', ok: true, result: { run_id: 'funnel' } },
       ])[0]
     ).toBe('funnel');
+  });
+
+  it('treats a finished client deck as a Report card, not Outputs', () => {
+    const results = [
+      {
+        name: 'build_client_deck',
+        procedure: 'build_client_deck',
+        ok: true,
+        result: {
+          procedure: 'build_client_deck',
+          status: 'complete',
+          job_id: 'job-deck',
+          run_id: 'job-deck',
+          key: 'exports/excel/x/client-deck.pptx',
+          exports: { key: 'exports/excel/x/client-deck.pptx', filename: 'client-deck.pptx' },
+          n_slides: 38,
+        },
+      },
+    ];
+    expect(isClientDeckResult(results)).toBe(true);
+    expect(outputKind(results)).toBe('Client deck');
+    expect(outputCardReady({ status: 'ok', tool_results: results }, false)).toBe(true);
+    expect(outputOpenHref('/flow/p/1', 'Client deck', 'job-deck')).toBe('/flow/p/1/report');
+    expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report');
+    expect(outputRunIds(results)[0]).toBe('job-deck');
   });
 });

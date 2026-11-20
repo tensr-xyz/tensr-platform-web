@@ -32,6 +32,7 @@ const KIND_LABELS: Record<string, string> = {
   correlation: 'Correlation',
   drivers: 'Drivers',
   export_set: 'Export',
+  build_client_deck: 'Client deck',
   nps: 'NPS',
   calibrated_purchase_intent: 'Calibrated purchase intent',
   share_of_wallet: 'Share of wallet',
@@ -43,8 +44,19 @@ const KIND_LABELS: Record<string, string> = {
 function procedureOf(item: ToolResult): string {
   const args = item.args || {};
   const nested = item.result || {};
-  const value = item.analysis_type || item.procedure || args.analysis_type || nested.analysis_type;
+  const value =
+    item.analysis_type ||
+    item.procedure ||
+    args.analysis_type ||
+    nested.analysis_type ||
+    nested.procedure ||
+    item.name;
   return typeof value === 'string' ? value : '';
+}
+
+/** True when this turn's primary output is a client deck build. */
+export function isClientDeckResult(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => procedureOf(item) === 'build_client_deck');
 }
 
 function bodyOf(item: ToolResult): Record<string, unknown> {
@@ -287,6 +299,7 @@ const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
 function preferredProcedure(items: ToolResult[]): string {
   const names = items.map(procedureOf);
   for (const name of [
+    'build_client_deck',
     'brand_duplication',
     'paired_brand_test',
     'funnel',
@@ -449,7 +462,16 @@ export function outputOpenHref(projectHref: string, kind: string, runId: string)
   if (kind === 'Funnel' && runId) {
     return `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runId)}`;
   }
+  if (kind === 'Client deck') {
+    // Report editor, first page — not the Outputs pane (no stored analysis summary).
+    return `${projectHref}/report`;
+  }
   return `${projectHref}/tables`;
+}
+
+/** Open the Report editor scrolled to the deck's first page. */
+export function clientDeckReportHref(projectHref: string): string {
+  return `${projectHref}/report`;
 }
 
 /** A weight column code and an empty cautions bullet are not part of the finding. */
@@ -723,7 +745,7 @@ export function outputRunIds(results: ToolResult[] | undefined): string[] {
   return ordered
     .map(item => {
       const nested = item.result || {};
-      const value = (item as { run_id?: unknown }).run_id ?? nested.run_id;
+      const value = (item as { run_id?: unknown }).run_id ?? nested.run_id ?? nested.job_id;
       return typeof value === 'string' ? value : '';
     })
     .filter(Boolean);
@@ -748,7 +770,20 @@ export function outputCardReady(
   if (!turn || turn.status !== 'ok') return false;
   // A plan with no table yet is still the approval card. A table in the stream opens the panel.
   if (plan) return hasSummaryTable(turn.tool_results);
-  return outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results);
+  if (outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results)) return true;
+  // Finished deck with a download (or pending job id) still gets the chat card.
+  return (turn.tool_results || []).some(item => {
+    if (procedureOf(item) !== 'build_client_deck') return false;
+    const nested = item.result || {};
+    if (nested.ok === false || nested.error) return false;
+    return Boolean(
+      nested.exports ||
+      nested.key ||
+      nested.run_id ||
+      nested.job_id ||
+      (item as { run_id?: unknown }).run_id
+    );
+  });
 }
 
 /** Method checks the engine ran, as short chips. A failed check is a warning. */

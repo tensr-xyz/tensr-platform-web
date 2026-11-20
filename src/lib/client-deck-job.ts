@@ -8,6 +8,8 @@ const CLIENT_DECK_POLL_LIMIT = 200;
 const CLIENT_DECK_NO_PROGRESS_MS = 120_000;
 /** Insights stage: surface failure within 3 minutes if the worker dies silently. */
 const CLIENT_DECK_NARRATIVE_NO_PROGRESS_MS = 180_000;
+/** Never call a job stalled while the server wrote within this window. */
+const CLIENT_DECK_LIVE_FLOOR_MS = 60_000;
 
 export type ClientDeckJobSnapshot = {
   ok?: boolean;
@@ -22,6 +24,11 @@ export type ClientDeckJobSnapshot = {
   insights_done?: number;
   insights_total?: number;
   report_pages?: number;
+  created_at?: string;
+  updated_at?: string;
+  age_seconds?: number;
+  live?: boolean;
+  resumed?: boolean;
   error?: string;
   result?: Record<string, unknown>;
 };
@@ -106,6 +113,7 @@ function progressFingerprint(job: ClientDeckJobSnapshot | null | undefined): str
     String(job.insights_total || 0),
     String(job.report_pages || 0),
     String(job.message || ''),
+    String(job.updated_at || ''),
   ].join('|');
 }
 
@@ -115,6 +123,20 @@ function noProgressLimitMs(
 ): number {
   if (String(job?.stage || '') === 'narrative') return CLIENT_DECK_NARRATIVE_NO_PROGRESS_MS;
   return fallback;
+}
+
+/** True when the job record was written recently enough that stall claims are wrong. */
+export function clientDeckJobIsLive(
+  job: ClientDeckJobSnapshot | null | undefined,
+  nowMs = Date.now()
+): boolean {
+  if (!job) return false;
+  if (job.live === true) return true;
+  const updated = String(job.updated_at || job.created_at || '').trim();
+  if (!updated) return false;
+  const stamp = Date.parse(updated.endsWith('Z') ? updated : `${updated}Z`);
+  if (!Number.isFinite(stamp)) return false;
+  return nowMs - stamp < CLIENT_DECK_LIVE_FLOOR_MS;
 }
 
 /** Wait until a pending client-deck job is complete or failed. */
@@ -156,6 +178,7 @@ export async function waitForClientDeckJob(
     } else if (
       job &&
       (status === 'pending' || status === 'running') &&
+      !clientDeckJobIsLive(job) &&
       Date.now() - lastProgressAt >= noProgressLimitMs(job, noProgressMs)
     ) {
       const stage = String(job.stage || '');
@@ -220,9 +243,26 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
     (result.exports as { filename?: string } | undefined)?.filename || result.filename || ''
   );
   const pages = result.report_pages;
+  const slides =
+    typeof result.n_slides === 'number' && result.n_slides > 0
+      ? result.n_slides
+      : typeof pages === 'number' && pages > 0
+        ? pages
+        : null;
   const bits: string[] = [];
+  if (slides != null) bits.push(`Done · ${slides} slides`);
   if (key) bits.push(`PowerPoint: ${filename || 'client-deck.pptx'}`);
-  if (typeof pages === 'number' && pages > 0) bits.push(`Report pages: ${pages}`);
+  const preview = Array.isArray(result.exec_summary_preview)
+    ? result.exec_summary_preview
+        .map(item =>
+          String(item || '')
+            .replace(/^[\s•\-*–—]+/, '')
+            .trim()
+        )
+        .filter(Boolean)
+        .slice(0, 2)
+    : [];
+  for (const bullet of preview) bits.push(`• ${bullet}`);
   if (typeof result.n_saved_tables === 'number' && result.n_saved_tables > 0) {
     bits.push(`Saved tables: ${result.n_saved_tables}`);
   }
@@ -231,7 +271,7 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
     bits.push(`Appendix questions: ${result.n_questions}`);
   }
   if (bits.length) {
-    bits.push('Open the Report tab to edit the pages.');
+    bits.push('Open in Report to edit the pages.');
     return bits.join('\n');
   }
   return String(result.message || result.error || 'The PowerPoint file could not be built.');
@@ -303,6 +343,12 @@ export function applyClientDeckJobSnapshot(
       n_saved_tables: job.n_saved_tables ?? prior.n_saved_tables,
       insights_done: job.insights_done ?? prior.insights_done,
       insights_total: job.insights_total ?? prior.insights_total,
+      updated_at: job.updated_at ?? prior.updated_at,
+      created_at: job.created_at ?? prior.created_at,
+      live: clientDeckJobIsLive(job),
+      run_id: found.jobId,
+      job_id: found.jobId,
+      procedure: 'build_client_deck',
       deliver_exports: false,
     };
     delete (entry.result as { exports?: unknown }).exports;
@@ -322,6 +368,7 @@ export function applyClientDeckJobSnapshot(
     procedure: 'build_client_deck',
     deliver_exports: Boolean(key),
     job_id: found.jobId,
+    run_id: found.jobId,
   };
   if (key) {
     merged.exports = {
