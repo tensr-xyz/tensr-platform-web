@@ -1,6 +1,7 @@
 import {
   estimateOfficeDeckSeconds,
   groupReportExportPages,
+  isExportableReportPage,
   pagesFromReportDocument,
   reportPageGroupKey,
 } from '@/lib/office-deck-job';
@@ -10,6 +11,17 @@ describe('reportPageGroupKey', () => {
     expect(reportPageGroupKey('Executive summary', 'Study intro')).toBe('summary');
     expect(reportPageGroupKey('Insights', 'Where respondents are based')).toBe('insights');
     expect(reportPageGroupKey('Appendix', 'Region')).toBe('appendix');
+  });
+});
+
+describe('isExportableReportPage', () => {
+  it('drops section divider pages without a table', () => {
+    expect(isExportableReportPage({ title: 'Appendix', section: 'Appendix' })).toBe(false);
+    expect(isExportableReportPage({ title: 'Insights', section: 'Insights' })).toBe(false);
+    expect(
+      isExportableReportPage({ title: 'Appendix', section: 'Appendix', tableSpecId: 'spec-1' })
+    ).toBe(true);
+    expect(isExportableReportPage({ title: 'Region', section: 'Appendix' })).toBe(true);
   });
 });
 
@@ -25,17 +37,20 @@ describe('pagesFromReportDocument / groupReportExportPages', () => {
           objects: [{ table_spec_id: 'spec-region' }],
         },
         { id: 'i2', title: 'Profession mix', section: 'Insights' },
+        { id: 'folder', title: 'Appendix', section: 'Appendix' },
         { id: 'a1', title: 'Region', section: 'Appendix', objects: [{ tableSpecId: 'spec-a' }] },
         { id: 'a2', title: 'Profession', section: 'Appendix' },
       ],
     });
     expect(pages).toHaveLength(5);
+    expect(pages.map(page => page.title)).not.toContain('Appendix');
     expect(pages[1].tableSpecId).toBe('spec-region');
     const groups = groupReportExportPages(pages);
     expect(groups.map(group => group.key)).toEqual(['summary', 'insights', 'appendix']);
     expect(groups.find(group => group.key === 'insights')?.defaultExpanded).toBe(true);
     expect(groups.find(group => group.key === 'appendix')?.defaultExpanded).toBe(false);
     expect(groups.find(group => group.key === 'summary')?.pages).toHaveLength(1);
+    expect(groups.find(group => group.key === 'appendix')?.pages).toHaveLength(2);
   });
 });
 

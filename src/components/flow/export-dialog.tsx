@@ -345,12 +345,12 @@ export function ExportDialog({
         n_cols: 0,
       })),
       flowJson<{
-        columns?: unknown[];
+        columns?: { name?: string; label?: string; measure?: string }[];
         variable_sets?: unknown[];
         multiple_response_sets?: unknown[];
       }>(`/datasets/${datasetId}/metadata`).catch(
         (): {
-          columns?: unknown[];
+          columns?: { name?: string; label?: string; measure?: string }[];
           variable_sets?: unknown[];
           multiple_response_sets?: unknown[];
         } => ({})
@@ -358,16 +358,29 @@ export function ExportDialog({
     ]).then(([schema, meta]) => {
       if (!live) return;
       const rows = Number(schema.n_rows || 0);
-      const setCount = Array.isArray(meta.variable_sets)
-        ? meta.variable_sets.length
+      const sets = Array.isArray(meta.variable_sets)
+        ? meta.variable_sets
         : Array.isArray(meta.multiple_response_sets)
-          ? meta.multiple_response_sets.length
-          : 0;
-      const colCount = Array.isArray(meta.columns)
-        ? meta.columns.length
-        : Number(schema.n_cols || 0);
-      // Prefer set count when present (closer to “questions”); else column count.
-      setFileStats({ rows, questions: setCount || colCount });
+          ? meta.multiple_response_sets
+          : [];
+      const covered = new Set<string>();
+      for (const item of sets) {
+        if (!item || typeof item !== 'object') continue;
+        const columns = (item as { columns?: unknown[] }).columns;
+        if (!Array.isArray(columns)) continue;
+        for (const column of columns) {
+          const name = String(column || '').trim();
+          if (name) covered.add(name);
+        }
+      }
+      const singles = (meta.columns || []).filter(column => {
+        const name = String(column.name || '').trim();
+        if (!name || covered.has(name) || isInternalColumn(name) || isIdColumn(name)) return false;
+        const measure = String(column.measure || '').toLowerCase();
+        return measure !== 'text' && measure !== 'datetime';
+      }).length;
+      // Questionnaire units ≈ sets (collapsed) + remaining single columns.
+      setFileStats({ rows, questions: sets.length + singles });
     });
     return () => {
       live = false;
@@ -777,25 +790,29 @@ export function ExportDialog({
                         </label>
                         {open || group.key === 'insights' || preview.length > 0 ? (
                           <div className="xr-group-pages">
-                            {preview.map((page, index) => (
-                              <label key={page.id} className="xr-item">
-                                <Checkbox
-                                  checked={pickedPages[page.id] !== false}
-                                  onCheckedChange={value =>
-                                    setPickedPages(currentMap => ({
-                                      ...currentMap,
-                                      [page.id]: value === true,
-                                    }))
-                                  }
-                                  aria-label={`Include ${page.title}`}
-                                />
-                                <span>
-                                  {group.key === 'appendix'
-                                    ? `Q${index + 1} · ${page.title}`
-                                    : `${String(index + 1).padStart(2, '0')} · ${page.title}`}
-                                </span>
-                              </label>
-                            ))}
+                            {preview.map(page => {
+                              const index = group.pages.findIndex(row => row.id === page.id);
+                              const number = index >= 0 ? index + 1 : 1;
+                              return (
+                                <label key={page.id} className="xr-item">
+                                  <Checkbox
+                                    checked={pickedPages[page.id] !== false}
+                                    onCheckedChange={value =>
+                                      setPickedPages(currentMap => ({
+                                        ...currentMap,
+                                        [page.id]: value === true,
+                                      }))
+                                    }
+                                    aria-label={`Include ${page.title}`}
+                                  />
+                                  <span>
+                                    {group.key === 'appendix'
+                                      ? `Q${number} · ${page.title}`
+                                      : `${String(number).padStart(2, '0')} · ${page.title}`}
+                                  </span>
+                                </label>
+                              );
+                            })}
                             {!open && hidden > 0 ? (
                               <Button
                                 type="button"

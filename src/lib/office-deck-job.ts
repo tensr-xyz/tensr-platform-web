@@ -45,6 +45,24 @@ export function reportPageGroupKey(section: string, title: string): ReportPageGr
   return 'other';
 }
 
+/**
+ * Section divider pages (title equals the section name, no live table) must not
+ * appear in the export picker — they were counted as "Q1 · Appendix".
+ */
+export function isExportableReportPage(page: {
+  title: string;
+  section: string;
+  tableSpecId?: string;
+}): boolean {
+  if (page.tableSpecId) return true;
+  const title = page.title.trim().toLowerCase();
+  const section = page.section.trim().toLowerCase();
+  if (!title) return false;
+  if (section && title === section) return false;
+  if (title === 'appendix' || title === 'insights' || title === 'summary') return false;
+  return true;
+}
+
 export function pagesFromReportDocument(
   document: { pages?: unknown } | null | undefined
 ): ReportExportPage[] {
@@ -67,7 +85,9 @@ export function pagesFromReportDocument(
         break;
       }
     }
-    out.push({ id, title, section, ...(tableSpecId ? { tableSpecId } : {}) });
+    const next: ReportExportPage = { id, title, section, ...(tableSpecId ? { tableSpecId } : {}) };
+    if (!isExportableReportPage(next)) return;
+    out.push(next);
   });
   return out;
 }
