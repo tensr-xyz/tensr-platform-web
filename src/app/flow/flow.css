@@ -12952,7 +12952,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .report-editor-thumb-num {
   font-size: 11px;
   line-height: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   color: var(--color-muted);
 }
 
