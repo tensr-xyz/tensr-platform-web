@@ -28,6 +28,8 @@ import {
   estimateOfficeDeckSeconds,
   exportOfficeDeckAndDownload,
   groupReportExportPages,
+  isAppendixExportPage,
+  isSummaryExportPage,
   pagesFromReportDocument,
   type ReportExportPage,
 } from '@/lib/office-deck-job';
@@ -332,6 +334,10 @@ export function ExportDialog({
         const pages = pagesFromReportDocument(body.document);
         setReportPages(pages);
         setPickedPages(Object.fromEntries(pages.map(page => [page.id, true])));
+        // Research report: exec summary on when the Report has a summary page.
+        const hasSummary = pages.some(page => isSummaryExportPage(page));
+        setWithNote(hasSummary);
+        setMethodsOn(pages.some(page => isAppendixExportPage(page)));
         setExpandedGroups(
           Object.fromEntries(
             groupReportExportPages(pages).map(group => [group.key, group.defaultExpanded])
@@ -592,6 +598,16 @@ export function ExportDialog({
         return next;
       });
     };
+    const setSummaryToggle = (on: boolean) => {
+      setWithNote(on);
+      const ids = reportPages.filter(page => isSummaryExportPage(page)).map(page => page.id);
+      if (ids.length) setGroupChecked(ids, on);
+    };
+    const setAppendixToggle = (on: boolean) => {
+      setMethodsOn(on);
+      const ids = reportPages.filter(page => isAppendixExportPage(page)).map(page => page.id);
+      if (ids.length) setGroupChecked(ids, on);
+    };
     return (
       <Dialog open onOpenChange={open => !open && onClose()}>
         <DialogContent className="export-dialog xr">
@@ -646,7 +662,7 @@ export function ExportDialog({
                       </span>
                       <Switch
                         checked={withNote}
-                        onCheckedChange={setWithNote}
+                        onCheckedChange={setSummaryToggle}
                         aria-label="Executive summary slide"
                       />
                     </label>
@@ -656,7 +672,7 @@ export function ExportDialog({
                       </span>
                       <Switch
                         checked={methodsOn}
-                        onCheckedChange={setMethodsOn}
+                        onCheckedChange={setAppendixToggle}
                         aria-label="Question appendix"
                       />
                     </label>

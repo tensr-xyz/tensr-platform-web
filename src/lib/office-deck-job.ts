@@ -48,6 +48,7 @@ export function reportPageGroupKey(section: string, title: string): ReportPageGr
 /**
  * Section divider pages (title equals the section name, no live table) must not
  * appear in the export picker — they were counted as "Q1 · Appendix".
+ * Executive summary is a real text slide (title often equals its section), so keep it.
  */
 export function isExportableReportPage(page: {
   title: string;
@@ -58,9 +59,21 @@ export function isExportableReportPage(page: {
   const title = page.title.trim().toLowerCase();
   const section = page.section.trim().toLowerCase();
   if (!title) return false;
+  // Text-only exec summary pages are slides, not section dividers.
+  if (title === 'executive summary' || /exec(utive)?\s+summary/.test(title)) return true;
   if (section && title === section) return false;
   if (title === 'appendix' || title === 'insights' || title === 'summary') return false;
   return true;
+}
+
+/** True when a picker page belongs in the Summary group. */
+export function isSummaryExportPage(page: { title: string; section: string }): boolean {
+  return reportPageGroupKey(page.section, page.title) === 'summary';
+}
+
+/** True when a picker page belongs in the Appendix group. */
+export function isAppendixExportPage(page: { title: string; section: string }): boolean {
+  return reportPageGroupKey(page.section, page.title) === 'appendix';
 }
 
 export function pagesFromReportDocument(
