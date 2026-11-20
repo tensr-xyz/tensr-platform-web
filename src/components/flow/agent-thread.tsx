@@ -382,7 +382,9 @@ export function useAgentThread({
           datasetId: datasetIdRef.current,
           signal: watch.signal,
           onProgress: (_step, message) => {
-            if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+            // Keep polling until the job finishes even if a follow-up turn bumped
+            // turnToken — otherwise status questions orphan the progress card.
+            if (!aliveRef.current) return;
             shown(() => {
               setSteps(current => (current.includes(message) ? current : [...current, message]));
             });
@@ -391,7 +393,11 @@ export function useAgentThread({
             if (aliveRef.current) onReportUpdatedRef.current?.();
           },
           onUpdate: next => {
-            if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+            if (!aliveRef.current) return;
+            // Follow-up turns bump turnToken; still refresh while this deck job is live.
+            if (watchToken !== turnTokenRef.current && !clientDeckStillPending(next)) {
+              return;
+            }
             const nextAnswer = visibleTurnAnswer(
               next.status,
               keptModelAnswer('', next.answer_markdown || '')
@@ -400,9 +406,11 @@ export function useAgentThread({
               setAnswer(nextAnswer);
               setTurn(next);
               setDownloads(downloadEntries(next));
-              setNextSteps(
-                nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
-              );
+              if (watchToken === turnTokenRef.current) {
+                setNextSteps(
+                  nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
+                );
+              }
             });
             onFinishedRef.current?.(next);
           },

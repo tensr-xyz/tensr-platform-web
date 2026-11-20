@@ -291,10 +291,18 @@ export function applyClientDeckJobSnapshot(
       ...prior,
       ok: true,
       pending: true,
-      status: 'pending',
+      // Keep the live job status/stage/counters so status tooling and the card agree.
+      status: status === 'running' ? 'running' : 'pending',
+      stage: job.stage ?? prior.stage,
+      message: line,
       progress_message: line,
       answer_markdown: answer,
       report_pages: pages ?? prior.report_pages,
+      tables_done: job.tables_done ?? prior.tables_done,
+      tables_total: job.tables_total ?? prior.tables_total,
+      n_saved_tables: job.n_saved_tables ?? prior.n_saved_tables,
+      insights_done: job.insights_done ?? prior.insights_done,
+      insights_total: job.insights_total ?? prior.insights_total,
       deliver_exports: false,
     };
     delete (entry.result as { exports?: unknown }).exports;
