@@ -4,6 +4,8 @@ import type { AgentLoopResponse, AgentLoopToolResult } from '@/lib/run-agent-loo
 const CLIENT_DECK_POLL_MS = 1500;
 /** ~5 minutes: multi-chunk table builds on the 180s worker need room to finish. */
 const CLIENT_DECK_POLL_LIMIT = 200;
+/** Fail visibly when tables_done / stage message has not moved (matches API ~2 min). */
+const CLIENT_DECK_NO_PROGRESS_MS = 120_000;
 
 export type ClientDeckJobSnapshot = {
   ok?: boolean;
@@ -82,6 +84,18 @@ export async function fetchClientDeckJob(
   }
 }
 
+function progressFingerprint(job: ClientDeckJobSnapshot | null | undefined): string {
+  if (!job) return '';
+  return [
+    String(job.status || ''),
+    String(job.stage || ''),
+    String(job.tables_done || 0),
+    String(job.tables_total || 0),
+    String(job.report_pages || 0),
+    String(job.message || ''),
+  ].join('|');
+}
+
 /** Wait until a pending client-deck job is complete or failed. */
 export async function waitForClientDeckJob(
   datasetId: string,
@@ -89,6 +103,7 @@ export async function waitForClientDeckJob(
   opts?: {
     intervalMs?: number;
     attempts?: number;
+    noProgressMs?: number;
     signal?: AbortSignal;
     onProgress?: (message: string) => void;
     onJob?: (job: ClientDeckJobSnapshot) => void;
@@ -96,8 +111,11 @@ export async function waitForClientDeckJob(
 ): Promise<ClientDeckJobSnapshot | null> {
   const intervalMs = opts?.intervalMs ?? CLIENT_DECK_POLL_MS;
   const attempts = opts?.attempts ?? CLIENT_DECK_POLL_LIMIT;
+  const noProgressMs = opts?.noProgressMs ?? CLIENT_DECK_NO_PROGRESS_MS;
   let last = '';
   let lastPages = -1;
+  let lastFingerprint = '';
+  let lastProgressAt = Date.now();
   for (let i = 0; i < attempts; i += 1) {
     if (opts?.signal?.aborted) return null;
     const job = await fetchClientDeckJob(datasetId, jobId);
@@ -110,8 +128,51 @@ export async function waitForClientDeckJob(
     }
     const pages = Number(job?.report_pages || 0);
     if (pages > lastPages) lastPages = pages;
+    const fingerprint = progressFingerprint(job);
+    if (fingerprint && fingerprint !== lastFingerprint) {
+      lastFingerprint = fingerprint;
+      lastProgressAt = Date.now();
+    } else if (
+      job &&
+      (status === 'pending' || status === 'running') &&
+      Date.now() - lastProgressAt >= noProgressMs
+    ) {
+      const total = Number(job.tables_total || 0);
+      const done = Number(job.tables_done || 0);
+      const stuck =
+        total > 0
+          ? `The deck build made no progress for two minutes (still ${done} of ${total} tables). Ask me to continue to try again.`
+          : 'The deck build made no progress for two minutes. Ask me to continue to try again.';
+      const failed: ClientDeckJobSnapshot = {
+        ...job,
+        status: 'failed',
+        error: stuck,
+        message: stuck,
+      };
+      opts?.onJob?.(failed);
+      opts?.onProgress?.(stuck);
+      return failed;
+    }
     if (job && status !== 'pending' && status !== 'running') return job;
-    if (i + 1 >= attempts) return job;
+    if (i + 1 >= attempts) {
+      // Only hard-fail on the full background watch budget — short peeks
+      // (resolvePendingClientDeckInResponse) must return the live snapshot.
+      const fullWatch = attempts >= CLIENT_DECK_POLL_LIMIT;
+      if (fullWatch && job && (status === 'pending' || status === 'running')) {
+        const timedOut =
+          'The deck build is still running after five minutes with no finish. Ask me to continue to try again.';
+        const failed: ClientDeckJobSnapshot = {
+          ...job,
+          status: 'failed',
+          error: timedOut,
+          message: timedOut,
+        };
+        opts?.onJob?.(failed);
+        opts?.onProgress?.(timedOut);
+        return failed;
+      }
+      return job;
+    }
     await new Promise<void>(resolve => {
       const timer = setTimeout(resolve, intervalMs);
       opts?.signal?.addEventListener(
