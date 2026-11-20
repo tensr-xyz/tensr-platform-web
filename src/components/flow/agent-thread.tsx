@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useProjectSessions } from '@/hooks/api/use-project-data';
+import { invalidateProjectSessions, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   Empty,
   EmptyDescription,
@@ -341,6 +344,16 @@ export function useAgentThread({
     [projectId, syncAddress]
   );
 
+  const queryClient = useQueryClient();
+  const sessionsQuery = useProjectSessions(projectId || null);
+  useEffect(() => {
+    if (!sessionsQuery.data) {
+      if (sessionsQuery.isError) setSessions(current => current || []);
+      return;
+    }
+    setSessions(sortSessionsByRecency(sessionsQuery.data));
+  }, [sessionsQuery.data, sessionsQuery.isError]);
+
   const noteSession = useCallback(
     (sessionId: string, title: string) => {
       sessionRef.current = sessionId;
@@ -353,25 +366,19 @@ export function useAgentThread({
       if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
-        return sortSessionsByRecency([row, ...rest]);
+        const next = sortSessionsByRecency([row, ...rest]);
+        if (projectId) queryClient.setQueryData(projectQueryKeys.sessions(projectId), next);
+        return next;
       });
       onSessionRef.current?.(row);
     },
-    [rememberChat]
+    [rememberChat, projectId, queryClient]
   );
 
   const loadRail = useCallback(() => {
     if (!projectId) return;
-    void flowJson<{ sessions?: AgentChatSession[] }>(`/api/projects/${projectId}/sessions`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
-      .catch(() => setSessions(current => current || []));
-  }, [projectId]);
-
-  useEffect(() => {
-    loadRail();
-  }, [loadRail]);
+    void invalidateProjectSessions(queryClient, projectId);
+  }, [projectId, queryClient]);
 
   const startDeckWatch = useCallback(
     (result: AgentLoopResponse, watchToken: number) => {

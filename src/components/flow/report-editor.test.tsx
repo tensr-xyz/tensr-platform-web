@@ -1,5 +1,14 @@
+import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { previewGridFromBannerBook, ReportEditor } from './report-editor';
+
+function renderEditor(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(async (path: string, init?: { method?: string; body?: string }) => {
@@ -99,7 +108,7 @@ describe('previewGridFromBannerBook', () => {
 
 describe('ReportEditor formatting', () => {
   it('loads live table numbers instead of placeholder rows', async () => {
-    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+    renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
     expect(await screen.findByText('Prompted awareness')).toBeTruthy();
     expect(screen.getByText('62%')).toBeTruthy();
     expect(screen.getByText('71%')).toBeTruthy();
@@ -108,7 +117,7 @@ describe('ReportEditor formatting', () => {
   });
 
   it('formats selected text, paints styles, and renames default labels', async () => {
-    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+    renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
 
     expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
     expect(screen.getByText('Awareness is up')).toBeTruthy();
@@ -135,7 +144,7 @@ describe('ReportEditor formatting', () => {
   });
 
   it('styles a table, adds rules, and edits rows from the 9a chrome', async () => {
-    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+    renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
 
     expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
     fireEvent.click(screen.getByText('House'));
@@ -167,7 +176,7 @@ describe('ReportEditor formatting', () => {
   });
 
   it('inserts a live value from the 9a toolbar and binds it in the inspector', async () => {
-    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+    renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
 
     expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '+ Live value' }));

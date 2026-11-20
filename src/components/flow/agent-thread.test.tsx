@@ -1,4 +1,6 @@
+import type { ReactElement } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   AgentThread,
   liveRunShouldReplaceChat,
@@ -19,6 +21,13 @@ jest.mock('@/lib/run-agent-loop', () => ({
 }));
 
 const send = runAgentLoop as jest.Mock;
+
+function renderThread(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 describe('shared agent thread', () => {
   it('restores a readable step and hides a tool name', () => {
@@ -78,7 +87,7 @@ describe('shared agent thread', () => {
   });
 
   it('shows the same composer and empty thread in a side panel', async () => {
-    render(
+    renderThread(
       <AgentThread
         projectId="project"
         datasetId="file"
@@ -97,7 +106,7 @@ describe('shared agent thread', () => {
 
   it('sends a queued question once, even after the chat list reloads', async () => {
     send.mockResolvedValue({ status: 'ok', answer_markdown: 'Done', session_id: 's1' });
-    render(
+    renderThread(
       <AgentThread
         projectId="project"
         datasetId="file"
@@ -123,7 +132,7 @@ describe('shared agent thread', () => {
       status: 'Thinking…',
       running: true,
     });
-    render(
+    renderThread(
       <AgentThread
         projectId="project"
         datasetId="file"
