@@ -45,6 +45,20 @@ describe('QA round 9: shared table base', () => {
       expect(copy.line).toMatch(/unweighted/i);
     }
   });
+
+  test('weighted footer shows Kish effective n from the engine weight block', () => {
+    const copy = tableBaseCopy({
+      base_label: 'base 120 weighted (unweighted 100)',
+      weight: {
+        weight_aware: true,
+        weighted_n: 120,
+        unweighted_n: 100,
+        kish_effective_base: 84.2,
+      },
+    });
+    expect(copy.foot).toContain('120 weighted (100 unweighted)');
+    expect(copy.foot).toContain('effective n 84');
+  });
 });
 
 describe('QA round 9: stack opposite-end default', () => {

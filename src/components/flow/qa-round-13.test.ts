@@ -2,6 +2,7 @@ import { archiveChatTurn } from '@/components/flow/chat-thread';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
 import {
   displayedCount,
+  figuresForStatistics,
   shownDecimals,
   shownStatistics,
   tableFootStatus,
@@ -22,11 +23,12 @@ describe('round 13', () => {
     expect(past.map(turn => turn.answer)).toEqual(['8 rows.', 'Base 8.', 'North.']);
   });
 
-  it('shows the weighted count, rounded the same way as the export', () => {
+  it('shows the weighted count beside the unweighted count when both exist', () => {
     const cell = { count: 39.4, weighted_n: 39.4, unweighted_n: 36 };
-    expect(displayedCount(cell, true)).toBe('39');
+    expect(displayedCount(cell, true)).toBe('39 (36)');
     expect(displayedCount(cell, false)).toBe('36');
-    expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76');
+    expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76 (70)');
+    expect(displayedCount({ count: 76.2 }, true)).toBe('76');
   });
 
   it('does not call an edited table saved', () => {
@@ -74,12 +76,24 @@ describe('round 13', () => {
       expect(shownStatistics(measure, true)).toEqual([measure, 'column_mean']);
       expect(shownStatistics(measure, false)).toEqual([measure]);
     }
+    expect(shownStatistics(['column_proportion', 'count'], true)).toEqual([
+      'column_proportion',
+      'count',
+      'column_mean',
+    ]);
     expect(shownDecimals('column_proportion', 0, true)).toEqual({
       column_proportion: 0,
       column_mean: 1,
     });
     expect(shownDecimals('count', 3, true)).toEqual({ count: 0, column_mean: 3 });
+    expect(shownDecimals(['count', 'column_proportion'], 1, false)).toEqual({
+      count: 0,
+      column_proportion: 1,
+    });
     expect(shownDecimals('row_proportion', 2, false)).toEqual({ row_proportion: 2 });
     expect(shownDecimals('total_proportion', 1, true).column_mean).toBe(1);
+    expect(figuresForStatistics(['column_proportion', 'count'])).toEqual(['percent', 'count']);
+    expect(figuresForStatistics(['count', 'column_mean'])).toEqual(['count', 'mean']);
+    expect(shownStatistics('count', true)).toEqual(['count', 'column_mean']);
   });
 });

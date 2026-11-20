@@ -1,10 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { flowJson } from '@/lib/flow-api';
+import {
+  CODEFRAME_IMPORT_MODES,
+  codeframeImportSummary,
+  codesForImportMode,
+  shouldUseImportFrameApply,
+  textColumnFromCodeColumn,
+  type CodeframeImportMode,
+  type CodeframeImportParsed,
+  type CodeframeTheme,
+} from '@/lib/codeframe-import';
 
 type CodeRow = { id: string; label: string; count: number };
 
@@ -25,6 +35,32 @@ function rowsFrom(values: string[]): { codes: CodeRow[]; blank: number } {
   return { codes, blank };
 }
 
+async function pollApply(
+  datasetId: string,
+  body: Record<string, unknown>
+): Promise<{ datasetId: string; codeColumn: string }> {
+  let jobId: string | null = null;
+  for (;;) {
+    const applied: Record<string, unknown> = await flowJson(
+      `/datasets/${datasetId}/open-end/apply`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ ...body, job_id: jobId }),
+      }
+    );
+    if (applied.done) {
+      const nextId = String(applied.derived_dataset_id || '');
+      if (!nextId) throw new Error('The themes were saved but no new version came back.');
+      return {
+        datasetId: nextId,
+        codeColumn: String(applied.code_column || ''),
+      };
+    }
+    if (!applied.job_id) throw new Error('Coding stopped before it finished.');
+    jobId = String(applied.job_id);
+  }
+}
+
 export function CodeFrameRail({
   datasetId,
   column,
@@ -34,6 +70,7 @@ export function CodeFrameRail({
   texts = [],
   onFilter,
   onUseAsBanner,
+  onApplied,
 }: {
   datasetId?: string;
   column: string;
@@ -43,6 +80,7 @@ export function CodeFrameRail({
   texts?: string[];
   onFilter?: (value: string) => void;
   onUseAsBanner?: () => void;
+  onApplied?: (datasetId: string) => void;
 }) {
   const [{ codes, blank }, setFrame] = useState(() => rowsFrom(values));
   const [selected, setSelected] = useState<string[]>([]);
@@ -51,6 +89,13 @@ export function CodeFrameRail({
   const [split, setSplit] = useState<{ left: string; right: string } | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    filename: string;
+    parsed: CodeframeImportParsed;
+  } | null>(null);
+  const [importMode, setImportMode] = useState<CodeframeImportMode>('replace');
+  const fileRef = useRef<HTMLInputElement>(null);
   const signature = `${column}\n${values.join('\n')}`;
   useEffect(() => {
     const next = rowsFrom(values);
@@ -60,8 +105,14 @@ export function CodeFrameRail({
     setRename('');
     setSplit(null);
     setError('');
+    setImportPreview(null);
+    setImportMode('replace');
   }, [signature]);
   const total = values.length || 1;
+  const textColumn = textColumnFromCodeColumn(column);
+  const headTitle = `${title || textColumn} · ${codes.length} theme${
+    codes.length === 1 ? '' : 's'
+  }`;
 
   const toggle = (id: string, checked: boolean) => {
     setSelected(current => (checked ? [...current, id] : current.filter(item => item !== id)));
@@ -77,15 +128,206 @@ export function CodeFrameRail({
 
   const percent = (count: number) => `${Math.round((count / total) * 100)}%`;
 
+  async function loadCurrentThemes(): Promise<CodeframeTheme[]> {
+    if (!datasetId) return codes.map(row => ({ id: row.id, label: row.label }));
+    try {
+      const body = await flowJson<{
+        document?: { codes?: CodeframeTheme[] };
+      }>(`/datasets/${datasetId}/open-end/export-frame?code_column=${encodeURIComponent(column)}`);
+      const stored = body.document?.codes;
+      if (Array.isArray(stored) && stored.length) return stored;
+    } catch {
+      // Fall back to labels shown in the rail.
+    }
+    return codes.map(row => ({ id: row.id, label: row.label }));
+  }
+
+  async function onPickFile(file: File | null) {
+    if (!file || !datasetId) return;
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      const content = await file.text();
+      const parsed = await flowJson<CodeframeImportParsed>(
+        `/datasets/${datasetId}/open-end/import-frame`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            content,
+            filename: file.name,
+            apply: false,
+          }),
+        }
+      );
+      if (!Array.isArray(parsed.codes) || !parsed.codes.length) {
+        throw new Error('No themes were found in that codeframe.');
+      }
+      setImportPreview({ filename: file.name, parsed });
+    } catch (err) {
+      setImportPreview(null);
+      setError(err instanceof Error ? err.message : 'Could not read that codeframe');
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function applyImport(mode: CodeframeImportMode) {
+    if (!datasetId || !importPreview || busy) return;
+    setImportMode(mode);
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      const current = await loadCurrentThemes();
+      const imported = importPreview.parsed.codes;
+      const text = String(importPreview.parsed.source_text_column || '').trim() || textColumn;
+      if (shouldUseImportFrameApply(mode)) {
+        let jobId: string | null = null;
+        for (;;) {
+          const result: {
+            applied?: { done?: unknown; derived_dataset_id?: unknown; job_id?: unknown };
+          } = await flowJson(`/datasets/${datasetId}/open-end/import-frame`, {
+            method: 'POST',
+            body: JSON.stringify({
+              frame: importPreview.parsed.document || {
+                codes: imported,
+                assignments: importPreview.parsed.assignments || [],
+                source_text_column: text,
+              },
+              filename: importPreview.filename,
+              text_column: text,
+              apply: true,
+              use_model: false,
+              job_id: jobId,
+            }),
+          });
+          const applied = result.applied ?? {};
+          if (applied.done) {
+            const nextId = String(applied.derived_dataset_id || '');
+            if (!nextId) throw new Error('The themes were saved but no new version came back.');
+            setImportPreview(null);
+            onApplied?.(nextId);
+            return;
+          }
+          if (!applied.job_id) throw new Error('Coding stopped before it finished.');
+          jobId = String(applied.job_id);
+        }
+      }
+      const frame = codesForImportMode(mode, imported, current);
+      const saved = await pollApply(datasetId, {
+        text_column: text,
+        codes: frame,
+        use_model: false,
+      });
+      setImportPreview(null);
+      onApplied?.(saved.datasetId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply that codeframe');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportFrame() {
+    if (!datasetId || busy) return;
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      const body = await flowJson<{ document?: Record<string, unknown> }>(
+        `/datasets/${datasetId}/open-end/export-frame?code_column=${encodeURIComponent(column)}`
+      );
+      const document = body.document;
+      if (!document) throw new Error('That column has no saved codeframe');
+      const blob = new Blob([JSON.stringify(document, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${textColumn || column}-codeframe.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNote('Codeframe downloaded.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export the codeframe');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const importSummary = importPreview
+    ? codeframeImportSummary(
+        importPreview.parsed,
+        codes.map(row => ({ id: row.id, label: row.label }))
+      )
+    : '';
+
   return (
     <div className="code-frame">
       <div className="code-frame-head">
         <p className="flow-muted">
           Open end · coded · {codes.length} theme{codes.length === 1 ? '' : 's'}
         </p>
-        <h2>{title}</h2>
+        <div className="code-frame-head-row">
+          <h2>{headTitle}</h2>
+          <div className="code-frame-head-actions">
+            <Button
+              type="button"
+              className="code-frame-tool"
+              disabled={!datasetId || busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              Import client codeframe
+            </Button>
+            <Button
+              type="button"
+              className="code-frame-tool"
+              disabled={!datasetId || busy}
+              onClick={() => void exportFrame()}
+            >
+              Export codeframe
+            </Button>
+            <Input
+              ref={fileRef}
+              className="sr-only"
+              type="file"
+              accept=".json,.csv,.tsv,application/json,text/csv,text/tab-separated-values"
+              aria-label="Client codeframe file"
+              onChange={event => void onPickFile(event.target.files?.[0] || null)}
+            />
+          </div>
+        </div>
         {question && question !== title ? <p className="flow-muted">{question}</p> : null}
       </div>
+
+      {importPreview ? (
+        <div className="code-frame-import" aria-busy={busy}>
+          <p className="code-frame-import-title">Import · {importPreview.filename}</p>
+          <p className="code-frame-import-summary">{importSummary}</p>
+          <div className="code-frame-import-modes">
+            {CODEFRAME_IMPORT_MODES.map(mode => (
+              <Button
+                key={mode.id}
+                type="button"
+                className="code-frame-import-mode"
+                data-active={importMode === mode.id ? true : undefined}
+                disabled={busy}
+                onClick={() => void applyImport(mode.id)}
+              >
+                {mode.label}
+              </Button>
+            ))}
+          </div>
+          <p className="code-frame-import-note">
+            CSV or JSON: code, label, net. Pre-coded answers (respondent, code) are kept as they
+            are.
+          </p>
+        </div>
+      ) : null}
+
       <div className="code-frame-meta">
         <span>Code frame</span>
         <span>% of {values.length}</span>
@@ -278,22 +520,6 @@ export function CodeFrameRail({
         </Button>
         <Button type="button" onClick={() => setNote('Recode another wave from Interviews.')}>
           Recode
-        </Button>
-        <Button
-          type="button"
-          onClick={() => {
-            const blob = new Blob([JSON.stringify({ column, codes, blank }, null, 2)], {
-              type: 'application/json',
-            });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = `${column}-frame.json`;
-            anchor.click();
-            URL.revokeObjectURL(url);
-          }}
-        >
-          Export frame
         </Button>
       </div>
     </div>

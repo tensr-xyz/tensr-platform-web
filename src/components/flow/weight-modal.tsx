@@ -17,13 +17,19 @@ import { efficiencyPercent } from '@/lib/flow-survey';
 import { RAKE_COPY } from '@/lib/rake-weights';
 import {
   achievedShare,
+  buildCombineWeightsBody,
+  buildScreenRakeBody,
   categoryMeanWeight,
-  countsFromPercents,
   marginFor,
+  PREVIOUS_WEIGHT,
+  resolveWeightedTotal,
   shareLabel,
   type WeightCode,
   type WeightMargin,
+  type WeightedTotalMode,
 } from '@/components/flow/weight-targets';
+import { Segmented } from '@/components/ui/segmented';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/rest';
 
 type WeightDataset = {
   dataset_id?: string;
@@ -123,8 +129,21 @@ type WeightGroup = {
   codes: WeightCode[];
 };
 
+type WeightTab = 'targets' | 'limits' | 'combine';
+
+type ConstructedWeightPayload = {
+  dataset_id?: string;
+  derived_dataset_id?: string;
+  original_filename?: string;
+};
+
 function rowId(row: WeightDataset): string {
   return row.dataset_id || row.id || '';
+}
+
+function columnLabel(columns: { name: string; label?: string }[], name: string): string {
+  const column = columns.find(item => item.name === name);
+  return column?.label && column.label !== name ? column.label : name;
 }
 
 export function WeightPanel({
@@ -154,6 +173,13 @@ export function WeightPanel({
   const [addColumn, setAddColumn] = useState('');
   const [sourceDataset, setSourceDataset] = useState('');
   const [cap, setCap] = useState('');
+  const [floor, setFloor] = useState('');
+  const [startFrom, setStartFrom] = useState('');
+  const [tab, setTab] = useState<WeightTab>('targets');
+  const [totalMode, setTotalMode] = useState<WeightedTotalMode>('sample');
+  const [customTotal, setCustomTotal] = useState('');
+  const [combineColumns, setCombineColumns] = useState<string[]>([]);
+  const [combineRescale, setCombineRescale] = useState(true);
   const [diagnostics, setDiagnostics] = useState<RakeDiagnostics | null>(null);
   const [savedName, setSavedName] = useState('');
   const [error, setError] = useState('');
@@ -280,43 +306,35 @@ export function WeightPanel({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not load targets'));
   };
 
-  const requestBody = (previewOnly: boolean) => {
-    const categorical: Record<string, Record<string, number>> = {};
-    for (const group of groups) {
-      const counts = countsFromPercents(
-        group.codes.map(code => ({
+  const weightedTotal = resolveWeightedTotal(totalMode, customTotal);
+
+  const requestBody = (previewOnly: boolean) =>
+    buildScreenRakeBody(
+      groups.map(group => ({
+        column: group.column,
+        codes: group.codes.map(code => ({
           code: code.code,
           percent: percents[group.column]?.[code.code] || '',
         })),
-        group.total
-      );
-      if (Object.keys(counts).length) categorical[group.column] = counts;
-    }
-    if (!Object.keys(categorical).length) return null;
-    const upper = Number(cap);
-    const missingTargets = Object.fromEntries(
-      Object.entries(missingPct)
-        .filter(
-          ([column, value]) => categorical[column] && Number.isFinite(Number(value)) && value.trim()
-        )
-        .map(([column, value]) => {
-          const total = groups.find(group => group.column === column)?.total || 0;
-          return [column, (Number(value) / 100) * total];
-        })
+      })),
+      {
+        missingHandling: handling,
+        missingTargets: missingPct,
+        floor,
+        cap,
+        startFrom,
+        weightedTotal,
+        preview: previewOnly,
+      }
     );
-    return {
-      categorical_targets: categorical,
-      ...(handling ? { missing_handling: handling } : {}),
-      ...(handling === 'missing_target' ? { missing_targets: missingTargets } : {}),
-      ...(Number.isFinite(upper) && upper > 0 ? { upper } : {}),
-      ...(previewOnly ? { preview: true } : {}),
-    };
-  };
 
   const previewKey = JSON.stringify([
     percents,
     groups.map(group => group.column),
+    floor,
     cap,
+    startFrom,
+    weightedTotal,
     handling,
     missingPct,
   ]);
@@ -355,8 +373,19 @@ export function WeightPanel({
 
   const needsChoice = Boolean(preview?.needs_choice) && !handling;
 
-  const save = () => {
+  const markSaved = (payload: ConstructedWeightPayload) => {
+    const name = payload.original_filename || 'the new file';
+    setSavedName(name);
+    const nextId = String(payload.derived_dataset_id || payload.dataset_id || '');
+    if (nextId) setSaved({ id: nextId, name });
+  };
+
+  const saveRake = () => {
     if (!datasetId) return;
+    if (totalMode !== 'sample' && weightedTotal == null) {
+      setError('Enter a positive weighted total, or choose Same as sample.');
+      return;
+    }
     const body = requestBody(false);
     if (!body) {
       setError('Enter a target percent for at least one code.');
@@ -374,13 +403,55 @@ export function WeightPanel({
     })
       .then(payload => {
         setDiagnostics(payload.diagnostics || null);
-        const name = payload.original_filename || 'the new file';
-        setSavedName(name);
-        const nextId = String(payload.derived_dataset_id || payload.dataset_id || '');
-        if (nextId) setSaved({ id: nextId, name });
+        markSaved(payload);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Raking did not finish'))
       .finally(() => setBusy(false));
+  };
+
+  const saveCombine = () => {
+    if (!datasetId) return;
+    const total =
+      combineRescale && totalMode !== 'sample'
+        ? weightedTotal
+        : combineRescale && totalMode === 'sample' && openFile?.n_rows
+          ? openFile.n_rows
+          : undefined;
+    if (combineRescale && totalMode !== 'sample' && total == null) {
+      setError('Enter a positive weighted total on Limits & total, or turn off re-scale.');
+      return;
+    }
+    const body = buildCombineWeightsBody(combineColumns, { total });
+    if (!body) {
+      setError('Pick at least two weight columns to multiply.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    void flowJson<ConstructedWeightPayload>(`/datasets/${datasetId}/weights/combine`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+      .then(markSaved)
+      .catch(err =>
+        setError(err instanceof Error ? err.message : 'Could not combine those weights')
+      )
+      .finally(() => setBusy(false));
+  };
+
+  const save = () => {
+    if (tab === 'combine') saveCombine();
+    else saveRake();
+  };
+
+  const sampleLabel = openFile?.n_rows
+    ? `Same as sample (${openFile.n_rows.toLocaleString('en-GB')})`
+    : 'Same as sample';
+
+  const toggleCombineColumn = (name: string) => {
+    setCombineColumns(current =>
+      current.includes(name) ? current.filter(item => item !== name) : [...current, name]
+    );
   };
 
   return (
@@ -394,31 +465,13 @@ export function WeightPanel({
         <div className="weight-top">
           <DialogHeader>
             {lead ? <p className="weight-lead">{lead}</p> : null}
-            <DialogTitle className="weight-title">Weight to targets</DialogTitle>
+            <DialogTitle className="weight-title">Weight this file</DialogTitle>
             <DialogDescription className="weight-copy">{RAKE_COPY}</DialogDescription>
           </DialogHeader>
           <div className="weight-versions-head">
             <span>Weight variable · {outputColumn}</span>
-            <span>Targets are a percent of each column&apos;s rows, sent as counts</span>
+            <span>Saved as a new weight; the old one stays available</span>
           </div>
-          <div className="weight-versions">
-            <div className="weight-version">
-              <i />
-              <div>
-                <strong>{openFile?.original_filename || 'Open file'}</strong>
-                <span>Current file · stays as it is</span>
-              </div>
-            </div>
-            <div className="weight-version" data-active>
-              <i />
-              <div>
-                <strong>{savedName || 'New weighted file'}</strong>
-                <span>This rake · adds a {outputColumn} column</span>
-              </div>
-              <span className="weight-new">New</span>
-            </div>
-          </div>
-          <p className="weight-note">Nothing is overwritten. Outputs keep the file they ran on.</p>
           {needsRefresh || rerake ? (
             <p className="flow-banner warn weight-refresh" role="status">
               Made before a weighting fix · re-run. The same targets are filled in below — save to
@@ -426,74 +479,229 @@ export function WeightPanel({
             </p>
           ) : null}
         </div>
-        <div className="weight-table">
-          <div className="weight-row weight-head-row">
-            <span>Variable · code</span>
-            <span>Unweighted</span>
-            <span>Target</span>
-            <span>Weighted</span>
-            <span>Weight</span>
-          </div>
-          {groups.length === 0 ? (
-            <p className="weight-empty">Add a target variable below to set its shares.</p>
-          ) : null}
-          {groups.map(group => (
-            <section key={group.column} className="weight-group">
-              <h3>{group.column}</h3>
-              {group.codes.map(code => {
-                const cell = previewCell(preview, group.column, code.code);
-                const margin = cell
-                  ? undefined
-                  : marginFor(diagnostics?.margins, group.column, code.code);
-                const mean =
-                  cell && cell.mean_weight != null
-                    ? cell.mean_weight.toFixed(2)
-                    : margin
-                      ? categoryMeanWeight(margin.achieved, code.count)
-                      : '';
-                const label =
-                  labels[group.column]?.[code.code] ||
-                  labels[group.column]?.[code.code.replace(/\.0$/, '')];
-                const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
-                return (
-                  <div
-                    key={code.code}
-                    className="weight-row"
-                    data-capped={capped ? 'true' : 'false'}
-                  >
-                    <span>
-                      {label ? (
-                        <>
-                          {label} <span className="weight-code">{code.code}</span>
-                        </>
-                      ) : (
-                        code.code
-                      )}
-                      {capped ? ` · capped at ${cap}` : ''}
-                    </span>
-                    <span className="weight-muted">{shareLabel(code.percentage)}</span>
-                    <span className="weight-target">
-                      <Input
-                        aria-label={`Target percent ${group.column} ${code.code}`}
-                        value={percents[group.column]?.[code.code] || ''}
-                        onChange={event => setPercent(group.column, code.code, event.target.value)}
-                      />
-                      %
-                    </span>
-                    <span>
-                      {cell
-                        ? `${cell.weighted_pct.toFixed(1)}%`
+        <Tabs
+          value={tab}
+          onValueChange={value => setTab(value as WeightTab)}
+          className="weight-tabs"
+        >
+          <TabsList className="weight-tablist">
+            <TabsTrigger value="targets" isClosable={false} className="weight-tab">
+              Targets (rake)
+            </TabsTrigger>
+            <TabsTrigger value="limits" isClosable={false} className="weight-tab">
+              Limits &amp; total
+            </TabsTrigger>
+            <TabsTrigger value="combine" isClosable={false} className="weight-tab">
+              Combine weights
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="targets" className="weight-tab-panel">
+            <div className="weight-table">
+              <div className="weight-row weight-head-row">
+                <span>Variable · code</span>
+                <span>Unweighted</span>
+                <span>Target</span>
+                <span>Weighted</span>
+                <span>Weight</span>
+              </div>
+              {groups.length === 0 ? (
+                <p className="weight-empty">Add a target variable below to set its shares.</p>
+              ) : null}
+              {groups.map(group => (
+                <section key={group.column} className="weight-group">
+                  <h3>{columnLabel(columns, group.column)}</h3>
+                  {group.codes.map(code => {
+                    const cell = previewCell(preview, group.column, code.code);
+                    const margin = cell
+                      ? undefined
+                      : marginFor(diagnostics?.margins, group.column, code.code);
+                    const mean =
+                      cell && cell.mean_weight != null
+                        ? cell.mean_weight.toFixed(2)
                         : margin
-                          ? achievedShare(margin.achieved, group.total)
-                          : '—'}
+                          ? categoryMeanWeight(margin.achieved, code.count)
+                          : '';
+                    const label =
+                      labels[group.column]?.[code.code] ||
+                      labels[group.column]?.[code.code.replace(/\.0$/, '')];
+                    const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
+                    const floored = mean && Number(floor) > 0 && Number(mean) <= Number(floor);
+                    return (
+                      <div
+                        key={code.code}
+                        className="weight-row"
+                        data-capped={capped ? 'true' : 'false'}
+                        data-floored={floored ? 'true' : 'false'}
+                      >
+                        <span>
+                          {label ? (
+                            <>
+                              {label} <span className="weight-code">{code.code}</span>
+                            </>
+                          ) : (
+                            code.code
+                          )}
+                          {capped ? ` · capped at ${cap}` : ''}
+                          {floored ? ` · floored at ${floor}` : ''}
+                        </span>
+                        <span className="weight-muted">{shareLabel(code.percentage)}</span>
+                        <span className="weight-target">
+                          <Input
+                            aria-label={`Target percent ${group.column} ${code.code}`}
+                            value={percents[group.column]?.[code.code] || ''}
+                            onChange={event =>
+                              setPercent(group.column, code.code, event.target.value)
+                            }
+                          />
+                          %
+                        </span>
+                        <span>
+                          {cell
+                            ? `${cell.weighted_pct.toFixed(1)}%`
+                            : margin
+                              ? achievedShare(margin.achieved, group.total)
+                              : '—'}
+                        </span>
+                        <span>{mean || '—'}</span>
+                      </div>
+                    );
+                  })}
+                </section>
+              ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="limits" className="weight-tab-panel">
+            <div className="weight-limits">
+              <section className="weight-limits-block">
+                <h3>Keep weights in a sensible range</h3>
+                <p>
+                  Very large or tiny weights make results unstable. Values outside the range are
+                  trimmed and the rest re-scaled so targets still hold.
+                </p>
+                <div className="weight-limits-row">
+                  <label className="weight-cap">
+                    Floor
+                    <Input
+                      aria-label="Weight floor"
+                      value={floor}
+                      placeholder="none"
+                      onChange={event => setFloor(event.target.value)}
+                    />
+                  </label>
+                  <label className="weight-cap">
+                    Cap
+                    <Input
+                      aria-label="Weight cap"
+                      value={cap}
+                      placeholder="none"
+                      onChange={event => setCap(event.target.value)}
+                    />
+                  </label>
+                </div>
+              </section>
+              <section className="weight-limits-block">
+                <h3>Weighted total</h3>
+                <Segmented
+                  className="weight-pills"
+                  aria-label="Weighted total"
+                  value={totalMode}
+                  onValueChange={setTotalMode}
+                  options={[
+                    { value: 'sample', label: sampleLabel },
+                    { value: 'people', label: 'Population (people)' },
+                    { value: 'thousands', label: 'Population (000s)' },
+                    { value: 'custom', label: 'Custom' },
+                  ]}
+                />
+                {totalMode !== 'sample' ? (
+                  <label className="weight-cap weight-total-input">
+                    {totalMode === 'thousands' ? 'Population (000s)' : 'Total'}
+                    <Input
+                      aria-label="Weighted total value"
+                      value={customTotal}
+                      placeholder={totalMode === 'thousands' ? 'e.g. 45.2' : 'e.g. 45200'}
+                      onChange={event => setCustomTotal(event.target.value)}
+                    />
+                  </label>
+                ) : null}
+                <p>Population totals turn on &quot;people&quot; figures in tables.</p>
+              </section>
+              <section className="weight-limits-block">
+                <h3>Start from</h3>
+                <ChoiceSelect
+                  className="weight-link weight-start-select"
+                  aria-label="Start from weight"
+                  value={startFrom}
+                  onValueChange={setStartFrom}
+                  options={[
+                    { value: '', label: 'No weight' },
+                    { value: PREVIOUS_WEIGHT, label: 'Previous weight' },
+                    ...weightColumns.map(name => ({
+                      value: name,
+                      label: `Design weight · ${columnLabel(columns, name)}`,
+                    })),
+                  ]}
+                />
+                <p>Raking adjusts the design weight instead of replacing it.</p>
+              </section>
+            </div>
+          </TabsContent>
+          <TabsContent value="combine" className="weight-tab-panel">
+            <div className="weight-combine">
+              <h3>Multiply weight columns</h3>
+              <p>
+                Combines existing weights into one (for example a design weight and a non-response
+                weight), then optionally re-scales to the total on Limits &amp; total.
+              </p>
+              {weightColumns.length < 2 ? (
+                <p className="weight-empty">
+                  This file needs at least two weight columns before they can be combined.
+                </p>
+              ) : (
+                <div
+                  className="weight-combine-row"
+                  role="group"
+                  aria-label="Weight columns to multiply"
+                >
+                  {weightColumns.map((name, index) => (
+                    <span key={name} className="weight-combine-factor">
+                      {index > 0 ? <span className="weight-combine-times">×</span> : null}
+                      <Button
+                        type="button"
+                        className="flow-btn"
+                        data-active={combineColumns.includes(name) || undefined}
+                        aria-pressed={combineColumns.includes(name)}
+                        onClick={() => toggleCombineColumn(name)}
+                      >
+                        {columnLabel(columns, name)}
+                      </Button>
                     </span>
-                    <span>{mean || '—'}</span>
-                  </div>
-                );
-              })}
-            </section>
-          ))}
-        </div>
+                  ))}
+                </div>
+              )}
+              <label className="weight-combine-rescale">
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  data-active={combineRescale || undefined}
+                  aria-pressed={combineRescale}
+                  onClick={() => setCombineRescale(current => !current)}
+                >
+                  Then re-scale to total
+                </Button>
+                <span className="weight-muted">
+                  {combineRescale
+                    ? totalMode === 'sample'
+                      ? sampleLabel
+                      : weightedTotal != null
+                        ? `Total ${weightedTotal.toLocaleString('en-GB')}`
+                        : 'Set a total on Limits & total'
+                    : 'Keep the product as-is'}
+                </span>
+              </label>
+            </div>
+          </TabsContent>
+        </Tabs>
         <div className="weight-stats">
           <div>
             <span>Efficiency</span>
@@ -609,56 +817,55 @@ export function WeightPanel({
           </div>
         ) : null}
         <div className="weight-foot">
-          <ChoiceSelect
-            className="weight-link"
-            aria-label="Add target column"
-            value={addColumn}
-            onValueChange={value => {
-              setAddColumn(value);
-            }}
-            options={[
-              { value: '', label: '+ Add target' },
-              ...targetColumns(columns, weightColumns)
-                .filter(column => !groups.some(group => group.column === column.name))
-                .map(column => ({
-                  value: column.name,
-                  label: column.label && column.label !== column.name ? column.label : column.name,
-                })),
-            ]}
-          />
-          {addColumn ? (
-            <Button className="weight-text" type="button" onClick={addTarget}>
-              Add
-            </Button>
+          {tab === 'targets' ? (
+            <>
+              <ChoiceSelect
+                className="weight-link"
+                aria-label="Add target column"
+                value={addColumn}
+                onValueChange={value => {
+                  setAddColumn(value);
+                }}
+                options={[
+                  { value: '', label: '+ Add target' },
+                  ...targetColumns(columns, weightColumns)
+                    .filter(column => !groups.some(group => group.column === column.name))
+                    .map(column => ({
+                      value: column.name,
+                      label:
+                        column.label && column.label !== column.name ? column.label : column.name,
+                    })),
+                ]}
+              />
+              {addColumn ? (
+                <Button className="weight-text" type="button" onClick={addTarget}>
+                  Add
+                </Button>
+              ) : null}
+              <ChoiceSelect
+                className="weight-link"
+                aria-label="Load targets from"
+                value={sourceDataset}
+                onValueChange={setSourceDataset}
+                options={[
+                  { value: '', label: 'Load targets from…' },
+                  ...datasets
+                    .filter(row => rowId(row) && rowId(row) !== datasetId)
+                    .map(row => ({
+                      value: rowId(row),
+                      label: row.original_filename || rowId(row),
+                    })),
+                ]}
+              />
+              {sourceDataset ? (
+                <Button className="weight-text" type="button" onClick={loadTargets}>
+                  Load
+                </Button>
+              ) : null}
+            </>
           ) : null}
-          <ChoiceSelect
-            className="weight-link"
-            aria-label="Load targets from"
-            value={sourceDataset}
-            onValueChange={setSourceDataset}
-            options={[
-              { value: '', label: 'Load targets from…' },
-              ...datasets
-                .filter(row => rowId(row) && rowId(row) !== datasetId)
-                .map(row => ({ value: rowId(row), label: row.original_filename || rowId(row) })),
-            ]}
-          />
-          {sourceDataset ? (
-            <Button className="weight-text" type="button" onClick={loadTargets}>
-              Load
-            </Button>
-          ) : null}
-          <span className="weight-cap">
-            Cap
-            <Input
-              aria-label="Weight cap"
-              value={cap}
-              placeholder="none"
-              onChange={event => setCap(event.target.value)}
-            />
-          </span>
           <span className="sheet-spacer" />
-          {previewing && !saved ? (
+          {previewing && !saved && tab !== 'combine' ? (
             <span className="flow-muted weight-previewing">Updating…</span>
           ) : null}
           <Button className="flow-btn" type="button" onClick={onClose}>
@@ -679,10 +886,16 @@ export function WeightPanel({
             <Button
               className="flow-btn primary"
               type="button"
-              disabled={!datasetId || busy || needsChoice}
+              disabled={
+                !datasetId ||
+                busy ||
+                (tab === 'combine'
+                  ? combineColumns.length < 2
+                  : needsChoice || (totalMode !== 'sample' && weightedTotal == null))
+              }
               onClick={save}
             >
-              {busy ? 'Saving…' : 'Save as new file'}
+              {busy ? 'Saving…' : 'Save as new weight'}
             </Button>
           )}
         </div>

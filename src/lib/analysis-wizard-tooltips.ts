@@ -198,7 +198,21 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
       'Cases are independent.',
       'Linear structure in the data helps interpretation.',
     ],
-    output: ['Eigenvalues, variance explained, and component loadings.'],
+    output: [
+      'Eigenvalues, variance explained, and component loadings.',
+      "Bartlett's test of sphericity and KMO sampling adequacy.",
+    ],
+  },
+  bartlett_sphericity: {
+    useWhen: [
+      'You want to check whether items are correlated enough for PCA or factor analysis.',
+      'You need Kaiser–Meyer–Olkin (KMO) sampling adequacy before extracting factors.',
+    ],
+    assumptions: ['Variables are numeric.', 'At least two complete cases per retained variable.'],
+    output: [
+      "Bartlett's chi-square, degrees of freedom, and p-value.",
+      'Overall KMO and per-variable measures of sampling adequacy.',
+    ],
   },
   anova_twoway: {
     useWhen: ['You have two categorical factors and one numeric outcome.'],
@@ -228,6 +242,32 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
       'Overdispersion may require negative binomial extensions.',
     ],
     output: ['Coefficients, incidence rate ratios, AIC, and deviance.'],
+  },
+  quasi_poisson_regression: {
+    useWhen: [
+      'Your outcome is a non-negative count and the Poisson deviance suggests overdispersion.',
+      'You want Poisson means with standard errors scaled by Pearson χ²/df.',
+    ],
+    assumptions: [
+      'Independent counts.',
+      'Mean follows a log-linear Poisson structure; variance is a multiple of the mean.',
+    ],
+    output: ['Coefficients, incidence rate ratios, Pearson dispersion, and scaled SEs.'],
+  },
+  multinomial_logit: {
+    useWhen: [
+      'Your outcome has three or more unordered categories.',
+      'You want relative log-odds for each category versus a reference level.',
+    ],
+    assumptions: [
+      'The outcome is nominal with a modest number of categories.',
+      'Cases are independent.',
+      'Independence of irrelevant alternatives is a modelling assumption.',
+    ],
+    output: [
+      'Coefficients by outcome level versus the reference.',
+      'Pseudo R², AIC, and in-sample classification accuracy.',
+    ],
   },
   cohens_kappa: {
     useWhen: ['Two raters classified the same cases and you need agreement beyond chance.'],
@@ -296,7 +336,11 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
   efa: {
     useWhen: ['You suspect a smaller set of latent factors underlies many correlated items.'],
     assumptions: ['Variables are numeric.', 'Adequate sample size relative to number of items.'],
-    output: ['Factor loadings and communalities.'],
+    output: [
+      'Factor loadings and communalities.',
+      'Kaiser rule (eigenvalue > 1) when the factor count is left blank.',
+      "Bartlett's test of sphericity and KMO sampling adequacy.",
+    ],
   },
   discriminant_analysis: {
     useWhen: ['You have a categorical group and want to see which predictors separate the groups.'],
@@ -527,12 +571,12 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
   confirmatory_factor_analysis: {
     useWhen: ['You have a hypothesized factor structure for observed indicators.'],
     assumptions: ['Indicators are numeric.', 'Model spec uses semopy syntax (e.g. F1 =~ x1 + x2).'],
-    output: ['Factor loadings, CFI/RMSEA/SRMR fit indices, path diagram.'],
+    output: ['Factor loadings, CFI/TLI/RMSEA/SRMR fit indices, path diagram.'],
   },
   structural_equation_modelling: {
     useWhen: ['You want to test latent and observed relationships in one model.'],
     assumptions: ['Full semopy model spec with measurement and structural paths.'],
-    output: ['Path coefficients, fit indices, SEM path diagram.'],
+    output: ['Path coefficients, CFI/TLI/RMSEA/SRMR fit indices, SEM path diagram.'],
   },
   mixed_model: {
     useWhen: [

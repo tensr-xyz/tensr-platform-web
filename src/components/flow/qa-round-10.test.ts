@@ -48,6 +48,32 @@ describe('QA round 10: stale table does not take down the report', () => {
     expect(settled.stale[0].label).toBe('Stale');
     expect(settled.failed).toHaveLength(0);
   });
+
+  test('bounded concurrency never opens more than the limit at once', async () => {
+    const rows = Array.from({ length: 8 }, (_, index) => ({
+      id: `t${index}`,
+      datasetId: 'a',
+      label: `Table ${index}`,
+      number: index + 1,
+      filename: 'wave-a',
+    }));
+    let inFlight = 0;
+    let peak = 0;
+    const settled = await loadTablesSettled(
+      rows,
+      async row => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { ok: true, rows: [{ id: row.id }] };
+      },
+      { concurrency: 3 }
+    );
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(settled.ready).toHaveLength(8);
+    expect(settled.failed).toHaveLength(0);
+  });
 });
 
 describe('QA round 10: table numbers are never reused', () => {

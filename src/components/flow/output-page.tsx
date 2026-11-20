@@ -41,7 +41,7 @@ type Comment = {
   created_at?: string;
   parent_id?: string | null;
   resolved?: boolean;
-  anchor?: { id?: string } | null;
+  anchor?: { id?: string; kind?: string } | null;
 };
 
 export function OutputPage({
@@ -69,6 +69,7 @@ export function OutputPage({
   const [exporting, setExporting] = useState(false);
   const [rerunNote, setRerunNote] = useState('');
   const [panel, setPanel] = useState<'info' | 'comments'>('info');
+  const [cellAnchor, setCellAnchor] = useState('');
   const pins = useProjectPins(projectId, datasetId ? [datasetId] : []);
   const pinned = pins.some(pin => pin.runId === runId);
   const plot = figureSvg(
@@ -99,12 +100,15 @@ export function OutputPage({
         text,
         dataset_id: datasetId,
         parent_id: replyTo || undefined,
-        anchor: { kind: 'section', id: document.title },
+        anchor: cellAnchor
+          ? { kind: 'cell', id: cellAnchor }
+          : { kind: 'section', id: document.title },
       }),
     })
       .then(() => {
         setDraft('');
         setReplyTo(null);
+        setCellAnchor('');
         loadComments();
       })
       .catch(err =>
@@ -266,7 +270,22 @@ export function OutputPage({
                           {table.rows.map(row => (
                             <tr key={row.join('|')}>
                               {row.map((cell, cellIndex) => (
-                                <td key={`${cell}-${cellIndex}`}>{cell}</td>
+                                <td key={`${cell}-${cellIndex}`}>
+                                  <Button
+                                    type="button"
+                                    className="output-cell"
+                                    onClick={() => {
+                                      const rowLabel = row[0] || 'row';
+                                      const columnLabel = table.columns[cellIndex] || 'column';
+                                      setCellAnchor(
+                                        `${table.title} / ${rowLabel} / ${columnLabel}`
+                                      );
+                                      setPanel('comments');
+                                    }}
+                                  >
+                                    {cell}
+                                  </Button>
+                                </td>
                               ))}
                             </tr>
                           ))}
@@ -370,6 +389,9 @@ export function OutputPage({
                         <strong>{personName(comment.author_name)}</strong>{' '}
                         <span className="flow-muted">{commentWhen(comment.created_at)}</span>
                       </p>
+                      {comment.anchor?.id && comment.anchor.kind === 'cell' ? (
+                        <p className="flow-muted">{comment.anchor.id}</p>
+                      ) : null}
                       <p>{comment.text}</p>
                     </div>
                     <Button
@@ -418,7 +440,14 @@ export function OutputPage({
                 onChange={event => setDraft(event.target.value)}
               />
               <div className="output-compose-row">
-                <span className="flow-muted">{replyTo ? 'Replying' : 'On this output'}</span>
+                <span className="flow-muted">
+                  {replyTo ? 'Replying' : cellAnchor ? `On ${cellAnchor}` : 'On this output'}
+                </span>
+                {cellAnchor && !replyTo ? (
+                  <Button className="output-link" type="button" onClick={() => setCellAnchor('')}>
+                    Clear cell
+                  </Button>
+                ) : null}
                 {replyTo ? (
                   <Button className="output-link" type="button" onClick={() => setReplyTo(null)}>
                     Cancel

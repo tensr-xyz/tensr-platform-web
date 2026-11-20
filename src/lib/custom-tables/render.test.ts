@@ -139,4 +139,23 @@ describe('banner table renderer model', () => {
     expect(table.rows[0].cells[0].columnPercent).toBe('3.50 (SD 1.20)');
     expect(table.rows[0].cells[0].bases).toMatch(/n=40/);
   });
+
+  it('keeps stub group header rows as labels without percents', () => {
+    const table = displayBannerTable({
+      ...BOOK,
+      rows: [
+        {
+          id: 'q1:header',
+          label: 'Which region did you visit?',
+          kind: 'header',
+          cells: [],
+        },
+        BOOK.rows[0],
+      ],
+    });
+    expect(table.rows[0].kind).toBe('header');
+    expect(table.rows[0].label).toBe('Which region did you visit?');
+    expect(table.rows[0].cells.every(cell => cell.columnPercent === '')).toBe(true);
+    expect(table.rows[1].label).toBe('Male');
+  });
 });

@@ -1,4 +1,5 @@
 import { flowJson } from '@/lib/flow-api';
+import { shareRequest } from '@/components/flow/report-pins';
 
 /** A saved table, with the file it was built on. */
 export type ProjectTable = {
@@ -10,6 +11,8 @@ export type ProjectTable = {
   number: number;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 
 type RawRow = {
@@ -22,6 +25,8 @@ type RawRow = {
   table_number?: number | null;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 
 /** Saved tables across the screens that list them. The same id counts once. */
@@ -34,6 +39,15 @@ export function savedTableTotal(groups: { id?: string }[][]): number {
     }
   }
   return ids.size;
+}
+
+/** Report header: how many tables are live against every saved table. */
+export function liveOfTotalLabel(live: number, total: number): string {
+  const open = Math.max(0, live);
+  const all = Math.max(open, total);
+  if (all <= 0) return '0 saved tables';
+  if (all === open) return `${open} live table${open === 1 ? '' : 's'}`;
+  return `${open} live of ${all}`;
 }
 
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
@@ -53,6 +67,8 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
       stale: Boolean(row.stale),
       detail: row.detail || '',
+      parked: Boolean(row.parked),
+      hidden: Boolean(row.hidden),
     });
   }
   return out;
@@ -79,11 +95,11 @@ export async function loadProjectTables(
     (datasetId
       ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
       : Promise.resolve(null));
-  let projectPage: { specs?: RawRow[]; stamps_pending?: boolean } | null = null;
-  projectPage = projectId
-    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
-        projectTablesPath(projectId, fileIds)
-      ).catch(() => null)
+  const tablesPath = projectId ? projectTablesPath(projectId, fileIds) : '';
+  const projectPage = tablesPath
+    ? await shareRequest(tablesPath, () =>
+        flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(tablesPath).catch(() => null)
+      )
     : null;
   const filePage = await filePagePromise;
   return numberTables(

@@ -1,4 +1,4 @@
-import { dependentColumns, openEndColumns } from './flow-columns';
+import { dependentColumns, openEndColumns, questionnaireOutline } from './flow-columns';
 
 describe('ANOVA dependent columns', () => {
   it('keeps a numeric companion when the preview type is text and id is the only numeric type', () => {
@@ -34,7 +34,7 @@ describe('code frame open ends', () => {
 });
 
 describe('picker columns', () => {
-  it('drops row ids, coding scratch, and stored codes', () => {
+  it('drops row ids, coding scratch, stored codes, and admin fields', () => {
     const { pickerColumns, isInternalColumn } = jest.requireActual('./flow-columns');
     expect(
       pickerColumns([
@@ -42,6 +42,7 @@ describe('picker columns', () => {
         { name: 'comments_coding' },
         { name: 'comments_codes' },
         { name: 'region' },
+        { name: 'ResponseId', role: 'admin' },
       ]).map((column: { name: string }) => column.name)
     ).toEqual(['region']);
     expect(isInternalColumn('source_wave')).toBe(false);
@@ -50,6 +51,98 @@ describe('picker columns', () => {
         (column: { name: string }) => column.name
       )
     ).toEqual(['region']);
+  });
+
+  it('collapses multi-select sets and skips admin columns in the outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'ResponseId', label: 'Response ID', role: 'admin' },
+        { name: 'q_6_1', label: 'Which types of media do you prefer? - Email' },
+        { name: 'q_6_2', label: 'Which types of media do you prefer? - Social' },
+        { name: 'q_6_3', label: 'Which types of media do you prefer? - Podcasts' },
+        {
+          name: 'q_6_4_text',
+          label: 'Which types of media do you prefer? - Other (please specify)',
+          type: 'string',
+        },
+        { name: 'region', label: 'Region' },
+        { name: 'weight', label: 'Weight', role: 'weight' },
+      ],
+      [
+        {
+          id: 'q_6',
+          name: 'Which types of media do you prefer?',
+          label: 'Which types of media do you prefer?',
+          kind: 'multiple_response',
+          columns: ['q_6_1', 'q_6_2', 'q_6_3'],
+          text_columns: [
+            {
+              column: 'q_6_4_text',
+              label: 'Which types of media do you prefer? - Other (please specify)',
+            },
+          ],
+        },
+      ],
+      { weightName: 'weight', kinds: { region: 'single', q_6_1: 'multi' } }
+    );
+    expect(outline.map(item => item.label)).toEqual([
+      'Which types of media do you prefer?',
+      'Region',
+    ]);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].columns).toEqual(['q_6_1', 'q_6_2', 'q_6_3']);
+  });
+
+  it('keeps questionnaire order and groups open-end boxes as one open question', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'region', label: 'Region' },
+        {
+          name: 'q_12_1',
+          label: 'Can you share some of your favourite sources - 1',
+          type: 'string',
+        },
+        {
+          name: 'q_12_2',
+          label: 'Can you share some of your favourite sources - 2',
+          type: 'string',
+        },
+        {
+          name: 'q_12_3',
+          label: 'Can you share some of your favourite sources - 3',
+          type: 'string',
+        },
+        { name: 'q_9_1_1', label: 'Source A - Price' },
+        { name: 'q_9_1_2', label: 'Source A - Speed' },
+        { name: 'q_9_2_1', label: 'Source B - Price' },
+        { name: 'q_9_2_2', label: 'Source B - Speed' },
+      ],
+      [
+        {
+          id: 'q_9',
+          name: 'Sources grid',
+          label: 'Sources grid',
+          kind: 'grid',
+          columns: ['q_9_1_1', 'q_9_1_2', 'q_9_2_1', 'q_9_2_2'],
+        },
+        {
+          id: 'q_12',
+          name: 'Can you share some of your favourite sources',
+          label: 'Can you share some of your favourite sources',
+          kind: 'group',
+          structure: 'open_end',
+          columns: ['q_12_1', 'q_12_2', 'q_12_3'],
+        },
+      ],
+      { kinds: { region: 'single' } }
+    );
+    expect(outline.map(item => item.kind)).toEqual(['single', 'open', 'grid']);
+    expect(outline.map(item => item.label)).toEqual([
+      'Region',
+      'Can you share some of your favourite sources',
+      'Sources grid',
+    ]);
+    expect(outline[1].columns).toEqual(['q_12_1', 'q_12_2', 'q_12_3']);
   });
 
   it('offers coded open ends by their open-end name', () => {
@@ -89,7 +182,10 @@ describe('id columns', () => {
   it('skips respondent ids by name or by every value being distinct', () => {
     const { isIdColumn } = jest.requireActual('./flow-columns');
     expect(isIdColumn('Respondent id')).toBe(true);
+    expect(isIdColumn('Respondent')).toBe(true);
     expect(isIdColumn('resp_id')).toBe(true);
+    expect(isIdColumn('pid')).toBe(true);
+    expect(isIdColumn('psid')).toBe(true);
     expect(isIdColumn('ID')).toBe(true);
     expect(isIdColumn('_row_uid')).toBe(true);
     expect(isIdColumn('serial_no')).toBe(true);
@@ -103,5 +199,51 @@ describe('id columns', () => {
         distinct.map(value => value % 5)
       )
     ).toBe(false);
+  });
+});
+
+describe('outline linked other-choice and full stems', () => {
+  it('hides id columns and linked Other Choice text from the outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'Respondent', label: 'Respondent' },
+        { name: 'pid', label: 'pid' },
+        { name: 'psid', label: 'psid' },
+        {
+          name: 'q_5',
+          label: 'Please select the profession you currently hold.',
+        },
+        {
+          name: 'q_5_text',
+          label: 'Please select the profession you currently hold. - Other Choice',
+          type: 'string',
+          linked_set: 'q_5',
+          role: 'helper',
+        },
+        {
+          name: 'q_3_1',
+          label: 'Which of the following best describes your race and ethnic background? - Asian',
+        },
+        {
+          name: 'q_3_2',
+          label: 'Which of the following best describes your race and ethnic background? - Black',
+        },
+      ],
+      [
+        {
+          id: 'q_3',
+          name: 'Which of the following best describes your race and ethnic background?',
+          label: 'Which of the following best describes your race and ethnic background?',
+          kind: 'multiple_response',
+          columns: ['q_3_1', 'q_3_2'],
+        },
+      ],
+      { kinds: { q_5: 'single' } }
+    );
+    expect(outline.map(item => item.label)).toEqual([
+      'Please select the profession you currently hold.',
+      'Which of the following best describes your race and ethnic background?',
+    ]);
+    expect(outline[1].kind).toBe('multi');
   });
 });

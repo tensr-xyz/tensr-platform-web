@@ -55,6 +55,17 @@ describe('QA round 6', () => {
     expect(selectedTableWeight({ column: 'design_weight' }, { weight_aware: false }, '')).toBe(
       'design_weight'
     );
+    // Metadata can arrive after the book. Empty active looks Unweighted; the real active names it.
+    expect(
+      selectedTableWeight({ column: '_weight' }, { column: '_weight', weight_aware: true }, '')
+    ).toBe('');
+    expect(
+      selectedTableWeight(
+        { column: '_weight' },
+        { column: '_weight', weight_aware: true },
+        'design_weight'
+      )
+    ).toBe('design_weight');
   });
 
   test('3: an answer to the agent question carries the earlier turns', () => {

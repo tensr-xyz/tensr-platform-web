@@ -19,6 +19,8 @@ const REQUIRED_DIALOGS = [
   'Van Westendorp',
   'Gabor-Granger',
   'NPS',
+  'Calibrated purchase intent',
+  'Share of wallet',
   'Brand Funnel',
   'MaxDiff (counting / MNL)',
   'Conjoint',
@@ -46,9 +48,13 @@ describe('Q-page + billing scorecard (UI is wired)', () => {
 
   it('accepts SPSS, Stata, and Triple-S uploads', () => {
     expect(isAcceptedUploadExtension('wave.sav')).toBe(true);
+    expect(isAcceptedUploadExtension('wave.zsav')).toBe(true);
+    expect(isAcceptedUploadExtension('wave.tsv')).toBe(true);
     expect(isAcceptedUploadExtension('wave.dta')).toBe(true);
     expect(isAcceptedUploadExtension('wave.sss')).toBe(true);
     expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.sav');
+    expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.zsav');
+    expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.tsv');
   });
 
   it('does not put referral copy on the pricing catalogue', () => {

@@ -1,7 +1,10 @@
 import {
   datasetFileLabel,
   defaultTableWeight,
+  isTableTextCategorical,
+  isTableWeightColumn,
   savedTableMatches,
+  stubHeaderLabel,
   tablePickerColumns,
 } from '@/components/flow/survey-screens';
 
@@ -56,9 +59,42 @@ describe('table screen defaults', () => {
       { name: 'q_wave', label: 'Wave', labels: {}, type: 'numeric' },
       { name: 'q_item', label: 'Item', labels: { y: 'Yes' }, type: 'string' },
       { name: '_row_uid', label: 'Row', labels: {}, type: 'id' },
-      { name: 'comment_2', label: 'Another comment', labels: {}, type: 'string' },
+      {
+        name: 'comment_2',
+        label: 'Another comment',
+        labels: {},
+        type: 'string',
+        n_unique: 180,
+        n_rows: 200,
+      },
+      { name: 'case_key', label: 'Respondent ID', labels: {}, type: 'numeric' },
+      { name: 'mass', label: 'Design weight', labels: {}, type: 'numeric' },
+      {
+        name: 'why',
+        label: 'Why that score?',
+        labels: {},
+        type: 'string',
+        n_unique: 160,
+        n_rows: 200,
+      },
+      {
+        name: 'gender',
+        label: 'Gender',
+        labels: {},
+        type: 'string',
+        n_unique: 2,
+        n_rows: 200,
+      },
+      {
+        name: 'age_band',
+        label: 'Age band',
+        labels: {},
+        type: 'string',
+        n_unique: 5,
+        n_rows: 200,
+      },
     ];
-    const names = tablePickerColumns(columns, ['design_w']).map(column => column.name);
+    const names = tablePickerColumns(columns, []).map(column => column.name);
     expect(names).toEqual([
       'q_region',
       'q_score',
@@ -67,7 +103,30 @@ describe('table screen defaults', () => {
       'q_site',
       'q_wave',
       'q_item',
+      'gender',
+      'age_band',
     ]);
+    expect(isTableWeightColumn({ name: 'mass', label: 'Design weight' })).toBe(true);
+    expect(isTableTextCategorical({ type: 'string', labels: {}, n_unique: 3, n_rows: 400 })).toBe(
+      true
+    );
+    expect(isTableTextCategorical({ type: 'string', labels: {}, n_unique: 180, n_rows: 200 })).toBe(
+      false
+    );
+    expect(isTableTextCategorical({ type: 'text', labels: {}, n_unique: 2, n_rows: 200 })).toBe(
+      false
+    );
+  });
+
+  it('uses the question label for the stub header and the rail name', () => {
+    expect(
+      stubHeaderLabel({ column: 'q_sat', label: 'q_sat' }, [
+        { name: 'q_sat', label: 'How satisfied are you overall?' },
+      ])
+    ).toBe('How satisfied are you overall?');
+    expect(stubHeaderLabel({ column: 'q_sat', label: 'How satisfied are you overall?' }, [])).toBe(
+      'How satisfied are you overall?'
+    );
   });
 
   it('keeps Save until the table is in the saved list', () => {

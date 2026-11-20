@@ -41,18 +41,19 @@ function tableFromReport(value: unknown): RunTable | null {
 function groupTable(result: Record<string, unknown>): RunTable | null {
   const groups = result.group_descriptives;
   if (!Array.isArray(groups) || !groups.length) return null;
-  const rows = groups
-    .filter(group => group && typeof group === 'object')
-    .map(group => {
-      const row = group as {
-        group?: unknown;
-        label?: unknown;
-        n?: unknown;
-        mean?: unknown;
-        std?: unknown;
-      };
-      return [text(row.label || row.group), text(row.n), text(row.mean), text(row.std)];
-    })
+  const records = groups.filter(group => group && typeof group === 'object') as {
+    group?: unknown;
+    label?: unknown;
+    n?: unknown;
+    mean?: unknown;
+    std?: unknown;
+  }[];
+  // Rank results carry medians. The shared Groups table is the one to show.
+  if (!records.some(row => row.mean != null && Number.isFinite(Number(row.mean)))) {
+    return null;
+  }
+  const rows = records
+    .map(row => [text(row.label || row.group), text(row.n), text(row.mean), text(row.std)])
     .filter(row => row[0]);
   if (!rows.length) return null;
   return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };

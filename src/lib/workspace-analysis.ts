@@ -1,9 +1,29 @@
 import { ApiRequestError } from '@/lib/api-error';
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
+import { waitForAnalysisRun } from '@/lib/analysis-runs';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 
 export type AnalysisEnvelope = AnalyzeResponse;
+
+async function resolvePendingEnvelope(envelope: AnalyzeResponse): Promise<AnalyzeResponse> {
+  const status = String(envelope.status || '');
+  const runId = String(envelope.run_id || '').trim();
+  if (status !== 'pending' || !runId) return envelope;
+  const run = await waitForAnalysisRun(runId);
+  if (!run || String(run.status || '') === 'pending') {
+    throw new Error('The table is still running. Open it again in a moment.');
+  }
+  if (String(run.status || '') === 'failed') {
+    throw new Error('The table could not be built.');
+  }
+  return {
+    result: run.result,
+    report: run.report,
+    run_id: run.id,
+    provenance: run.provenance ?? undefined,
+  };
+}
 
 export async function runDatasetAnalysis(
   datasetId: string,
@@ -17,7 +37,8 @@ export async function runDatasetAnalysis(
     where: 'setup',
   });
   try {
-    const envelope = await apiClient.datasets.analyze.run(datasetId, op, body);
+    const startedEnvelope = await apiClient.datasets.analyze.run(datasetId, op, body);
+    const envelope = await resolvePendingEnvelope(startedEnvelope);
     captureProductEvent('analysis_completed', {
       dataset_id: datasetId,
       analysis_type: op,

@@ -9,9 +9,45 @@ import {
   type SigLetter,
 } from '@/lib/flow-survey';
 
-function missingBanner(column: BannerColumn): boolean {
-  const label = String(column.label || column.column_label || column.id || '');
-  return isNonAnswerTheme(label);
+/** Survey missing labels (and open-end non-answers). Checked on every nest segment. */
+const MISSING_BANNER_LABELS = new Set([
+  'not answered',
+  'non répondu',
+  'keine angabe',
+  'no answer',
+  'no response',
+  'system missing',
+]);
+
+function nestSegments(text: string): string[] {
+  return String(text || '')
+    .split(/\s*[×]\s*|\s+x\s+/u)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function missingLabel(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (isNonAnswerTheme(trimmed)) return true;
+  return MISSING_BANNER_LABELS.has(trimmed.toLowerCase());
+}
+
+/** True when any nest level is a non-answer / missing category (e.g. "Not answered × Female"). */
+export function missingBanner(column: BannerColumn): boolean {
+  const texts = [
+    column.label,
+    column.column_label,
+    column.id,
+    bannerHeading(column),
+    ...(column.codes || []).map(code => String(code.code ?? '')),
+  ];
+  for (const text of texts) {
+    for (const part of nestSegments(String(text || ''))) {
+      if (missingLabel(part)) return true;
+    }
+  }
+  return false;
 }
 
 export type ReportTable = {
@@ -64,6 +100,8 @@ export type ReportFinding = {
   citation: string;
   significant: boolean;
   lowBase: boolean;
+  /** Percent decimals for this finding's bars and headline — same as the table. */
+  decimals: number;
   bars: FindingBar[];
 };
 
@@ -129,8 +167,7 @@ export function reportTableFromBook(
     };
   });
   const banners = [...byColumn.keys()].sort();
-  const decimals = book.spec as { decimals?: Record<string, number> } | undefined;
-  const places = Object.values(decimals?.decimals || {}).find(value => typeof value === 'number');
+  const places = percentPlaces(book);
   return {
     id,
     label,
@@ -140,8 +177,28 @@ export function reportTableFromBook(
     letters: (book.letters as SigLetter[]) || [],
     tested: significanceTested(book),
     key: `${stub}|${banners.join(',')}`,
-    ...(typeof places === 'number' ? { decimals: places } : {}),
+    decimals: places,
   };
+}
+
+/** Column % places from the saved table. Tables default to 0 dp; count is not a percent. */
+export function percentPlaces(book: Record<string, unknown>): number {
+  const spec = (book.spec as { decimals?: Record<string, number> } | undefined) || undefined;
+  const raw =
+    (spec?.decimals && typeof spec.decimals === 'object' ? spec.decimals : null) ||
+    (book.decimals && typeof book.decimals === 'object'
+      ? (book.decimals as Record<string, number>)
+      : null) ||
+    {};
+  for (const key of [
+    'column_proportion',
+    'row_proportion',
+    'total_proportion',
+    'column_responses_percent',
+  ]) {
+    if (typeof raw[key] === 'number') return Math.max(0, Math.min(6, Math.trunc(raw[key])));
+  }
+  return 0;
 }
 
 /** One finding per question: an identical table, or one whose banners another table covers, is dropped. */
@@ -183,7 +240,9 @@ export function segmentChoices(tables: ReportTable[]): BannerColumn[] {
   const seen = new Map<string, BannerColumn>();
   tables.forEach(table => {
     table.columns.forEach(column => {
-      if (column.id && column.id !== 'total' && !seen.has(column.id)) seen.set(column.id, column);
+      if (column.id && column.id !== 'total' && !missingBanner(column) && !seen.has(column.id)) {
+        seen.set(column.id, column);
+      }
     });
   });
   return [...seen.values()];
@@ -215,9 +274,15 @@ type Gap = {
   low: number;
 };
 
-function shown(percent: number, places = 1): string {
-  const text = percent.toFixed(places);
-  return `${places > 0 ? text.replace(/\.0+$/, '') : text}%`;
+/** Same percent text the table grid shows for the given places. */
+export function shownPercent(percent: number, places = 0): string {
+  const digits = Math.max(0, Math.min(6, Math.trunc(places)));
+  const text = percent.toFixed(digits);
+  return `${digits > 0 ? text.replace(/\.0+$/, '') : text}%`;
+}
+
+function shown(percent: number, places = 0): string {
+  return shownPercent(percent, places);
 }
 
 function columnForLetter(table: ReportTable, letter: string): BannerColumn | undefined {
@@ -355,7 +420,7 @@ export function notableFinding(
 ): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
   const columns = visibleColumns(table, segmentId);
   const rows = candidateRows(table, rowCut);
-  const places = table.decimals ?? 1;
+  const places = table.decimals ?? 0;
   const format = (percent: number) => shown(percent, places);
   const summary = rowCut ? null : summaryRow(table);
   const gapRows =
@@ -466,6 +531,7 @@ export function findingFromStale(table: {
     citation,
     significant: false,
     lowBase: false,
+    decimals: 0,
     bars: [],
   };
 }
@@ -475,13 +541,16 @@ function findingNumber(finding: { citation?: string; eyebrow?: string }): number
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
-/** Live findings, with an out-of-date table shown once in the same list. */
+/** Live findings first; out-of-date tables once, below them. */
 export function findingsWithOutOfDate<
   T extends { id: string; tableId: string; citation?: string; eyebrow?: string },
 >(findings: T[], stale: T[]): T[] {
   const ids = new Set(stale.flatMap(item => [item.id, item.tableId]));
-  const live = findings.filter(item => !ids.has(item.id) && !ids.has(item.tableId));
-  return [...live, ...stale].sort((left, right) => findingNumber(left) - findingNumber(right));
+  const live = findings
+    .filter(item => !ids.has(item.id) && !ids.has(item.tableId))
+    .sort((left, right) => findingNumber(left) - findingNumber(right));
+  const outdated = [...stale].sort((left, right) => findingNumber(left) - findingNumber(right));
+  return [...live, ...outdated];
 }
 
 /** A finding from the project overview, before any table grid has loaded. */
@@ -501,6 +570,7 @@ export function findingFromOverview(row: {
     citation,
     significant: false,
     lowBase: false,
+    decimals: 0,
     bars: [],
   };
 }
@@ -512,6 +582,7 @@ export function findingFromTable(
 ): ReportFinding {
   const columns = visibleColumns(table, segmentId);
   const copy = notableFinding(table, segmentId, rowCut);
+  const places = table.decimals ?? 0;
   return {
     id: table.id,
     tableId: table.id,
@@ -523,6 +594,7 @@ export function findingFromTable(
     lowBase: Boolean(
       copy.lead && columns.some(column => cellFor(copy.lead!.row, column.id)?.low_base)
     ),
+    decimals: places,
     bars: findingBars(table, copy.lead, segmentId, rowCut),
   };
 }

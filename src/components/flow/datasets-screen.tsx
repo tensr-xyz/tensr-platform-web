@@ -15,6 +15,7 @@ import { shellDatasetId, type ShellDataset } from '@/components/flow/flow-shell'
 import { MoveToProjectDialog } from '@/components/flow/move-dataset';
 import { downloadExport } from '@/components/flow/survey-screens';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
+import { exportDatasetFormat, exportDatasetSavAndSps, exportStem } from '@/lib/dataset-data-export';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
@@ -253,19 +254,28 @@ export function DatasetsScreen({
       .catch(err => setError(err instanceof Error ? err.message : 'The file did not open.'));
   };
 
-  const download = (row: ShellDataset) => {
+  const downloadOriginal = (row: ShellDataset) => {
     const format = exportFormatFor(row.original_filename);
-    const base = (row.original_filename || 'dataset').replace(/\.[a-z0-9]+$/i, '');
+    const stem = exportStem(row.original_filename);
     setError('');
     void downloadExport(
       `/datasets/${shellDatasetId(row)}/export?format=${format}`,
-      `${base}.${format}`
+      `${stem}.${format}`
     ).catch(err => setError(err instanceof Error ? err.message : 'The download did not start.'));
+  };
+
+  const downloadAs = (
+    row: ShellDataset,
+    action: () => Promise<void>,
+    fail = 'The download did not start.'
+  ) => {
+    setError('');
+    void action().catch(err => setError(err instanceof Error ? err.message : fail));
   };
 
   const upload = (file: File) => {
     if (!isAcceptedUploadExtension(file.name)) {
-      setError('Use a .sav, .dta, CSV, Excel, Triple-S, or Parquet file.');
+      setError('Use a .sav, .zsav, .dta, CSV, TSV, Excel, Triple-S, or Parquet file.');
       return;
     }
     const token = getStytchBearerForTensrApi();
@@ -300,8 +310,35 @@ export function DatasetsScreen({
         ) : null}
         <DropdownMenuItem onSelect={() => analyse(row)}>Analyse in Responses</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setMoving(row)}>Move to project…</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => download(row)}>
-          Download as .{exportFormatFor(row.original_filename)}
+        <DropdownMenuItem onSelect={() => downloadOriginal(row)}>
+          Download original
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            downloadAs(row, () =>
+              exportDatasetSavAndSps(shellDatasetId(row), exportStem(row.original_filename))
+            )
+          }
+        >
+          Export as SPSS (.sav + .sps)
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            downloadAs(row, () =>
+              exportDatasetFormat(shellDatasetId(row), exportStem(row.original_filename), 'csv')
+            )
+          }
+        >
+          Export as CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            downloadAs(row, () =>
+              exportDatasetFormat(shellDatasetId(row), exportStem(row.original_filename), 'dta')
+            )
+          }
+        >
+          Export as Stata (.dta)
         </DropdownMenuItem>
       </DatasetMenu>
     );
@@ -435,7 +472,7 @@ export function DatasetsScreen({
               ? 'Try a different name, project or type.'
               : activeView === 'versions'
                 ? 'Stack, weight or code a file in a project and its versions show up here.'
-                : 'Upload a .sav, .dta, CSV or Excel file to get started.'}
+                : 'Upload a .sav, .zsav, .dta, CSV, TSV or Excel file to get started.'}
           </span>
         </div>
       ) : (

@@ -45,6 +45,18 @@ describe('rake form payload', () => {
     expect(payload.targets_filename).toBe('targets.csv');
   });
 
+  it('posts floor, cap, and a design weight column', () => {
+    const payload = buildRakePayload(
+      [{ column: 'gender', targets: { Female: '51', Male: '49' } }],
+      { lower: 0.4, upper: 3, designWeightColumn: 'panel_weight' }
+    );
+    expect(payload).toMatchObject({
+      lower: 0.4,
+      upper: 3,
+      design_weight_column: 'panel_weight',
+    });
+  });
+
   it('reads a variable, category, population targets file', () => {
     const margins = marginsFromTargetsCsv(
       'variable,level,population\ngender,Female,104\ngender,Male,96\n'

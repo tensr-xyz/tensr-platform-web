@@ -1,6 +1,8 @@
 /** Output panel text for a finished chat turn: title, takeaway, and the base note. */
 
 import { analysisDisplayName } from '@/lib/analysis-definitions';
+import type { RunTable } from '@/components/flow/run-document';
+import { funnelHeadline } from '@/components/flow/result-tables';
 
 type ToolResult = {
   name?: string;
@@ -24,18 +26,37 @@ const KIND_LABELS: Record<string, string> = {
   ttest_paired: 'Paired t-test',
   linear_regression: 'Regression',
   logistic_regression: 'Logistic regression',
+  multinomial_logit: 'Multinomial logit',
+  quasi_poisson_regression: 'Quasi-Poisson regression',
+  bartlett_sphericity: 'Bartlett test of sphericity',
   correlation: 'Correlation',
   drivers: 'Drivers',
   export_set: 'Export',
+  build_client_deck: 'Client deck',
   nps: 'NPS',
+  calibrated_purchase_intent: 'Calibrated purchase intent',
+  share_of_wallet: 'Share of wallet',
   funnel: 'Funnel',
+  brand_duplication: 'Duplication',
+  paired_brand_test: 'Paired comparison',
 };
 
 function procedureOf(item: ToolResult): string {
   const args = item.args || {};
   const nested = item.result || {};
-  const value = item.analysis_type || item.procedure || args.analysis_type || nested.analysis_type;
+  const value =
+    item.analysis_type ||
+    item.procedure ||
+    args.analysis_type ||
+    nested.analysis_type ||
+    nested.procedure ||
+    item.name;
   return typeof value === 'string' ? value : '';
+}
+
+/** True when this turn's primary output is a client deck build. */
+export function isClientDeckResult(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => procedureOf(item) === 'build_client_deck');
 }
 
 function bodyOf(item: ToolResult): Record<string, unknown> {
@@ -244,13 +265,32 @@ function frequencyQuestions(results: ToolResult[] | undefined): string[] {
 export type QuestionLabel = { name: string; label?: string | null };
 
 /** A column code becomes its question when the file has a label for it. */
+function replaceColumnCodes(title: string, columns: QuestionLabel[]): string {
+  const byName = new Map<string, string>();
+  for (const column of columns) {
+    const name = (column.name || '').trim();
+    const label = (column.label || '').trim();
+    if (name && label && label !== name) {
+      byName.set(name.toLowerCase(), label);
+    }
+  }
+  if (!byName.size) return title;
+  return title
+    .split(/(\s+|×|x|,)/i)
+    .map(part => {
+      if (/^(×|x|,|\s+)$/i.test(part)) return part === 'x' || part === 'X' ? '×' : part;
+      return byName.get(part.toLowerCase()) || part;
+    })
+    .join('');
+}
+
 export function titledWithQuestion(title: string, columns: QuestionLabel[] = []): string {
   const stripped = title.replace(/^frequency table:\s*/i, '').trim();
   const key = stripped.replace(/\.\s*$/, '').toLowerCase();
   const meta = columns.find(column => column.name.trim().toLowerCase() === key);
   const label = (meta?.label || '').trim();
-  if (label && label.toLowerCase() !== key) return label;
-  return stripped || title;
+  if (label && label !== stripped) return label;
+  return replaceColumnCodes(stripped || title, columns);
 }
 
 const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
@@ -258,7 +298,17 @@ const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
 /** The analysis the card should be named for. A saved column is not the result. */
 function preferredProcedure(items: ToolResult[]): string {
   const names = items.map(procedureOf);
-  for (const name of ['funnel', 'nps', 'chi_square', 'banner_table', 'rake', 'frequencies']) {
+  for (const name of [
+    'build_client_deck',
+    'brand_duplication',
+    'paired_brand_test',
+    'funnel',
+    'nps',
+    'chi_square',
+    'banner_table',
+    'rake',
+    'frequencies',
+  ]) {
     if (names.includes(name)) return name;
   }
   return names.find(name => name && name !== 'compute') || names[0] || '';
@@ -274,6 +324,19 @@ export function isBlandAnswer(text: string): boolean {
   );
 }
 
+/** Plain text when a turn would otherwise leave the chat blank. */
+export const EMPTY_TURN_ANSWER = 'The reply did not finish. Ask again.';
+export const CONTINUING_TURN_ANSWER = 'This turn is still running. Nothing has been reported yet.';
+
+/** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
+export function visibleTurnAnswer(status: string | undefined, text: string): string {
+  const done = text.trim();
+  if (done) return done;
+  if (status === 'awaiting_approval') return '';
+  if (status === 'continuing') return CONTINUING_TURN_ANSWER;
+  return EMPTY_TURN_ANSWER;
+}
+
 /** Keep the streamed answer when the finished text is only a procedure line. */
 export function keptModelAnswer(streamed: string, finalText: string): string {
   const live = streamed.trim();
@@ -284,10 +347,211 @@ export function keptModelAnswer(streamed: string, finalText: string): string {
   return done;
 }
 
-/** The model's sentences. Tables and the base line stay on the card. */
-export function resultLead(answer: string): string {
-  const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
-  return prose || outputTakeaway(answer);
+const STDERR_MARKS = [
+  'traceback',
+  'execution halted',
+  'loading required package',
+  'attaching package',
+  'masked from package',
+  'svydesign',
+  'error in ',
+  'lengths of prob',
+  'modulenotfounderror',
+  'syntaxerror',
+  'nameerror',
+  'typeerror:',
+  'valueerror:',
+  'r script failed',
+];
+const PROMISE_MARKS = ['check', 'look', 'verify', 'confirm', 'retry', 'rerun', 'investigate'];
+const CORRECTION_MARKS = [
+  'earlier reply',
+  'previous reply',
+  'i was wrong',
+  'wrong way round',
+  'i misspoke',
+  'that was incorrect',
+  'in my last reply',
+  'correction:',
+];
+
+/** One pass for every sentence a person reads. Drops a promise, a retry, and raw stderr. */
+export function guardUserText(text: string): string {
+  const source = String(text || '');
+  if (!source.trim()) return '';
+  const kept = source
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => (/\bfreq:/i.test(part) ? 'Check not run for this table.' : part))
+    .filter(part => !dropUserSentence(part));
+  return kept.join(' ').trim();
+}
+
+function dropUserSentence(part: string): boolean {
+  const folded = part.toLowerCase();
+  if (STDERR_MARKS.some(mark => folded.includes(mark))) return true;
+  if (
+    /\b(?:brand_duplication|banner_table|paired_brand_test|row_filters|analysis_type)\b/i.test(
+      folded
+    )
+  ) {
+    return true;
+  }
+  if (
+    (folded.includes('option column') || folded.includes('option columns')) &&
+    (folded.includes('passed') ||
+      (folded.includes('lists') && folded.includes('but')) ||
+      folded.includes('check that the list matches'))
+  ) {
+    return true;
+  }
+  if (CORRECTION_MARKS.some(mark => folded.includes(mark))) return true;
+  const opening =
+    folded.startsWith("i'll ") || folded.startsWith('i will ') || folded.startsWith('let me ');
+  return opening && PROMISE_MARKS.some(mark => folded.includes(mark));
+}
+
+function withoutOtherRuns(text: string): string {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter(sentence => {
+    if (/can.?t show inline|cannot show inline/i.test(sentence)) return false;
+    if (
+      /other chat|another chat|earlier chat|previous chat|earlier run|previous run|earlier funnel/i.test(
+        sentence
+      )
+    )
+      return false;
+    return true;
+  });
+  return kept.join(' ').trim();
+}
+
+/** The model's sentences, or the result's own line when the chat has none. */
+export function resultLead(
+  answer: string,
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[],
+  tables?: RunTable[]
+): string {
+  const prose = withoutOtherRuns(
+    answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
+  ).trim();
+  const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
+  const deniesTheTable =
+    /not returned|was not returned|can.?t give|cannot give|could not (?:give|return|show)|was not run/i.test(
+      prose
+    );
+  if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
+  const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
+  const text =
+    (hasFigure(prose) ? prose : '') ||
+    (hasFigure(finding) ? finding : '') ||
+    (prose && /\d/.test(prose) ? prose : '') ||
+    finding ||
+    prose ||
+    outputTakeaway(answer);
+  const cleaned = guardUserText(withoutStrayEnding(text));
+  const headline = tables ? funnelHeadline(tables) : '';
+  const figures = cleaned.match(/%/g)?.length ?? 0;
+  if (headline && (!cleaned || figures > 4)) return headline;
+  return cleaned;
+}
+
+/** A funnel output opens that output. Other outputs open the table builder. */
+export function outputOpenHref(projectHref: string, kind: string, runId: string): string {
+  if (kind === 'Funnel' && runId) {
+    return `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runId)}`;
+  }
+  if (kind === 'Client deck') {
+    // Report editor, first page — not the Outputs pane (no stored analysis summary).
+    return `${projectHref}/report`;
+  }
+  return `${projectHref}/tables`;
+}
+
+/** Open the Report editor scrolled to the deck's first page. */
+export function clientDeckReportHref(projectHref: string): string {
+  return `${projectHref}/report`;
+}
+
+/** A weight column code and an empty cautions bullet are not part of the finding. */
+function withoutStrayEnding(text: string): string {
+  const lines = text.split('\n').filter(line => {
+    const trimmed = line.trim();
+    if (/^cautions:?$/i.test(trimmed)) return false;
+    if (/^[-*•]\s*$/.test(trimmed)) return false;
+    return true;
+  });
+  return lines
+    .join('\n')
+    .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+    .replace(/\s*[\(\[]\s*[\)\]]/g, '')
+    .replace(/(\d+\.\d{2,})%/g, (_all, raw: string) => {
+      const number = Number(raw);
+      if (!Number.isFinite(number)) return `${raw}%`;
+      const shown = number.toFixed(1).replace(/\.0$/, '');
+      return `${shown}%`;
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function summaryLine(
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+): string {
+  const lines: string[] = [];
+  for (const item of results || []) {
+    const nested =
+      item?.result && typeof item.result === 'object' && !Array.isArray(item.result)
+        ? (item.result.summary as Record<string, unknown> | undefined)
+        : undefined;
+    const summary = item?.summary || nested;
+    const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
+    if (!line || !/[A-Za-z]/.test(line) || !/\d/.test(line)) continue;
+    // The default summarize stub is the procedure name; it is not a lead.
+    if (/^(banner_table|rake|frequencies|funnel|nps)\b/i.test(line)) continue;
+    lines.push(line);
+  }
+  if (!lines.length) return '';
+  // Prefer a line that quotes a share or count over a weight-only sentence.
+  const withFigure = lines.find(line => /%|thousand|target|met|missed/i.test(line));
+  return withFigure || lines[0];
+}
+
+/** Subject before the statistic on a structured lead, e.g. "Satisfaction by Brand". */
+function subjectFromStructuredAnswer(answer: string): string {
+  for (const line of proseLines(answer)) {
+    const match = line.match(
+      /^(.+?):\s*(?:Welch'?s\s+)?(?:Survey\s+F|Pearson\s+chi-square|F|t|H|U|z|statistic)\b/i
+    );
+    const subject = (match?.[1] || '').trim();
+    if (subject && isQuestion(subject) && !PROCEDURE_TITLE.test(subject)) {
+      return subject.length > 90 ? `${subject.slice(0, 89).trimEnd()}…` : subject;
+    }
+  }
+  return '';
+}
+
+function structuredAnswerOnResult(item: ToolResult): string {
+  const result = item.result || {};
+  const nested =
+    result.result && typeof result.result === 'object'
+      ? (result.result as Record<string, unknown>)
+      : {};
+  for (const layer of [result, nested]) {
+    const report = layer.report;
+    if (!report || typeof report !== 'object') continue;
+    const block = report as { answer_from_result?: unknown; answer?: unknown };
+    if (
+      block.answer_from_result === true &&
+      typeof block.answer === 'string' &&
+      block.answer.trim()
+    ) {
+      return block.answer.trim();
+    }
+  }
+  return '';
 }
 
 /** The table title the API put on the result, or the first prose line that is not the base. */
@@ -296,14 +560,18 @@ export function outputTitle(
   answer: string,
   columns: QuestionLabel[] = []
 ): string {
+  const items = analysisItems(results);
+  if (preferredProcedure(items) === 'funnel') return 'Funnel';
+  if (preferredProcedure(items) === 'brand_duplication') return 'Duplication';
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );
   if (questions.length) return questions.join(', ');
-  const items = analysisItems(results);
   const preferred = preferredProcedure(items);
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;
+    const fromResult = subjectFromStructuredAnswer(structuredAnswerOnResult(item));
+    if (fromResult) return fromResult;
     const result = item.result || {};
     const nested =
       result.result && typeof result.result === 'object'
@@ -338,10 +606,18 @@ export function outputTitle(
     ]);
     const group = first(body, ['group_column', 'banner_column', 'factor', 'by']);
     if (measure && group) {
-      return `${titledWithQuestion(measure, columns)} by ${titledWithQuestion(group, columns)}`;
+      const labelled = `${titledWithQuestion(measure, columns)} by ${titledWithQuestion(group, columns)}`;
+      // Prefer the structured subject when the body only has variable codes.
+      if (!isQuestion(labelled)) {
+        const fromAnswer = subjectFromStructuredAnswer(answer);
+        if (fromAnswer) return fromAnswer;
+      }
+      return labelled;
     }
     if (measure) return titledWithQuestion(measure, columns);
   }
+  const fromAnswerAlone = subjectFromStructuredAnswer(answer);
+  if (fromAnswerAlone) return fromAnswerAlone;
   const procedure = preferred || procedureOf(items[0] || {});
   if (procedure && (KIND_LABELS[procedure] || analysisDisplayName(procedure))) {
     return KIND_LABELS[procedure] || analysisDisplayName(procedure);
@@ -426,6 +702,13 @@ export function answerWithoutBase(answer: string): string {
 }
 
 /** Plain lines written one under another stay on separate lines when rendered. */
+/** A lead saved as one line still starts a list at each " - ". */
+export function restoreListBreaks(text: string): string {
+  return text
+    .replace(/([.!?])\s+-\s+/g, '$1\n- ')
+    .replace(/(?<=[a-z0-9%])\s+-\s+(?=[A-Z])/g, '\n- ');
+}
+
 export function keepLineBreaks(text: string): string {
   const lines = text.split('\n');
   const out: string[] = [];
@@ -451,14 +734,32 @@ function succeeded(item: ToolResult): boolean {
 
 /** Saved run ids on this turn, for the server exports. A failed step is not an output. */
 export function outputRunIds(results: ToolResult[] | undefined): string[] {
-  return analysisItems(results)
-    .filter(succeeded)
+  const items = analysisItems(results).filter(succeeded);
+  const preferred = preferredProcedure(items);
+  const ordered = preferred
+    ? [
+        ...items.filter(item => procedureOf(item) === preferred),
+        ...items.filter(item => procedureOf(item) !== preferred),
+      ]
+    : items;
+  return ordered
     .map(item => {
       const nested = item.result || {};
-      const value = (item as { run_id?: unknown }).run_id ?? nested.run_id;
+      const value = (item as { run_id?: unknown }).run_id ?? nested.run_id ?? nested.job_id;
       return typeof value === 'string' ? value : '';
     })
     .filter(Boolean);
+}
+
+/** A real table is already in the stream. A compute step is not one. */
+export function hasSummaryTable(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => {
+    if (!succeeded(item) || procedureOf(item) === 'compute') return false;
+    const summary = summaryOf(item);
+    if (Array.isArray(summary.table) && summary.table.length > 0) return true;
+    if (Array.isArray(summary.by_group) && summary.by_group.length > 0) return true;
+    return false;
+  });
 }
 
 /** The output card is a successful result. A failed turn stays in the thread. */
@@ -466,8 +767,23 @@ export function outputCardReady(
   turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
   plan: boolean
 ): boolean {
-  if (!turn || turn.status !== 'ok' || plan) return false;
-  return outputRunIds(turn.tool_results).length > 0;
+  if (!turn || turn.status !== 'ok') return false;
+  // A plan with no table yet is still the approval card. A table in the stream opens the panel.
+  if (plan) return hasSummaryTable(turn.tool_results);
+  if (outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results)) return true;
+  // Finished deck with a download (or pending job id) still gets the chat card.
+  return (turn.tool_results || []).some(item => {
+    if (procedureOf(item) !== 'build_client_deck') return false;
+    const nested = item.result || {};
+    if (nested.ok === false || nested.error) return false;
+    return Boolean(
+      nested.exports ||
+      nested.key ||
+      nested.run_id ||
+      nested.job_id ||
+      (item as { run_id?: unknown }).run_id
+    );
+  });
 }
 
 /** Method checks the engine ran, as short chips. A failed check is a warning. */
@@ -523,6 +839,17 @@ function exclusionLabels(item: ToolResult): string[] {
   if (filtered) lines.push(`${filtered} rows excluded because they were filtered out`);
   if (other) lines.push(`${other} rows excluded for another counted reason`);
   return lines;
+}
+
+/**
+ * Side-panel tab for an agent table. Unsaved previews have no T number so they
+ * cannot collide with a saved T1; a saved number is shown only after save.
+ */
+export function outputTableTabLabel(title: string, number?: number | null): string {
+  const label = title.trim() || 'Table';
+  const saved = Number(number);
+  if (Number.isFinite(saved) && saved > 0) return `T${saved} ${label}`;
+  return label;
 }
 
 /** Markdown table blocks in the answer, in order. The panel shows them; the thread keeps the prose. */

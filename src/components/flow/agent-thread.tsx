@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useProjectSessions } from '@/hooks/api/use-project-data';
+import { invalidateProjectSessions, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   Empty,
   EmptyDescription,
@@ -21,6 +24,7 @@ import {
 } from '@/components/flow/chat-live-run';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { exportResultAsPptx } from '@/lib/output-pptx';
 import {
   answerTables,
   answerWithoutBase,
@@ -29,14 +33,20 @@ import {
   outputBaseClause,
   outputCardReady,
   outputChecks,
+  hasSummaryTable,
+  isClientDeckResult,
+  clientDeckReportHref,
   isProcedurePlaceholder,
+  EMPTY_TURN_ANSWER,
   keptModelAnswer,
+  visibleTurnAnswer,
   outputKind,
   outputRunIds,
   outputStat,
   outputTakeaway,
   outputTitle,
   resultLead,
+  guardUserText,
   titledWithQuestion,
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
@@ -61,6 +71,21 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
+import {
+  chatTurnChangesFromToolResults,
+  notifyChatRunFinished,
+  numberedNextStepsFromTurn,
+  resolveNumberedNextStep,
+  summarizeChatSteps,
+  type NumberedNextStep,
+} from '@/lib/chat-turn-parity';
+import { ChatTurnChangesPanel } from '@/components/flow/chat-turn-changes';
+import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
+import {
+  documentFromPins,
+  parseReportReshapeRequest,
+  reportDocumentForApi,
+} from '@/lib/report-document';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
 
@@ -87,6 +112,8 @@ export type AgentThreadOptions = {
   onAsked?: () => void;
   onSession?: (session: AgentChatSession) => void;
   onFinished?: (result: AgentLoopResponse) => void;
+  /** Report pages/tables changed mid-deck — bump Report reload. */
+  onReportUpdated?: () => void;
 };
 
 /** A list key. The same step name can run twice, so the index keeps the rows apart. */
@@ -101,7 +128,13 @@ export function stepLines(steps: { name?: string; message?: string }[] | undefin
   });
 }
 
-function replyLines(result: AgentLoopResponse): string[] {
+function traceField(item: Record<string, unknown>, key: string): string {
+  const value = item[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Step lines from a finished reply. Prefer the procedure the person saw over wrapper tool names. */
+export function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
   if (summary) {
     return summary.split('\n').flatMap(line => {
@@ -110,13 +143,53 @@ function replyLines(result: AgentLoopResponse): string[] {
     });
   }
   return (result.tool_trace || []).flatMap(item => {
-    const message = item.message || item.summary;
-    const name = item.name || item.tool;
-    const line = visibleAgentStep(
-      typeof name === 'string' ? name : '',
-      typeof message === 'string' ? message : ''
-    );
+    const nested =
+      item.result && typeof item.result === 'object'
+        ? (item.result as Record<string, unknown>)
+        : {};
+    const args =
+      item.args && typeof item.args === 'object' ? (item.args as Record<string, unknown>) : {};
+    const message =
+      traceField(item, 'message') ||
+      traceField(item, 'summary') ||
+      traceField(nested, 'message') ||
+      '';
+    const wrapper = traceField(item, 'name') || traceField(item, 'tool');
+    const procedure = traceField(args, 'analysis_type');
+    const name =
+      (wrapper === 'run_analysis' || wrapper === 'run_operations') && procedure
+        ? procedure
+        : wrapper || procedure;
+    const line = visibleAgentStep(name, message);
     return line ? [line] : [];
+  });
+}
+
+/** Keep the lines shown while the turn ran; only fall back to the finished trace. */
+export function stepsAfterReply(live: string[], traced: string[]): string[] {
+  return live.length ? live : traced;
+}
+
+function nextStepsForResult(
+  result: AgentLoopResponse,
+  columnLabels: ColumnLabels[],
+  hasReportPins = false
+): NumberedNextStep[] {
+  return numberedNextStepsFromTurn({
+    toolResults: result.tool_results,
+    steps: replyLines(result),
+    hasOutput: outputCardReady(result, false),
+    columnLabels: columnLabels.map(column => column.label || column.name).filter(Boolean),
+    hasReportPins,
+  });
+}
+
+function notifyFinishedTurn(result: AgentLoopResponse, startedAt: number): boolean {
+  const body = (result.answer_markdown || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return notifyChatRunFinished({
+    title: 'Tensr finished a chat reply',
+    body: body || undefined,
+    startedAt,
   });
 }
 
@@ -131,6 +204,35 @@ function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
   return downloadsFromToolResults(entries);
 }
 
+function clientDeckStillPending(result: AgentLoopResponse): boolean {
+  return (result.tool_results || []).some(item => {
+    const payload = item.result;
+    if (!payload || typeof payload !== 'object') return false;
+    const procedure = String(item.name || payload.procedure || '');
+    if (
+      procedure !== 'build_client_deck' &&
+      String(payload.procedure || '') !== 'build_client_deck'
+    ) {
+      return false;
+    }
+    const status = String(payload.status || '');
+    return (
+      payload.pending === true ||
+      status === 'pending' ||
+      status === 'running' ||
+      Boolean(String(payload.job_id || '').trim() && status !== 'complete' && status !== 'failed')
+    );
+  });
+}
+
+function reportPagesFromResult(result: AgentLoopResponse): number {
+  for (const item of result.tool_results || []) {
+    const pages = item.result?.report_pages;
+    if (typeof pages === 'number' && pages > 0) return pages;
+  }
+  return 0;
+}
+
 export function useAgentThread({
   projectId,
   datasetId,
@@ -141,6 +243,7 @@ export function useAgentThread({
   onAsked,
   onSession,
   onFinished,
+  onReportUpdated,
 }: AgentThreadOptions) {
   const [question, setQuestion] = useState('');
   const [sent, setSent] = useState('');
@@ -153,6 +256,8 @@ export function useAgentThread({
   const [approving, setApproving] = useState(false);
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
+  const [nextSteps, setNextSteps] = useState<NumberedNextStep[]>([]);
+  const [awayNote, setAwayNote] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -166,6 +271,7 @@ export function useAgentThread({
   const questionRef = useRef('');
   const answerRef = useRef('');
   const stepsRef = useRef<string[]>([]);
+  const nextStepsRef = useRef<NumberedNextStep[]>([]);
   const noteRef = useRef('');
   const toolResultsRef = useRef(turn?.tool_results);
   toolResultsRef.current = turn?.tool_results;
@@ -173,6 +279,7 @@ export function useAgentThread({
   questionRef.current = question;
   answerRef.current = answer;
   stepsRef.current = steps;
+  nextStepsRef.current = nextSteps;
   noteRef.current = attachedNote;
   const askedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
@@ -186,12 +293,22 @@ export function useAgentThread({
   const openAbort = useRef<AbortController | null>(null);
   const onSessionRef = useRef(onSession);
   const onFinishedRef = useRef(onFinished);
+  const onReportUpdatedRef = useRef(onReportUpdated);
   const onAskedRef = useRef(onAsked);
-  const openChatRef = useRef<(sessionId: string) => void>(() => undefined);
+  const deckWatchAbort = useRef<AbortController | null>(null);
+  const openChatRef = useRef<(sessionId: string, opts?: { allowFallback?: boolean }) => void>(
+    () => undefined
+  );
+  const reportPins = useProjectPins(projectId || '', datasetId ? [datasetId] : []);
+  const reportPinsRef = useRef(reportPins);
+  reportPinsRef.current = reportPins;
+  const datasetIdRef = useRef(datasetId);
+  datasetIdRef.current = datasetId;
   statusRef.current = status;
   modeRef.current = mode;
   onSessionRef.current = onSession;
   onFinishedRef.current = onFinished;
+  onReportUpdatedRef.current = onReportUpdated;
   onAskedRef.current = onAsked;
 
   useEffect(() => {
@@ -200,6 +317,7 @@ export function useAgentThread({
       aliveRef.current = false;
       openToken.current += 1;
       openAbort.current?.abort();
+      deckWatchAbort.current?.abort();
     };
   }, []);
 
@@ -226,6 +344,16 @@ export function useAgentThread({
     [projectId, syncAddress]
   );
 
+  const queryClient = useQueryClient();
+  const sessionsQuery = useProjectSessions(projectId || null);
+  useEffect(() => {
+    if (!sessionsQuery.data) {
+      if (sessionsQuery.isError) setSessions(current => current || []);
+      return;
+    }
+    setSessions(sortSessionsByRecency(sessionsQuery.data));
+  }, [sessionsQuery.data, sessionsQuery.isError]);
+
   const noteSession = useCallback(
     (sessionId: string, title: string) => {
       sessionRef.current = sessionId;
@@ -233,29 +361,73 @@ export function useAgentThread({
       const row = {
         session_id: sessionId,
         title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+        updated_at: new Date().toISOString(),
       };
       if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
-        return [row, ...rest];
+        const next = sortSessionsByRecency([row, ...rest]);
+        if (projectId) queryClient.setQueryData(projectQueryKeys.sessions(projectId), next);
+        return next;
       });
       onSessionRef.current?.(row);
     },
-    [rememberChat]
+    [rememberChat, projectId, queryClient]
   );
 
   const loadRail = useCallback(() => {
     if (!projectId) return;
-    void flowJson<{ sessions?: AgentChatSession[] }>(`/api/projects/${projectId}/sessions`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setSessions(page.sessions || []))
-      .catch(() => setSessions(current => current || []));
-  }, [projectId]);
+    void invalidateProjectSessions(queryClient, projectId);
+  }, [projectId, queryClient]);
 
-  useEffect(() => {
-    loadRail();
-  }, [loadRail]);
+  const startDeckWatch = useCallback(
+    (result: AgentLoopResponse, watchToken: number) => {
+      if (!clientDeckStillPending(result)) return;
+      deckWatchAbort.current?.abort();
+      const watch = new AbortController();
+      deckWatchAbort.current = watch;
+      void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
+        watchClientDeckJobInBackground(result, {
+          datasetId: datasetIdRef.current,
+          signal: watch.signal,
+          onProgress: (_step, message) => {
+            // Keep polling until the job finishes even if a follow-up turn bumped
+            // turnToken — otherwise status questions orphan the progress card.
+            if (!aliveRef.current) return;
+            shown(() => {
+              setSteps(current => (current.includes(message) ? current : [...current, message]));
+            });
+          },
+          onReportPages: () => {
+            if (aliveRef.current) onReportUpdatedRef.current?.();
+          },
+          onUpdate: next => {
+            if (!aliveRef.current) return;
+            // Follow-up turns bump turnToken; still refresh while this deck job is live.
+            if (watchToken !== turnTokenRef.current && !clientDeckStillPending(next)) {
+              return;
+            }
+            const nextAnswer = visibleTurnAnswer(
+              next.status,
+              keptModelAnswer('', next.answer_markdown || '')
+            );
+            shown(() => {
+              setAnswer(nextAnswer);
+              setTurn(next);
+              setDownloads(downloadEntries(next));
+              if (watchToken === turnTokenRef.current) {
+                setNextSteps(
+                  nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
+                );
+              }
+            });
+            onFinishedRef.current?.(next);
+          },
+        })
+      );
+    },
+    [columnLabels, shown]
+  );
 
   const attachFiles = (list: FileList | null) => {
     void readChatAttachments(list).then(result => {
@@ -285,13 +457,16 @@ export function useAgentThread({
   );
 
   const sendText = useCallback(
-    async (text: string, nextMode: Mode = modeRef.current) => {
+    async (rawText: string, nextMode: Mode = modeRef.current) => {
+      const resolved = resolveNumberedNextStep(rawText, nextStepsRef.current);
+      const text = resolved || rawText;
       if (!text.trim() || sendingRef.current) return false;
       const turnToken = ++turnTokenRef.current;
       if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
         return false;
       if (projectId && chatRunInFlight(projectId)) return false;
       sendingRef.current = true;
+      const startedAt = Date.now();
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
         if (!projectId) return;
         const prior = liveChatRun();
@@ -331,6 +506,8 @@ export function useAgentThread({
       setPlan(null);
       setTurn(null);
       setSteps([]);
+      setNextSteps([]);
+      setAwayNote(false);
       setDownloads([]);
       setStatus('Thinking…');
       setApproving(false);
@@ -344,7 +521,69 @@ export function useAgentThread({
           ? 1
           : 0);
       const recover = () => loadSavedTurn(text, nextMode, alreadyAnswered);
+      const reshapeAsk = parseReportReshapeRequest(text);
+      const reshapeFileId = datasetIdRef.current;
+      const reshapePins = reportPinsRef.current;
       try {
+        if (reshapeAsk && reshapeFileId && reshapePins.length) {
+          shown(() => setSteps(['Reshaping the report…']));
+          publish({ steps: ['Reshaping the report…'], status: 'Thinking…' });
+          const reshaped = await flowJson<{
+            ok?: boolean;
+            note?: string;
+            variant_section?: string;
+            variant_page_ids?: string[];
+            document?: { pages?: unknown[] };
+          }>(`/datasets/${reshapeFileId}/report/reshape`, {
+            method: 'POST',
+            body: JSON.stringify({
+              message: text,
+              kind: reshapeAsk.kind,
+              max_slides: reshapeAsk.maxSlides,
+              audience_label: reshapeAsk.audienceLabel,
+              include_recommendations: reshapeAsk.includeRecommendations,
+              recommendation_count: reshapeAsk.recommendationCount,
+              placement: reshapeAsk.placement,
+              document: reportDocumentForApi(documentFromPins(reshapePins)),
+              persist: true,
+            }),
+            signal: AbortSignal.timeout(60_000),
+          });
+          if (turnToken !== turnTokenRef.current) return true;
+          const section = reshaped.variant_section || 'Board';
+          const nVariant = (reshaped.variant_page_ids || []).length;
+          const nPages = Array.isArray(reshaped.document?.pages)
+            ? reshaped.document.pages.length
+            : nVariant;
+          const kept =
+            reshaped.note ||
+            `${section} version added at the front. Full report kept (${nPages} pages).`;
+          const suggestions = numberedNextStepsFromTurn({
+            hasReportPins: true,
+            hasOutput: false,
+          });
+          shown(() => {
+            setAnswer(kept);
+            setApproving(false);
+            setPlan(null);
+            setTurn(null);
+            setSteps(['Reshaped the report']);
+            setNextSteps(suggestions);
+            setDownloads([]);
+            setAttachments([]);
+            setStatus(null);
+          });
+          publish({
+            running: false,
+            status: null,
+            answer: kept,
+            steps: ['Reshaped the report'],
+            sessionId: sessionRef.current,
+          });
+          if (aliveRef.current) loadRail();
+          return true;
+        }
+
         const result = await runAgentLoop({
           message: text,
           mode: nextMode,
@@ -396,51 +635,95 @@ export function useAgentThread({
           onPreview: preview => {
             if (turnToken !== turnTokenRef.current) return;
             const previewText = preview.text || draft;
-            if (!previewText || isProcedurePlaceholder(previewText)) return;
-            draft = previewText;
-            streamedRef.current = previewText;
-            shown(() => {
-              setAnswer(previewText);
-              setStatus(null);
-            });
-            publish({ answer: previewText, status: null });
+            const tables = hasSummaryTable(preview.tool_results);
+            if ((!previewText || isProcedurePlaceholder(previewText)) && !tables) return;
+            if (previewText && !isProcedurePlaceholder(previewText)) {
+              draft = previewText;
+              streamedRef.current = previewText;
+              shown(() => {
+                setAnswer(previewText);
+                setStatus(null);
+              });
+              publish({ answer: previewText, status: null });
+            }
+            if (tables) {
+              shown(() => {
+                setTurn({
+                  status: 'ok',
+                  mode,
+                  answer_markdown: previewText,
+                  tool_results: preview.tool_results,
+                });
+              });
+            }
           },
         });
         if (turnToken !== turnTokenRef.current) return true;
         if (result.session_id) noteSession(result.session_id, text.trim());
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = keptModelAnswer(draft, result.answer_markdown || '');
+        const kept = visibleTurnAnswer(
+          result.status,
+          keptModelAnswer(draft, result.answer_markdown || '')
+        );
+        const suggestions =
+          result.status === 'awaiting_approval'
+            ? []
+            : nextStepsForResult(result, columnLabels, reportPinsRef.current.length > 0);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
+          setNextSteps(suggestions);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
         });
-        if (result.status !== 'awaiting_approval' && aliveRef.current)
+        if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          if (reportPagesFromResult(result) > 0) onReportUpdatedRef.current?.();
+          if (notifyFinishedTurn(result, startedAt)) {
+            shown(() => setAwayNote(true));
+          }
+          startDeckWatch(result, turnToken);
+        }
         publish({
           running: false,
           status: null,
           answer: kept,
+          steps: keptSteps,
           sessionId: result.session_id || sessionRef.current,
         });
         if (aliveRef.current) loadRail();
         return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
-        shown(() => setStatus(message));
+        // Clear the live panel so a failed follow-up does not keep an old deck preview.
+        shown(() => {
+          setStatus(message);
+          setTurn(null);
+          setPlan(null);
+        });
         publish({ running: false, status: message });
         return true;
       } finally {
         sendingRef.current = false;
       }
     },
-    [datasetId, loadRail, loadSavedTurn, past, projectId, noteSession, shown]
+    [
+      columnLabels,
+      datasetId,
+      loadRail,
+      loadSavedTurn,
+      past,
+      projectId,
+      noteSession,
+      shown,
+      startDeckWatch,
+    ]
   );
 
   useEffect(() => {
@@ -476,10 +759,13 @@ export function useAgentThread({
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
     const approvedSession = plan.session_id || sessionRef.current;
     const turnToken = ++turnTokenRef.current;
+    const startedAt = Date.now();
     approvingRef.current = true;
     setApproving(true);
     setStatus('Thinking…');
     setAnswer('');
+    setNextSteps([]);
+    setAwayNote(false);
     streamedRef.current = '';
     if (projectId) {
       publishLiveChatRun({
@@ -516,28 +802,52 @@ export function useAgentThread({
       onReplace: next => writeStream(next),
       onPreview: preview => {
         if (turnToken !== turnTokenRef.current) return;
-        if (turnToken !== turnTokenRef.current) return;
         const previewText = preview.text || streamedRef.current;
-        if (previewText) writeStream(previewText);
+        if (previewText && !isProcedurePlaceholder(previewText)) writeStream(previewText);
+        if (hasSummaryTable(preview.tool_results)) {
+          shown(() => {
+            setTurn({
+              status: 'ok',
+              mode,
+              answer_markdown: previewText,
+              tool_results: preview.tool_results,
+            });
+          });
+        }
       },
     })
       .then(result => {
         if (turnToken !== turnTokenRef.current) return;
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
+        const kept = visibleTurnAnswer(
+          result.status,
+          keptModelAnswer(streamedRef.current, result.answer_markdown || '')
+        );
+        const suggestions =
+          result.status === 'awaiting_approval'
+            ? []
+            : nextStepsForResult(result, columnLabels, reportPinsRef.current.length > 0);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
+          setNextSteps(suggestions);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
         });
-        if (result.status !== 'awaiting_approval' && aliveRef.current)
+        if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          if (reportPagesFromResult(result) > 0) onReportUpdatedRef.current?.();
+          if (notifyFinishedTurn(result, startedAt)) {
+            shown(() => setAwayNote(true));
+          }
+          startDeckWatch(result, turnToken);
+        }
         const current = liveChatRun();
         if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
           publishLiveChatRun({
@@ -545,7 +855,7 @@ export function useAgentThread({
             running: false,
             status: null,
             answer: kept,
-            steps: traced.length ? traced : stepsRef.current,
+            steps: keptSteps,
           });
         }
         approvingRef.current = false;
@@ -575,6 +885,8 @@ export function useAgentThread({
     setSent('');
     setAttachedNote('');
     setAnswer('');
+    setNextSteps([]);
+    setAwayNote(false);
     setQuestion('');
     if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
@@ -588,9 +900,28 @@ export function useAgentThread({
     setPanelOpen(false);
   };
 
+  const resetToEmptyChat = useCallback(() => {
+    sessionRef.current = null;
+    rememberChat(null);
+    setPast([]);
+    setSent('');
+    setAttachedNote('');
+    setAnswer('');
+    setPlan(null);
+    setTurn(null);
+    setSteps([]);
+    setNextSteps([]);
+    setDownloads([]);
+    setAttachments([]);
+    setAttachError(null);
+    setPanelOpen(false);
+    setStatus(null);
+  }, [rememberChat]);
+
   const openChat = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, opts?: { allowFallback?: boolean }) => {
       if (!projectId || !sessionId) return;
+      const allowFallback = opts?.allowFallback !== false;
       const token = ++openToken.current;
       openAbort.current?.abort();
       const controller = new AbortController();
@@ -613,7 +944,8 @@ export function useAgentThread({
                   {
                     user: item.user,
                     note: '',
-                    answer: item.answer || '',
+                    answer:
+                      (item.answer || '').trim() || (item.steps?.length ? EMPTY_TURN_ANSWER : ''),
                     toolResults: item.tool_results,
                     steps: item.steps,
                   },
@@ -621,41 +953,63 @@ export function useAgentThread({
               : []
           );
           const last = exchanges[exchanges.length - 1];
+          const restoredAnswer =
+            (last?.answer || '').trim() || (last?.steps?.length ? EMPTY_TURN_ANSWER : '');
+          const restoredTurn: AgentLoopResponse | null = last
+            ? {
+                status: 'ok',
+                mode: 'agent',
+                answer_markdown: restoredAnswer,
+                session_id: sessionId,
+                tool_results: last.toolResults,
+              }
+            : null;
           shown(() => {
             setPast(last ? exchanges.slice(0, -1) : exchanges);
             setSent(last?.user || '');
             setAttachedNote('');
-            setAnswer(last?.answer || '');
+            setAnswer(restoredAnswer);
             if (!questionRef.current && projectId) {
               setQuestion(window.sessionStorage.getItem(draftKey(projectId)) || '');
             }
             setPlan(null);
-            setTurn(
-              last
-                ? {
-                    status: 'ok',
-                    mode: 'agent',
-                    answer_markdown: last.answer,
-                    session_id: sessionId,
-                    tool_results: last.toolResults,
-                  }
-                : null
-            );
+            setTurn(restoredTurn);
             setSteps(stepLines(last?.steps));
+            setAwayNote(false);
+            setNextSteps(
+              restoredTurn
+                ? nextStepsForResult(restoredTurn, columnLabels, reportPinsRef.current.length > 0)
+                : []
+            );
             setDownloads([]);
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
-            setPanelOpen(Boolean(last?.toolResults?.length));
+            // Failed tool steps still leave tool_results; only a ready output opens the column.
+            setPanelOpen(outputCardReady(restoredTurn, false));
           });
+          // Resume deck progress polling when reopening a chat mid-build.
+          if (restoredTurn) {
+            const watchToken = ++turnTokenRef.current;
+            startDeckWatch(restoredTurn, watchToken);
+          }
         })
         .catch(err => {
           if (token !== openToken.current) return;
           if (err instanceof DOMException && err.name === 'AbortError') return;
-          shown(() => setStatus('That chat could not be opened.'));
+          // Prefer empty chat or one other session over "That chat could not be opened."
+          const fallback = allowFallback
+            ? (sessions || []).find(item => item.session_id !== sessionId)
+            : null;
+          if (fallback?.session_id) {
+            // One fallback attempt only — avoid A↔B loops when both sessions 404.
+            openChatRef.current(fallback.session_id, { allowFallback: false });
+            return;
+          }
+          shown(() => resetToEmptyChat());
         });
     },
-    [projectId, rememberChat, shown]
+    [columnLabels, projectId, rememberChat, resetToEmptyChat, sessions, shown, startDeckWatch]
   );
   openChatRef.current = openChat;
 
@@ -714,14 +1068,16 @@ export function useAgentThread({
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
   const kind = outputKind(toolResults);
-  const title = outputTitle(toolResults, answer, columnLabels);
+  const clientDeck = isClientDeckResult(toolResults);
+  const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseClause(toolResults, answer);
   const stat = outputStat(toolResults, answer, takeaway);
   const runIds = outputRunIds(toolResults);
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
-    if (outputReady) setPanelOpen(true);
+    // Open on the first real output; close again if the latest turn has none (e.g. a failed run).
+    setPanelOpen(outputReady);
   }, [outputReady]);
   const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
@@ -733,10 +1089,13 @@ export function useAgentThread({
     ...table,
     title: titledWithQuestion(table.title, columnLabels),
   }));
+  const resultCharts = resultView.charts;
   const prose = answerWithoutBase(
-    withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
+    withoutResultTokens(
+      structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
+    )
   );
-  const lead = resultLead(answer);
+  const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
@@ -763,6 +1122,9 @@ export function useAgentThread({
     setPlan,
     turn,
     steps,
+    nextSteps,
+    awayNote,
+    setAwayNote,
     panelOpen,
     setPanelOpen,
     attachments,
@@ -784,6 +1146,7 @@ export function useAgentThread({
     rememberChat,
     toolResults,
     kind,
+    clientDeck,
     title,
     takeaway,
     baseNote,
@@ -798,6 +1161,7 @@ export function useAgentThread({
     ledger,
     resultView,
     structuredTables,
+    resultCharts,
     footnote,
     resultChecks,
     datasetId,
@@ -812,7 +1176,7 @@ function planCopy(answer: string): string {
   const waiting = 'Waiting for approval:';
   if (text.startsWith(waiting)) text = text.slice(waiting.length).trim();
   if (text === 'Plan' || text.startsWith('Plan\n')) text = text.slice(4).trim();
-  return text;
+  return guardUserText(text);
 }
 
 export function AgentThreadColumn({
@@ -831,6 +1195,28 @@ export function AgentThreadColumn({
   emptyDescription?: string;
 }) {
   const [stepsOpen, setStepsOpen] = useState(true);
+  const [asker, setAsker] = useState(false);
+  const [askedOwner, setAskedOwner] = useState(false);
+  useEffect(() => {
+    if (!thread.projectId) return;
+    let live = true;
+    void flowJson<{ user_id?: string }>('/me')
+      .then(me =>
+        flowJson<{ members?: { user_id?: string; role?: string }[] }>(
+          `/api/projects/${thread.projectId}/members`
+        ).then(page => {
+          if (!live) return;
+          const mine = (page.members || []).find(member => member.user_id === me.user_id);
+          setAsker(mine?.role === 'asker');
+        })
+      )
+      .catch(() => {
+        if (live) setAsker(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [thread.projectId]);
   const reportPins = useProjectPins(
     thread.projectId || '',
     thread.datasetId ? [thread.datasetId] : []
@@ -854,9 +1240,29 @@ export function AgentThreadColumn({
         .catch(() => thread.setStatus('That table could not be saved.'));
     });
   };
+  const liveChanges = chatTurnChangesFromToolResults(thread.toolResults);
+  const showLiveChanges = liveChanges.length > 0 && Boolean(thread.projectId) && !thread.plan;
 
   return (
     <div className={panel ? 'agent-thread-panel' : 'chat-column'}>
+      {asker ? (
+        <aside className="asker-rail">
+          <p>Can ask</p>
+          <p className="flow-muted">Audiences you can ask about</p>
+          <p className="flow-muted">The audiences shared with this project.</p>
+          <p>Your questions</p>
+          {thread.past.map(item => (
+            <p key={item.user}>{item.user}</p>
+          ))}
+          <div>
+            <p>What you can do here</p>
+            <p className="flow-muted">
+              Ask questions and copy answers. You can&apos;t change data, weights, audiences or the
+              report. Answers you mark get checked by the project owner.
+            </p>
+          </div>
+        </aside>
+      ) : null}
       <div className="chat-scroll">
         {!thread.showThread && panel ? (
           <Empty className="min-h-[280px] border-0 bg-transparent">
@@ -869,19 +1275,35 @@ export function AgentThreadColumn({
             </EmptyHeader>
           </Empty>
         ) : null}
-        {thread.past.map((item, index) => (
-          <div key={`${index}-${item.user.slice(0, 24)}`}>
-            <div className="chat-bubble">
-              {item.user}
-              {item.note ? <div className="flow-muted">{item.note}</div> : null}
+        {thread.past.map((item, index) => {
+          const pastChanges = chatTurnChangesFromToolResults(
+            (item.toolResults || []).map(entry => ({
+              name: entry.name,
+              result: entry.result,
+            }))
+          );
+          return (
+            <div key={`${index}-${item.user.slice(0, 24)}`}>
+              <div className="chat-bubble">
+                {item.user}
+                {item.note ? <div className="flow-muted">{item.note}</div> : null}
+              </div>
+              <ThreadResult
+                results={item.toolResults}
+                answer={item.answer}
+                columns={thread.columnLabels}
+              />
+              {pastChanges.length && thread.projectId ? (
+                <ChatTurnChangesPanel
+                  projectId={thread.projectId}
+                  changes={pastChanges}
+                  disabled={thread.status === 'Thinking…'}
+                  onRestored={() => thread.setStatus('Restored the previous version.')}
+                />
+              ) : null}
             </div>
-            <ThreadResult
-              results={item.toolResults}
-              answer={item.answer}
-              columns={thread.columnLabels}
-            />
-          </div>
-        ))}
+          );
+        })}
         {thread.sent ? (
           <div className="chat-bubble">
             {thread.sent}
@@ -906,7 +1328,7 @@ export function AgentThreadColumn({
                   strokeLinejoin="round"
                 />
               </svg>
-              Ran {thread.steps.length} {thread.steps.length === 1 ? 'step' : 'steps'}
+              {summarizeChatSteps(thread.steps)}
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                 <path
                   d={stepsOpen ? 'M3 4l2 2 2-2' : 'M4 3l2 2-2 2'}
@@ -944,24 +1366,67 @@ export function AgentThreadColumn({
           </div>
         ) : null}
         {thread.answer && (!thread.plan || thread.approving) ? (
-          thread.structuredTables.length ? (
+          thread.structuredTables.length || thread.resultCharts.length ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
+              charts={thread.resultCharts}
               footnote={thread.footnote}
               checks={thread.resultChecks}
               script={thread.resultView.script}
               rCheck={thread.resultView.rCheck}
               rStatement={thread.resultView.rStatement}
               runId={thread.runIds[0]}
+              datasetId={thread.datasetId || undefined}
+              projectId={thread.projectId || undefined}
             />
           ) : (
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
           )
         ) : null}
+        {asker && thread.answer && (!thread.plan || thread.approving) ? (
+          <div className="asker-worked">
+            <p>How it was worked out</p>
+            <p>
+              <span className="flow-muted">Audience</span>{' '}
+              {thread.resultView.audienceDefinition ||
+                thread.resultView.audience ||
+                'The rows this answer used'}
+            </p>
+            <p>
+              <span className="flow-muted">Base</span>{' '}
+              {thread.resultView.base || thread.resultView.baseDetail || 'The base on this answer'}
+            </p>
+            <p>
+              <span className="flow-muted">Weight</span>{' '}
+              {thread.resultView.weight || 'The project weight'}
+            </p>
+            <p>
+              <span className="flow-muted">Source</span>{' '}
+              {[thread.resultView.wave, thread.resultView.source].filter(Boolean).join(' · ') ||
+                'This project’s file'}
+            </p>
+          </div>
+        ) : null}
+        {showLiveChanges ? (
+          <ChatTurnChangesPanel
+            projectId={thread.projectId}
+            changes={liveChanges}
+            disabled={thread.status === 'Thinking…'}
+            onRestored={() => thread.setStatus('Restored the previous version.')}
+          />
+        ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
-            <div className="chat-result-top">
+            <Button
+              type="button"
+              className="chat-result-top"
+              aria-pressed={thread.panelOpen}
+              aria-label={
+                thread.panelOpen ? `${thread.title}, output open` : `Show output: ${thread.title}`
+              }
+              onClick={() => thread.setPanelOpen(true)}
+            >
               <span className="chat-result-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 14 14">
                   <path
@@ -977,60 +1442,168 @@ export function AgentThreadColumn({
                 <strong>{thread.title}</strong>
                 <div className="flow-muted">{thread.kind} · Output</div>
               </div>
-              <span className="chat-viewing">Viewing</span>
-            </div>
+              {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
+            </Button>
             <div className="chat-result-actions">
-              <Link
-                className="flow-btn primary"
-                href={
-                  thread.runIds[0]
-                    ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(thread.runIds[0])}`
-                    : `${projectHref}/report?pane=outputs`
-                }
-              >
-                Open
-              </Link>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!thread.runIds[0] || !thread.datasetId || inReport}
-                onClick={() => {
-                  if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
-                  void savePin(thread.projectId, thread.datasetId, {
-                    id: thread.runIds[0],
-                    runId: thread.runIds[0],
-                    datasetId: thread.datasetId,
-                    headline: thread.title,
-                    support: thread.takeaway,
-                    citation: thread.kind,
-                    afterId: '',
-                    deck: true,
-                    topline: true,
-                    keepLive: true,
-                  })
-                    .then(() => thread.setStatus('Added to the report.'))
-                    .catch(() => thread.setStatus('That result could not be added to the report.'));
-                }}
-              >
-                {inReport ? 'In report' : 'Add to report'}
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!thread.datasetId}
-                onClick={saveTable}
-              >
-                Save table
-              </Button>
-              {thread.downloads[0] ? (
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => void openSignedDownload(thread.downloads[0])}
-                >
-                  Download {thread.downloads[0].filename}
-                </Button>
+              {asker ? (
+                <>
+                  <span className="output-badge">Can ask · ask questions only</span>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      const text = [thread.lead, thread.footnote].filter(Boolean).join('\n');
+                      void navigator.clipboard?.writeText(text);
+                    }}
+                  >
+                    Copy answer
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      const text = thread.structuredTables
+                        .map(table =>
+                          [table.columns.join('\t'), ...table.rows.map(row => row.join('\t'))].join(
+                            '\n'
+                          )
+                        )
+                        .join('\n\n');
+                      void navigator.clipboard?.writeText(text);
+                    }}
+                  >
+                    Copy table
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!thread.structuredTables.length && !thread.lead}
+                    onClick={() => {
+                      void exportResultAsPptx({
+                        runId: thread.runIds[0],
+                        lead: thread.lead || thread.takeaway,
+                        tables: thread.structuredTables,
+                        footnote: thread.footnote,
+                        projectId: thread.projectId,
+                      })
+                        .then(() => thread.setStatus('Slide downloaded.'))
+                        .catch(() => thread.setStatus('That slide could not be downloaded.'));
+                    }}
+                  >
+                    Download slide
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      setAskedOwner(true);
+                      thread.setStatus('Sent to the owner to check.');
+                    }}
+                  >
+                    Ask owner to check
+                  </Button>
+                  {askedOwner ? <span className="flow-muted">Not checked yet</span> : null}
+                </>
               ) : null}
+              {thread.clientDeck ? (
+                <>
+                  <Link className="flow-btn primary" href={clientDeckReportHref(projectHref)}>
+                    Open in Report
+                  </Link>
+                  {thread.downloads[0] ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                    >
+                      Download .pptx
+                    </Button>
+                  ) : null}
+                  {asker || !thread.datasetId ? null : (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      disabled={thread.status === 'Thinking…'}
+                      onClick={() => {
+                        if (!thread.datasetId) return;
+                        thread.setStatus('Exporting PowerPoint…');
+                        void import('@/lib/office-deck-job')
+                          .then(({ exportOfficeDeckAndDownload }) =>
+                            exportOfficeDeckAndDownload(thread.datasetId!, 'deck', {
+                              fill_report: false,
+                            })
+                          )
+                          .then(() => thread.setStatus('PowerPoint downloaded.'))
+                          .catch(() =>
+                            thread.setStatus('That PowerPoint could not be exported again.')
+                          );
+                      }}
+                    >
+                      Export again
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link
+                    className="flow-btn primary"
+                    href={
+                      thread.runIds[0]
+                        ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(thread.runIds[0])}`
+                        : `${projectHref}/report?pane=outputs`
+                    }
+                  >
+                    Open
+                  </Link>
+                  {asker ? null : (
+                    <>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!thread.runIds[0] || !thread.datasetId || inReport}
+                        onClick={() => {
+                          if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
+                          void savePin(thread.projectId, thread.datasetId, {
+                            id: thread.runIds[0],
+                            runId: thread.runIds[0],
+                            datasetId: thread.datasetId,
+                            headline: thread.title,
+                            support: thread.takeaway,
+                            citation: thread.kind,
+                            afterId: '',
+                            deck: true,
+                            topline: true,
+                            keepLive: true,
+                          })
+                            .then(() => thread.setStatus('Added to the report.'))
+                            .catch(() =>
+                              thread.setStatus('That result could not be added to the report.')
+                            );
+                        }}
+                      >
+                        {inReport ? 'In report' : 'Add to report'}
+                      </Button>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!thread.datasetId}
+                        onClick={saveTable}
+                      >
+                        Save table
+                      </Button>
+                    </>
+                  )}
+                  {thread.downloads[0] ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                    >
+                      Download {thread.downloads[0].filename}
+                    </Button>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         ) : null}
@@ -1039,6 +1612,31 @@ export function AgentThreadColumn({
           <p className="flow-error">{thread.status}</p>
         ) : null}
       </div>
+      {thread.nextSteps.length && thread.status !== 'Thinking…' ? (
+        <div className="chat-next-steps" aria-label="Suggested next steps">
+          <div className="chat-next-steps-label">Next steps</div>
+          <div className="chat-next-steps-chips">
+            {thread.nextSteps.map(step => (
+              <Button
+                key={step.n}
+                className="chat-next-step"
+                type="button"
+                disabled={thread.status === 'Thinking…'}
+                onClick={() => thread.send(step.prompt)}
+              >
+                {step.n} · {step.label}
+              </Button>
+            ))}
+          </div>
+          <p className="chat-next-steps-hint">Type a number to run one.</p>
+        </div>
+      ) : null}
+      {thread.awayNote ? (
+        <div className="chat-away-note" role="status">
+          <span>Long run finished while you were away</span>
+          <span className="chat-away-note-meta">· browser notification</span>
+        </div>
+      ) : null}
       <FlowComposer
         layout="thread"
         value={thread.question}

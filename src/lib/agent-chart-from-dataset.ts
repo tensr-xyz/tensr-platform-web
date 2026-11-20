@@ -89,7 +89,8 @@ export type PaletteChartKind =
   | 'pie'
   | 'area'
   | 'violin'
-  | 'density';
+  | 'density'
+  | 'sankey';
 
 export type ErrorBarKind = 'none' | 'se' | 'ci';
 
@@ -104,6 +105,7 @@ export const PALETTE_MENU_TO_KIND: Record<string, PaletteChartKind> = {
   'Area Chart': 'area',
   'Violin Plot': 'violin',
   'Density Plot': 'density',
+  Sankey: 'sankey',
 };
 
 const PALETTE_KIND_WORDS: Record<string, PaletteChartKind> = {
@@ -475,6 +477,52 @@ function buildExplicitPaletteChart(
       y_label: yLabel,
       groups,
       weighting: weighted ? 'unweighted' : 'none',
+    };
+  }
+
+  if (kind === 'sankey') {
+    const linkCap = 40;
+    const totals = new Map<string, number>();
+    let anyWeight = false;
+    for (const row of rows) {
+      const source = String(row[xId] ?? '').trim();
+      const target = String(row[yId] ?? '').trim();
+      if (!source || !target) continue;
+      const weight = observationWeight(row, weightColumn);
+      if (weight === null) continue;
+      if (weightColumn) anyWeight = true;
+      const key = `${source}\x1e${target}`;
+      totals.set(key, (totals.get(key) ?? 0) + weight);
+    }
+    const ranked = [...totals.entries()]
+      .map(([key, value]) => {
+        const [source, target] = key.split('\x1e');
+        return { source: source!, target: target!, value };
+      })
+      .sort((a, b) => b.value - a.value);
+    const shown = ranked.slice(0, linkCap);
+    const shownSources = [...new Set(shown.map(link => link.source))];
+    const shownTargets = [...new Set(shown.map(link => link.target))];
+    const nodes = [
+      ...shownSources.map(name => ({ id: `s:${name}`, name })),
+      ...shownTargets.map(name => ({ id: `t:${name}`, name })),
+    ];
+    const links = shown.map(link => ({
+      source: `s:${link.source}`,
+      target: `t:${link.target}`,
+      value: link.value,
+    }));
+    const base = `${xLabel} → ${yLabel}`;
+    const capped =
+      ranked.length > shown.length ? ` (top ${shown.length} of ${ranked.length} flows)` : '';
+    return {
+      kind: 'sankey',
+      title: links.length
+        ? `${anyWeight ? 'Weighted ' : ''}${base}${capped}`
+        : `No rows for ${base}`,
+      nodes,
+      links,
+      weighting: anyWeight ? 'weighted' : 'none',
     };
   }
 

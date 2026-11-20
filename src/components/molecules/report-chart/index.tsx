@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { AnalysisReportChart, ChartAxisScale } from '@/lib/analysis-report-types';
-import { errorBarFootnoteLines } from '@/lib/chart-error-bars';
+import { chartFootnoteLines, errorBarFootnoteLines } from '@/lib/chart-error-bars';
 import {
   type ChartDensity,
   type ChartLayout,
@@ -18,8 +18,7 @@ import {
   valuesLookLikeDatetime,
   withExtraPadB,
 } from '@/utils/chart-axis';
-
-const SERIES_FILL = ['#71717a', '#a1a1aa', '#6366f1', '#78716c', '#8b5cf6'];
+import { resolveSeriesColors, type ChartStylePreset } from '@/lib/chart-theme';
 
 export type ReportChartProps = {
   chart: AnalysisReportChart;
@@ -27,7 +26,9 @@ export type ReportChartProps = {
   density?: ChartDensity;
   className?: string;
   /** `default` keeps the current palette. `apa` is greyscale, sans-serif, with a figure caption. */
-  preset?: 'default' | 'apa';
+  preset?: ChartStylePreset;
+  /** Team / template chart palette. Ignored when `preset` is `apa`. */
+  seriesColors?: string[];
   figureNumber?: number;
   note?: string;
 };
@@ -213,6 +214,11 @@ function AxisFrame({
 }
 
 function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
+  const maxChars = Math.max(
+    24,
+    Math.floor((layout.width - layout.padL - layout.padR) / (layout.titleSize * 0.55))
+  );
+  const shown = truncateLabel(title, maxChars);
   return (
     <text
       x={layout.padL}
@@ -220,7 +226,8 @@ function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
       fill="#3f3f46"
       style={{ fontSize: layout.titleSize, fontWeight: 500 }}
     >
-      {title}
+      {shown !== title ? <title>{title}</title> : null}
+      {shown}
     </text>
   );
 }
@@ -228,9 +235,11 @@ function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
 function ChartBody({
   chart,
   layout: baseLayout,
+  seriesFill,
 }: {
   chart: AnalysisReportChart;
   layout: ChartLayout;
+  seriesFill: string[];
 }) {
   if (chart.kind === 'histogram') {
     const maxC = Math.max(1, ...chart.bins.map(b => b.count));
@@ -597,10 +606,13 @@ function ChartBody({
         return error ? [value - error, value, value + error] : [value];
       })
     );
+    const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
     const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
     const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
     const minV = Math.min(0, dataMin);
-    const maxV = Math.max(dataMax, minV === 0 ? 1 : 0);
+    const maxRaw = Math.max(dataMax, minV === 0 ? 1 : 0);
+    // Leave room above the tallest bar/point for column letters.
+    const maxV = hasLetters ? maxRaw + Math.max(0.5, (maxRaw - minV) * 0.1) : maxRaw;
     const catsAreDates =
       chart.x_scale === 'datetime' ||
       (chart.x_scale !== 'category' && valuesLookLikeDatetime(categories));
@@ -645,15 +657,17 @@ function ChartBody({
     const isLine = chart.kind === 'line' || isArea;
     const yTicks = ticksInDomain(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = categories.map((_, i) => padL + i * groupW + groupW / 2);
-    const footnoteLines = errorBarFootnoteLines(chart);
+    const footnoteLines = chartFootnoteLines(chart);
     const footnoteLineH = layout.fontSize + 4;
     const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
     const capHalf = Math.max(2, Math.min(6, barW * 0.2));
+    const letterSize = Math.max(9, layout.fontSize - 1);
 
     return (
       <svg
         data-chart-kind={chart.kind}
-        data-error-bars={footnoteLines.length ? 'on' : undefined}
+        data-error-bars={errorBarFootnoteLines(chart).length ? 'on' : undefined}
+        data-significance={hasLetters ? 'on' : undefined}
         viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -667,7 +681,7 @@ function ChartBody({
                   return `${xs[gi]},${sy(v)}`;
                 })
                 .join(' ');
-              const color = SERIES_FILL[si % SERIES_FILL.length];
+              const color = seriesFill[si % seriesFill.length];
               return (
                 <g key={ser.name}>
                   {isArea && categories.length ? (
@@ -681,6 +695,7 @@ function ChartBody({
                   {categories.map((_, gi) => {
                     const v = ser.values[gi] ?? 0;
                     const error = ser.errors?.[gi];
+                    const letter = String(ser.letters?.[gi] || '').trim();
                     return (
                       <g key={`${ser.name}-${gi}`}>
                         {error ? (
@@ -704,8 +719,20 @@ function ChartBody({
                           cx={xs[gi]}
                           cy={sy(v)}
                           r={layout.density === 'comfortable' ? 3.2 : 2.5}
-                          fill={SERIES_FILL[si % SERIES_FILL.length]}
+                          fill={seriesFill[si % seriesFill.length]}
                         />
+                        {letter ? (
+                          <text
+                            data-chart-letter
+                            x={xs[gi]}
+                            y={sy(v) - 6}
+                            textAnchor="middle"
+                            fill="#27272a"
+                            style={{ fontSize: letterSize, fontWeight: 600 }}
+                          >
+                            {letter}
+                          </text>
+                        ) : null}
                       </g>
                     );
                   })}
@@ -720,6 +747,8 @@ function ChartBody({
                 const y = Math.min(yZero, yVal);
                 const error = ser.errors?.[gi];
                 const xMid = x + barW / 2;
+                const letter = String(ser.letters?.[gi] || '').trim();
+                const letterY = Math.min(yVal, yZero) - 4;
                 return (
                   <g key={`${gi}-${si}`}>
                     <rect
@@ -727,7 +756,7 @@ function ChartBody({
                       y={y}
                       width={Math.max(1, barW - 1)}
                       height={Math.max(0, Math.abs(yZero - yVal))}
-                      fill={SERIES_FILL[si % SERIES_FILL.length]}
+                      fill={seriesFill[si % seriesFill.length]}
                       rx={1}
                     />
                     {error ? (
@@ -746,6 +775,18 @@ function ChartBody({
                           y2={sy(v + error)}
                         />
                       </g>
+                    ) : null}
+                    {letter ? (
+                      <text
+                        data-chart-letter
+                        x={xMid}
+                        y={letterY}
+                        textAnchor="middle"
+                        fill="#27272a"
+                        style={{ fontSize: letterSize, fontWeight: 600 }}
+                      >
+                        {letter}
+                      </text>
                     ) : null}
                   </g>
                 );
@@ -772,7 +813,7 @@ function ChartBody({
         <g transform={`translate(${padL + plotW + 10} ${padT + 4})`}>
           {series.map((ser, si) => (
             <g key={ser.name} transform={`translate(0 ${si * (layout.fontSize + 4)})`}>
-              <rect width={8} height={8} fill={SERIES_FILL[si % SERIES_FILL.length]} rx={1} />
+              <rect width={8} height={8} fill={seriesFill[si % seriesFill.length]} rx={1} />
               <text x={12} y={7} fill="#52525b" style={{ fontSize: layout.fontSize }}>
                 {truncateLabel(ser.name, legendMax)}
               </text>
@@ -791,6 +832,151 @@ function ChartBody({
             {line}
           </text>
         ))}
+      </svg>
+    );
+  }
+
+  if (chart.kind === 'sankey') {
+    const layout = baseLayout;
+    const SK_W = layout.width;
+    const SK_H = Math.max(layout.height, layout.density === 'comfortable' ? 320 : 240);
+    const SK_PL = layout.density === 'comfortable' ? 72 : 56;
+    const SK_PR = SK_PL;
+    const SK_PT = layout.titleSize + (layout.density === 'comfortable' ? 28 : 20);
+    const SK_PB = 16;
+    const nodeW = layout.density === 'comfortable' ? 10 : 8;
+    const gap = 8;
+    const plotH = Math.max(40, SK_H - SK_PT - SK_PB);
+    const leftX = SK_PL;
+    const rightX = SK_W - SK_PR - nodeW;
+    const nodes = chart.nodes || [];
+    const links = (chart.links || []).filter(link => link.value > 0);
+    const leftIds = nodes.filter(node => node.id.startsWith('s:')).map(node => node.id);
+    const rightIds = nodes.filter(node => node.id.startsWith('t:')).map(node => node.id);
+    const nameById = new Map(nodes.map(node => [node.id, node.name]));
+    const outFlow = new Map<string, number>();
+    const inFlow = new Map<string, number>();
+    for (const link of links) {
+      outFlow.set(link.source, (outFlow.get(link.source) ?? 0) + link.value);
+      inFlow.set(link.target, (inFlow.get(link.target) ?? 0) + link.value);
+    }
+    const leftTotal = leftIds.reduce((sum, id) => sum + (outFlow.get(id) ?? 0), 0) || 1;
+    const rightTotal = rightIds.reduce((sum, id) => sum + (inFlow.get(id) ?? 0), 0) || 1;
+    const leftGaps = Math.max(0, leftIds.length - 1) * gap;
+    const rightGaps = Math.max(0, rightIds.length - 1) * gap;
+    const leftScale = (plotH - leftGaps) / leftTotal;
+    const rightScale = (plotH - rightGaps) / rightTotal;
+    type Band = { y0: number; y1: number };
+    const leftBand = new Map<string, Band>();
+    const rightBand = new Map<string, Band>();
+    let leftCursor = SK_PT;
+    for (const id of leftIds) {
+      const height = (outFlow.get(id) ?? 0) * leftScale;
+      leftBand.set(id, { y0: leftCursor, y1: leftCursor + height });
+      leftCursor += height + gap;
+    }
+    let rightCursor = SK_PT;
+    for (const id of rightIds) {
+      const height = (inFlow.get(id) ?? 0) * rightScale;
+      rightBand.set(id, { y0: rightCursor, y1: rightCursor + height });
+      rightCursor += height + gap;
+    }
+    const leftOffset = new Map<string, number>();
+    const rightOffset = new Map<string, number>();
+    const linkPaths = links.flatMap((link, index) => {
+      const source = leftBand.get(link.source);
+      const target = rightBand.get(link.target);
+      if (!source || !target) return [];
+      const sourceH = Math.max(1, link.value * leftScale);
+      const targetH = Math.max(1, link.value * rightScale);
+      const sy0 = source.y0 + (leftOffset.get(link.source) ?? 0);
+      const ty0 = target.y0 + (rightOffset.get(link.target) ?? 0);
+      leftOffset.set(link.source, (leftOffset.get(link.source) ?? 0) + sourceH);
+      rightOffset.set(link.target, (rightOffset.get(link.target) ?? 0) + targetH);
+      const x0 = leftX + nodeW;
+      const x1 = rightX;
+      const mid = (x0 + x1) / 2;
+      const d = [
+        `M ${x0} ${sy0}`,
+        `C ${mid} ${sy0}, ${mid} ${ty0}, ${x1} ${ty0}`,
+        `L ${x1} ${ty0 + targetH}`,
+        `C ${mid} ${ty0 + targetH}, ${mid} ${sy0 + sourceH}, ${x0} ${sy0 + sourceH}`,
+        'Z',
+      ].join(' ');
+      return [
+        {
+          d,
+          color: seriesFill[index % seriesFill.length],
+          key: `${link.source}-${link.target}-${index}`,
+        },
+      ];
+    });
+    const labelChars = layout.density === 'comfortable' ? 16 : 12;
+    const formatFlow = (value: number) =>
+      Number.isInteger(value) ? String(value) : value.toFixed(1);
+
+    return (
+      <svg
+        data-chart-kind="sankey"
+        viewBox={`0 0 ${SK_W} ${SK_H}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={{ ...layout, width: SK_W, height: SK_H }} title={chart.title} />
+        {linkPaths.map(link => (
+          <path key={link.key} d={link.d} fill={link.color} fillOpacity={0.45} stroke="none" />
+        ))}
+        {leftIds.map((id, index) => {
+          const band = leftBand.get(id);
+          if (!band) return null;
+          return (
+            <g key={id}>
+              <rect
+                x={leftX}
+                y={band.y0}
+                width={nodeW}
+                height={Math.max(1, band.y1 - band.y0)}
+                fill={seriesFill[index % seriesFill.length]}
+                rx={1}
+              />
+              <text
+                x={leftX - 6}
+                y={(band.y0 + band.y1) / 2 + layout.fontSize * 0.35}
+                textAnchor="end"
+                fill="#3f3f46"
+                style={{ fontSize: layout.fontSize }}
+              >
+                {truncateLabel(nameById.get(id) || id, labelChars)}
+              </text>
+            </g>
+          );
+        })}
+        {rightIds.map((id, index) => {
+          const band = rightBand.get(id);
+          if (!band) return null;
+          const value = inFlow.get(id) ?? 0;
+          return (
+            <g key={id}>
+              <rect
+                x={rightX}
+                y={band.y0}
+                width={nodeW}
+                height={Math.max(1, band.y1 - band.y0)}
+                fill={seriesFill[index % seriesFill.length]}
+                rx={1}
+              />
+              <text
+                x={rightX + nodeW + 6}
+                y={(band.y0 + band.y1) / 2 + layout.fontSize * 0.35}
+                textAnchor="start"
+                fill="#3f3f46"
+                style={{ fontSize: layout.fontSize }}
+              >
+                {`${truncateLabel(nameById.get(id) || id, labelChars)} (${formatFlow(value)})`}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     );
   }
@@ -915,6 +1101,10 @@ function ChartBody({
     const cx = layout.padL + layout.plotW / 2;
     const cy = layout.padT + layout.plotH / 2;
     const r = Math.max(8, Math.min(layout.plotW, layout.plotH) / 2 - 8);
+    const hasLetters = (chart.letters || []).some(letter => String(letter || '').trim());
+    const footnoteLines = chartFootnoteLines(chart);
+    const footnoteLineH = layout.fontSize + 4;
+    const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
     let angle = -Math.PI / 2;
     const slices = chart.categories.map((label, i) => {
       const value = Math.max(0, chart.values[i] ?? 0);
@@ -926,18 +1116,28 @@ function ChartBody({
       const y1 = cy + r * Math.sin(start);
       const x2 = cx + r * Math.cos(start + sweep);
       const y2 = cy + r * Math.sin(start + sweep);
+      const mid = start + sweep / 2;
+      const letter = String(chart.letters?.[i] || '').trim();
       const d =
         sweep <= 0
           ? ''
           : sweep >= Math.PI * 2 - 0.0001
             ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
             : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-      return { d, label, fill: SERIES_FILL[i % SERIES_FILL.length] };
+      return {
+        d,
+        label,
+        fill: seriesFill[i % seriesFill.length],
+        letter,
+        lx: cx + (r + 14) * Math.cos(mid),
+        ly: cy + (r + 14) * Math.sin(mid),
+      };
     });
     return (
       <svg
         data-chart-kind="pie"
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        data-significance={hasLetters ? 'on' : undefined}
+        viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
       >
@@ -945,6 +1145,34 @@ function ChartBody({
         {slices.map((slice, i) =>
           slice.d ? <path key={`${slice.label}-${i}`} d={slice.d} fill={slice.fill} /> : null
         )}
+        {slices.map((slice, i) =>
+          slice.letter ? (
+            <text
+              key={`letter-${slice.label}-${i}`}
+              data-chart-letter
+              x={slice.lx}
+              y={slice.ly}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#27272a"
+              style={{ fontSize: Math.max(9, layout.fontSize - 1), fontWeight: 600 }}
+            >
+              {slice.letter}
+            </text>
+          ) : null
+        )}
+        {footnoteLines.map((line, index) => (
+          <text
+            key={line}
+            data-chart-footnote
+            x={layout.padL}
+            y={layout.height + 2 + (index + 1) * footnoteLineH}
+            fill="#71717a"
+            style={{ fontSize: layout.fontSize }}
+          >
+            {line}
+          </text>
+        ))}
       </svg>
     );
   }
@@ -971,7 +1199,7 @@ function ChartBody({
           <polyline
             key={item.name}
             fill="none"
-            stroke={SERIES_FILL[index % SERIES_FILL.length]}
+            stroke={seriesFill[index % seriesFill.length]}
             strokeWidth={2}
             points={item.points.map(point => `${sx(point.x)},${sy(point.y)}`).join(' ')}
           />
@@ -1038,7 +1266,7 @@ function ChartBody({
             <g key={group.label}>
               <polygon
                 points={[...right, ...left].join(' ')}
-                fill={SERIES_FILL[index % SERIES_FILL.length]}
+                fill={seriesFill[index % seriesFill.length]}
                 fillOpacity={0.35}
               />
               <line
@@ -1083,6 +1311,7 @@ export function ReportChart({
   density = 'inline',
   className,
   preset = 'default',
+  seriesColors,
   figureNumber = 1,
   note = 'Axes are labelled in the units of the plotted variables.',
 }: ReportChartProps) {
@@ -1103,6 +1332,7 @@ export function ReportChart({
   }, []);
 
   const layout = computeLayout(density, width);
+  const seriesFill = resolveSeriesColors(preset, null, seriesColors);
 
   const apa = preset === 'apa';
 
@@ -1121,7 +1351,7 @@ export function ReportChart({
           {chart.title ? <p className="text-sm italic">{chart.title}</p> : null}
         </>
       ) : null}
-      <ChartBody chart={chart} layout={layout} />
+      <ChartBody chart={chart} layout={layout} seriesFill={seriesFill} />
       {apa ? <figcaption className="text-xs">Note. {note}</figcaption> : null}
     </figure>
   );

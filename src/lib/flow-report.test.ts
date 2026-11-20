@@ -3,17 +3,21 @@ import {
   findingFromStale,
   findingFromTable,
   findingsWithOutOfDate,
+  missingBanner,
   outOfDateLine,
   reportTableFromBook,
+  shownPercent,
   titledWithQuestions,
   type ReportTable,
 } from './flow-report';
+import { liveOfTotalLabel } from '@/components/flow/project-tables';
 
 const table: ReportTable = {
   id: 'spec-1',
   label: 'agree by region',
   index: 1,
   tested: true,
+  decimals: 1,
   columns: [
     { id: 'north', label: 'region=North', letter_slot: 'A' },
     { id: 'east', label: 'region=East', letter_slot: 'B' },
@@ -273,11 +277,11 @@ describe('report findings', () => {
     expect(outOfDateLine('', '')).toBe('The data changed after this was saved.');
   });
 
-  it('shows an out-of-date table once, in the findings list', () => {
+  it('shows an out-of-date table once, below the live findings', () => {
     const live = findingFromTable({ ...table, index: 2 }, null, null);
     const stale = findingFromStale({ id: 'old', label: 'Satisfaction by region', number: 1 });
     const shown = findingsWithOutOfDate([live, { ...stale, headline: 'duplicate' }], [stale]);
-    expect(shown.map(item => item.id)).toEqual([stale.id, live.id]);
+    expect(shown.map(item => item.id)).toEqual([live.id, stale.id]);
     expect(stale.headline).toBe('Satisfaction by region');
   });
 
@@ -298,5 +302,70 @@ describe('report findings', () => {
       make('d', 'likes|owns'),
     ]);
     expect(kept.map(item => item.id)).toEqual(['c', 'd']);
+  });
+
+  it('excludes Not answered at every nest level from findings', () => {
+    expect(missingBanner({ id: 'miss', label: 'Not answered' })).toBe(true);
+    expect(missingBanner({ id: 'nested', label: 'Not answered × Female' })).toBe(true);
+    expect(missingBanner({ id: 'ok', label: 'North × Female' })).toBe(false);
+    const book = {
+      stubs: [{ column: 'q' }],
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'north', label: 'North', letter_slot: 'A' },
+        { id: 'miss-f', label: 'Not answered × Female', letter_slot: 'B' },
+        { id: 'south', label: 'South', letter_slot: 'C' },
+      ],
+      letters: [],
+      rows: [
+        {
+          id: 'q:1',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'north', percent: 40 },
+            { banner_id: 'miss-f', percent: 0 },
+            { banner_id: 'south', percent: 55 },
+          ],
+        },
+      ],
+      spec: { decimals: { column_proportion: 0 } },
+    };
+    const finding = findingFromTable(reportTableFromBook('t1', 'Yes', 1, book), null, null);
+    expect(finding.headline).toBe('Yes is highest in South at 55% and lowest in North at 40%.');
+    expect(finding.headline).not.toMatch(/Not answered/i);
+    expect(finding.decimals).toBe(0);
+  });
+
+  it('uses the table percent decimals in the finding', () => {
+    expect(shownPercent(56.3, 0)).toBe('56%');
+    expect(shownPercent(56.3, 1)).toBe('56.3%');
+    const book = {
+      stubs: [{ column: 'q' }],
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'a', label: 'A', letter_slot: 'A' },
+      ],
+      letters: [],
+      rows: [
+        {
+          id: 'q:1',
+          label: 'Agree',
+          kind: 'value',
+          cells: [{ banner_id: 'a', percent: 56.3 }],
+        },
+      ],
+      spec: { decimals: { column_proportion: 0 } },
+    };
+    expect(findingFromTable(reportTableFromBook('t1', 'Agree', 1, book), null, null).headline).toBe(
+      'Agree is 56%.'
+    );
+  });
+
+  it('names how many tables are live of every saved table', () => {
+    expect(liveOfTotalLabel(8, 15)).toBe('8 live of 15');
+    expect(liveOfTotalLabel(15, 15)).toBe('15 live tables');
+    expect(liveOfTotalLabel(1, 1)).toBe('1 live table');
+    expect(liveOfTotalLabel(0, 0)).toBe('0 saved tables');
   });
 });

@@ -1,4 +1,14 @@
-import { bannerHeading, codedStub, efficiencyPercent, selectionFromCell } from './flow-survey';
+import {
+  bannerFootnote,
+  bannerHeading,
+  chartFromBannerSeries,
+  chartSeriesFromBook,
+  chartSignificanceNote,
+  codedStub,
+  efficiencyPercent,
+  mediaCellText,
+  selectionFromCell,
+} from './flow-survey';
 
 describe('flow survey grid', () => {
   it('prefers the value label over a stored banner code', () => {
@@ -80,8 +90,219 @@ describe('flow survey grid', () => {
     expect(selected?.n).toBe('2');
   });
 
+  it('names a selected banner column by the variable label', () => {
+    expect(
+      bannerHeading({
+        id: 'member=1',
+        label: 'Selected',
+        column_label: 'Member role',
+        letter_slot: 'b',
+      })
+    ).toBe('Member role');
+  });
+
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
+  });
+
+  it('shows projected thousands and index beside the column percent', () => {
+    expect(
+      mediaCellText({
+        banner_id: 'total',
+        percent: 39.4,
+        projected_thousands: 102.6,
+        index: 131.2,
+      })
+    ).toBe('39.4% · 102.6 (000s) · 131');
+  });
+
+  it('names the paired McNemar test when brands are compared inside a column', () => {
+    expect(
+      bannerFootnote({
+        paired_within_items: true,
+        letter_test: 'Paired McNemar test at 95%.',
+        significance_display: 'column_letters',
+        letters: [{ stub_row_id: 'a:1', banner_id: 'total', letter: 'B' }],
+      })
+    ).toContain('Paired McNemar test at 95%');
+  });
+
+  it('charts the same banner cells as grouped bars, and remaps to line or pie', () => {
+    const book = {
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'east', label: 'East' },
+        { id: 'north', label: 'North' },
+      ],
+      rows: [
+        {
+          id: 'yes',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'east', percent: 60 },
+            { banner_id: 'north', percent: 40 },
+          ],
+        },
+        {
+          id: 'no',
+          label: 'No',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'east', percent: 40 },
+            { banner_id: 'north', percent: 60 },
+          ],
+        },
+        {
+          id: 'base',
+          label: 'Base',
+          kind: 'base',
+          cells: [{ banner_id: 'east', unweighted_n: 100 }],
+        },
+      ],
+    };
+    const series = chartSeriesFromBook(book);
+    expect(series).toEqual([
+      {
+        label: 'Yes',
+        values: [
+          { name: 'East', value: 60 },
+          { name: 'North', value: 40 },
+        ],
+      },
+      {
+        label: 'No',
+        values: [
+          { name: 'East', value: 40 },
+          { name: 'North', value: 60 },
+        ],
+      },
+    ]);
+
+    const bars = chartFromBannerSeries(series, 'bar', { title: 'Awareness' });
+    expect(bars).toMatchObject({
+      kind: 'bar_grouped',
+      title: 'Awareness',
+      categories: ['East', 'North'],
+      series: [
+        { name: 'Yes', values: [60, 40] },
+        { name: 'No', values: [40, 60] },
+      ],
+    });
+
+    expect(chartFromBannerSeries(series, 'line')?.kind).toBe('line');
+    expect(chartFromBannerSeries(series, 'area')?.kind).toBe('area');
+
+    const pie = chartFromBannerSeries(series, 'pie', { title: 'Awareness' });
+    expect(pie).toEqual({
+      kind: 'pie',
+      title: 'Awareness',
+      categories: ['Yes', 'No'],
+      values: [60, 40],
+    });
+
+    const single = chartFromBannerSeries([series[0]!], 'pie');
+    expect(single).toEqual({
+      kind: 'pie',
+      title: '',
+      categories: ['East', 'North'],
+      values: [60, 40],
+    });
+  });
+
+  it('carries the same column letters onto bar, line, area, and pie charts', () => {
+    const book = {
+      significance_display: 'letters',
+      letter_test: 'Column proportions test at 95%',
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'east', label: 'region=East', letter_slot: 'A' },
+        { id: 'north', label: 'region=North', letter_slot: 'B' },
+      ],
+      letters: [{ stub_row_id: 'yes', banner_id: 'east', letter: 'B' }],
+      rows: [
+        {
+          id: 'yes',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'east', percent: 60 },
+            { banner_id: 'north', percent: 40 },
+          ],
+        },
+        {
+          id: 'no',
+          label: 'No',
+          kind: 'value',
+          cells: [
+            { banner_id: 'east', percent: 40 },
+            { banner_id: 'north', percent: 60 },
+          ],
+        },
+      ],
+    };
+    const series = chartSeriesFromBook(book);
+    expect(series[0]?.values[0]).toEqual({ name: 'East', value: 60, letter: 'B' });
+    expect(series[0]?.values[1]).toEqual({ name: 'North', value: 40 });
+    expect(chartSignificanceNote(book)).toBe('Column proportions test at 95%');
+
+    const note = chartSignificanceNote(book);
+    const bars = chartFromBannerSeries(series, 'bar', {
+      title: 'Awareness',
+      significanceNote: note,
+    });
+    expect(bars).toMatchObject({
+      kind: 'bar_grouped',
+      significance_note: 'Column proportions test at 95%',
+      series: [
+        { name: 'Yes', values: [60, 40], letters: ['B', ''] },
+        { name: 'No', values: [40, 60] },
+      ],
+    });
+    expect(chartFromBannerSeries(series, 'line', { significanceNote: note })).toMatchObject({
+      kind: 'line',
+      series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+      significance_note: note,
+    });
+    expect(chartFromBannerSeries(series, 'area', { significanceNote: note })).toMatchObject({
+      kind: 'area',
+      series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+    });
+
+    const pie = chartFromBannerSeries([series[0]!], 'pie', { significanceNote: note });
+    expect(pie).toMatchObject({
+      kind: 'pie',
+      categories: ['East', 'North'],
+      values: [60, 40],
+      letters: ['B', ''],
+      significance_note: note,
+    });
+  });
+
+  it('omits chart letters when significance display is off', () => {
+    const book = {
+      significance_display: 'none',
+      banner_columns: [
+        { id: 'east', label: 'East', letter_slot: 'A' },
+        { id: 'north', label: 'North', letter_slot: 'B' },
+      ],
+      letters: [{ stub_row_id: 'yes', banner_id: 'east', letter: 'B' }],
+      rows: [
+        {
+          id: 'yes',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'east', percent: 60 },
+            { banner_id: 'north', percent: 40 },
+          ],
+        },
+      ],
+    };
+    expect(chartSeriesFromBook(book)[0]?.values[0]).toEqual({ name: 'East', value: 60 });
+    expect(chartSignificanceNote(book)).toBeUndefined();
   });
 });
 

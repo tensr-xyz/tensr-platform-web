@@ -1,14 +1,7 @@
-/** Tensr chart canvas palette — aligned with brand purple accent in globals.css */
-export const CHART_SERIES_COLORS = [
-  'hsl(var(--primary))',
-  'hsl(262 52% 52%)',
-  'hsl(199 75% 48%)',
-  'hsl(168 55% 42%)',
-  'hsl(32 90% 52%)',
-  'hsl(340 65% 52%)',
-  'hsl(210 40% 55%)',
-  'hsl(145 45% 42%)',
-] as const;
+import { DEFAULT_CHART_PALETTE, type ReportTheme } from '@/lib/report-theme';
+
+/** Hex fallbacks for SVG fills (CSS vars alone are unreliable in exported SVGs). */
+export const CHART_SERIES_COLORS = [...DEFAULT_CHART_PALETTE] as string[];
 
 export const CHART_AXIS_TICK_STYLE = {
   fontSize: 11,
@@ -41,3 +34,15 @@ export const CHART_STYLE_PRESETS = {
 } as const;
 
 export type ChartStylePreset = keyof typeof CHART_STYLE_PRESETS;
+
+/** Resolve series fills: APA wins, then team theme palette, then Tensr defaults. */
+export function resolveSeriesColors(
+  preset: ChartStylePreset = 'default',
+  teamTheme?: Pick<ReportTheme, 'chartPalette'> | null,
+  override?: string[] | null
+): string[] {
+  if (preset === 'apa') return [...CHART_STYLE_PRESETS.apa.series];
+  if (override && override.length) return [...override];
+  if (teamTheme?.chartPalette?.length) return [...teamTheme.chartPalette];
+  return [...CHART_STYLE_PRESETS.default.series];
+}

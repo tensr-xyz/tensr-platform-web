@@ -26,11 +26,21 @@ export function rakeMarginFromColumn(
 
 export function buildRakePayload(
   margins: RakeMargin[],
-  options?: { targetsFilename?: string }
+  options?: {
+    targetsFilename?: string;
+    lower?: number;
+    upper?: number;
+    designWeightColumn?: string;
+    useExistingWeight?: boolean;
+  }
 ): {
   categorical_targets: Record<string, Record<string, number>>;
   missing_handling: 'exclude';
   targets_filename?: string;
+  lower?: number;
+  upper?: number;
+  design_weight_column?: string;
+  use_existing_weight?: boolean;
 } {
   const categorical_targets: Record<string, Record<string, number>> = {};
   for (const margin of margins) {
@@ -47,6 +57,13 @@ export function buildRakePayload(
     categorical_targets,
     missing_handling: 'exclude',
     ...(options?.targetsFilename ? { targets_filename: options.targetsFilename } : {}),
+    ...(options?.lower != null && options.lower > 0 ? { lower: options.lower } : {}),
+    ...(options?.upper != null && options.upper > 0 ? { upper: options.upper } : {}),
+    ...(options?.useExistingWeight
+      ? { use_existing_weight: true }
+      : options?.designWeightColumn
+        ? { design_weight_column: options.designWeightColumn }
+        : {}),
   };
 }
 

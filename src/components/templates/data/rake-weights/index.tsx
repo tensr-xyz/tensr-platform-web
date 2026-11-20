@@ -47,6 +47,8 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [upperCap, setUpperCap] = useState('');
+  const [lowerFloor, setLowerFloor] = useState('');
+  const [designWeightColumn, setDesignWeightColumn] = useState('');
   const [targetsFilename, setTargetsFilename] = useState<string | undefined>();
   const targetsFileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -84,11 +86,14 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
       setError(WORKSPACE_DATASET_REQUIRED);
       return;
     }
-    const payload = buildRakePayload(margins, { targetsFilename });
-    const cap = Number(upperCap);
-    if (upperCap.trim() && Number.isFinite(cap) && cap > 0) {
-      (payload as { upper?: number }).upper = cap;
-    }
+    const lower = Number(lowerFloor);
+    const upper = Number(upperCap);
+    const payload = buildRakePayload(margins, {
+      targetsFilename,
+      ...(lowerFloor.trim() && Number.isFinite(lower) && lower > 0 ? { lower } : {}),
+      ...(upperCap.trim() && Number.isFinite(upper) && upper > 0 ? { upper } : {}),
+      ...(designWeightColumn ? { designWeightColumn } : {}),
+    });
     if (!Object.keys(payload.categorical_targets).length) {
       setError('Add at least one raking variable with numeric targets.');
       return;
@@ -133,18 +138,53 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
             <AlertDescription>{RAKE_MISSING_CATEGORY_WARNING}</AlertDescription>
           </Alert>
           <div className="space-y-1">
-            <Label htmlFor="rake-upper">Cap (optional)</Label>
-            <Input
-              id="rake-upper"
-              inputMode="decimal"
-              placeholder="1.1"
-              value={upperCap}
-              onChange={event => setUpperCap(event.target.value)}
-              className="text-xs"
-            />
+            <Label htmlFor="rake-design-weight">Start from (optional)</Label>
+            <Select
+              value={designWeightColumn || '__equal__'}
+              onValueChange={value => setDesignWeightColumn(value === '__equal__' ? '' : value)}
+            >
+              <SelectTrigger id="rake-design-weight" className="text-xs">
+                <SelectValue placeholder="Equal weights" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__equal__">Equal weights</SelectItem>
+                {columns.map(column => (
+                  <SelectItem key={column} value={column}>
+                    {column}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-[11px] text-muted-foreground">
-              Leave blank for no cap. A cap is applied on every raking step, and the saved weights
-              stay at or below this value. Margins can move slightly so the cap holds.
+              Rake starts from equal weights of 1, or from a weight column already on the file.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="rake-lower">Floor (optional)</Label>
+                <Input
+                  id="rake-lower"
+                  inputMode="decimal"
+                  placeholder="none"
+                  value={lowerFloor}
+                  onChange={event => setLowerFloor(event.target.value)}
+                  className="text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="rake-upper">Cap (optional)</Label>
+                <Input
+                  id="rake-upper"
+                  inputMode="decimal"
+                  placeholder="none"
+                  value={upperCap}
+                  onChange={event => setUpperCap(event.target.value)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Floor and cap apply on every raking step. Margins can move slightly so the bounds
+              hold.
             </p>
             <Label htmlFor="rake-targets-file">Targets file (CSV)</Label>
             <div className="flex items-center gap-2 text-xs">

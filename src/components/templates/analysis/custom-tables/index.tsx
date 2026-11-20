@@ -1317,42 +1317,53 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {table.rows.map(row => (
-                    <tr key={row.label} className="border-b align-top">
-                      <td className="px-2 py-1 font-medium">{row.label}</td>
-                      {row.cells.map((cell, i) => (
-                        <td key={`${row.label}-${i}`} className="px-2 py-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-auto w-full justify-start px-1 text-left font-normal"
-                            onClick={() => void clickCell(cell, row.label)}
-                          >
-                            <div>
-                              {canvas.showCount ? (
-                                <span className="mr-1">{cell.countText}</span>
-                              ) : null}
-                              {canvas.columnPercent ? cell.columnPercent : null}
-                              {canvas.rowPercent ? (
-                                <span className="ml-1 text-muted-foreground">
-                                  {cell.rowPercent} row
-                                </span>
-                              ) : null}
-                              {canvas.totalPercent ? (
-                                <span className="ml-1 text-muted-foreground">
-                                  {cell.totalPercent} total
-                                </span>
-                              ) : null}
-                              {cell.letters ? (
-                                <sup className="ml-0.5 font-medium">{cell.letters}</sup>
-                              ) : null}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">{cell.bases}</div>
-                          </Button>
+                  {table.rows.map(row =>
+                    row.kind === 'header' ? (
+                      <tr key={row.id || row.label} className="border-b bg-muted/20">
+                        <td
+                          className="px-2 py-2 font-medium"
+                          colSpan={Math.max(1, table.headers.length + 1)}
+                        >
+                          {row.label}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                      </tr>
+                    ) : (
+                      <tr key={row.id || row.label} className="border-b align-top">
+                        <td className="px-2 py-1 font-medium">{row.label}</td>
+                        {row.cells.map((cell, i) => (
+                          <td key={`${row.label}-${i}`} className="px-2 py-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-auto w-full justify-start px-1 text-left font-normal"
+                              onClick={() => void clickCell(cell, row.label)}
+                            >
+                              <div>
+                                {canvas.showCount ? (
+                                  <span className="mr-1">{cell.countText}</span>
+                                ) : null}
+                                {canvas.columnPercent ? cell.columnPercent : null}
+                                {canvas.rowPercent ? (
+                                  <span className="ml-1 text-muted-foreground">
+                                    {cell.rowPercent} row
+                                  </span>
+                                ) : null}
+                                {canvas.totalPercent ? (
+                                  <span className="ml-1 text-muted-foreground">
+                                    {cell.totalPercent} total
+                                  </span>
+                                ) : null}
+                                {cell.letters ? (
+                                  <sup className="ml-0.5 font-medium">{cell.letters}</sup>
+                                ) : null}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">{cell.bases}</div>
+                            </Button>
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
               {table.rows.some(row => row.cells.some(cell => cell.lowBase)) ? (

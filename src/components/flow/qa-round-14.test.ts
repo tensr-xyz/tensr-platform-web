@@ -23,6 +23,24 @@ describe('round 14', () => {
     expect(outputCardReady(failed, false)).toBe(false);
   });
 
+  it('keeps the output column closed after a failed coding run with tool_results', () => {
+    // openChat used to open the panel on tool_results.length; failed coding still has results.
+    const failedCoding = {
+      status: 'ok',
+      tool_results: [
+        {
+          ok: false,
+          name: 'run_operations',
+          procedure: 'code_open_ends',
+          error: 'Coding could not finish.',
+          result: { ok: false, error: 'Coding could not finish.' },
+        },
+      ],
+    };
+    expect(failedCoding.tool_results.length).toBeGreaterThan(0);
+    expect(outputCardReady(failedCoding, false)).toBe(false);
+  });
+
   it('keeps a card when the procedure succeeded', () => {
     const done = {
       status: 'ok',

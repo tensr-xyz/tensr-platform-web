@@ -1,11 +1,18 @@
 import type { RunTable } from '@/components/flow/run-document';
+import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 
 export type ResultView = {
   tables: RunTable[];
+  charts: AnalysisReportChart[];
   script: string;
   checks: string[];
   weight: string;
   filter: string;
+  audience: string;
+  audienceDefinition: string;
+  wave: string;
+  source: string;
   /** match, mismatch, pending, or empty when this result has no R reproduction. */
   rCheck: string;
   rStatement: string;
@@ -13,12 +20,15 @@ export type ResultView = {
   letterNote: string;
   /** Weight, sample size, missing, effective n, and the confidence level. */
   baseDetail?: string;
+  /** study_brief when the table used the weight named in the brief. */
+  weightSource?: string;
+  universeThousands?: number;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
-export function withoutEngineCopies<T extends { title?: string; columns?: string[] }>(
-  tables: T[]
-): T[] {
+export function withoutEngineCopies<
+  T extends { title?: string; columns?: string[]; superseded?: boolean },
+>(tables: T[]): T[] {
   const titles = tables.map(table => (table.title || '').trim().toLowerCase());
   const has = (name: string) => titles.includes(name);
   const labelledCoefficients = tables.some(
@@ -27,7 +37,9 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
   );
   return tables.filter(table => {
+    if (table.superseded) return false;
     const title = (table.title || '').trim().toLowerCase();
+    const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
       has('correlations') &&
       (title.includes('correlation matrix') || title.includes('correlation p-value'))
@@ -35,6 +47,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       return false;
     }
     if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
+    if (
+      has('groups') &&
+      columns.includes('status') &&
+      (columns.includes('median') || columns.includes('mean rank'))
+    ) {
+      return false;
+    }
     if (
       labelledCoefficients &&
       title === 'coefficients' &&
@@ -49,12 +68,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
 function decimalKind(
   header: string,
   percentSign: boolean
-): 'percent' | 'mean' | 'whole' | 'tenth' | 'plain' {
+): 'percent' | 'mean' | 'median' | 'whole' | 'tenth' | 'plain' {
   if (percentSign) return 'percent';
   const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/%|percent|share/.test(name)) return 'percent';
   if (/weighted\s*n|weighted base/.test(name)) return 'whole';
   if (name === 'nps' || name.endsWith(' nps')) return 'tenth';
+  if (/\bmedian\b/.test(name)) return 'median';
   if (/\b(mean|sd|std\.?|s\.d\.?|standard deviation)\b/.test(name)) return 'mean';
   if (
     /^(n|count|frequency|cases|df)$/.test(name) ||
@@ -66,8 +86,29 @@ function decimalKind(
   return 'plain';
 }
 
+function plainNumber(value: number): string {
+  if (!Number.isFinite(value)) return '';
+  if (Math.abs(value) >= 1000) {
+    return new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(value);
+  }
+  const rounded = Math.round(value * 1000) / 1000;
+  return String(rounded);
+}
+
+/** A count that arrived as 2.67896e+06 is shown as a normal number. */
+export function shownCount(value: string): string {
+  const text = value.trim().replace(/,/g, '');
+  if (!/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(text)) return value;
+  const number = Number(text);
+  if (!Number.isFinite(number)) return value;
+  const scientific = /e[+-]?\d+$/i.test(text);
+  if (Math.abs(number) < 1000 && !scientific) return value;
+  return plainNumber(number);
+}
+
 /** Percents use the project decimals. Counts and weighted n are whole. Means and SDs are 2 dp. */
 export function formatDecimalText(value: string, places: number, header = ''): string {
+  value = shownCount(value);
   const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)?(%?)$/);
   if (!match?.[2]) return value;
   const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
@@ -85,11 +126,12 @@ export function formatDecimalText(value: string, places: number, header = ''): s
       ? 2
       : kind === 'tenth'
         ? 1
-        : kind === 'percent'
+        : kind === 'percent' || kind === 'median'
           ? Math.max(0, Math.min(6, Math.trunc(places)))
           : 0;
   let shown = number.toFixed(digits);
-  if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (kind === 'percent' || kind === 'median')
+    shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   return `${shown}${match[3] || ''}`;
 }
 
@@ -116,10 +158,17 @@ function shownP(value: unknown): string {
   return cell(value);
 }
 
+function oneDecimal(value: unknown): string {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return '';
+  return (Math.round(number * 10) / 10).toFixed(1);
+}
+
 function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return '';
+    if (Math.abs(value) >= 1000) return plainNumber(value);
     const rounded = Math.round(value * 1000) / 1000;
     return String(rounded);
   }
@@ -129,7 +178,7 @@ function cell(value: unknown): string {
     if (label != null && typeof label !== 'object') return cell(label);
     return '';
   }
-  return String(value).trim();
+  return shownCount(String(value).trim());
 }
 
 function questionTitle(title: string): string {
@@ -225,6 +274,50 @@ export function answerResultTables(answer: string): RunTable[] {
   return tables;
 }
 
+/** Shared frequency headers. A blank first cell used to shift counts under Percent. */
+const FREQUENCY_HEADERS = ['Label', 'Count', '%', 'Valid %', 'Cumulative %'];
+const MR_FREQUENCY_HEADERS = ['Label', 'Count', '% of respondents'];
+
+function looksLikeFrequencyHeaders(columns: string[]): boolean {
+  if (columns.length < 2) return false;
+  const folded = columns.map(column => column.trim().toLowerCase());
+  const first = folded[0];
+  const hasCount = folded.some(
+    column => column === 'frequency' || column === 'count' || column === 'n'
+  );
+  const hasPercent = folded.some(column => /%|percent/.test(column));
+  if (first === '' && hasCount) return true;
+  if (
+    (first === '' || first === 'label' || first === 'answer' || first === 'value') &&
+    hasCount &&
+    hasPercent
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeFrequencyColumns(
+  columns: string[],
+  opts?: { multipleResponse?: boolean }
+): string[] {
+  if (!looksLikeFrequencyHeaders(columns)) return columns;
+  if (opts?.multipleResponse) {
+    if (columns.some(column => /respondent/i.test(column))) return [...columns];
+    return [...MR_FREQUENCY_HEADERS];
+  }
+  if (columns.length >= FREQUENCY_HEADERS.length) return [...FREQUENCY_HEADERS];
+  return FREQUENCY_HEADERS.slice(0, Math.max(columns.length, 2));
+}
+
+/** Frequency % / Valid % / Cumulative %, or a header that names percent/share. Not "% of base". */
+function isPercentHeader(column: string): boolean {
+  const name = column.trim().toLowerCase();
+  if (name.includes('percent') || name.includes('share') || name.includes('respondent'))
+    return true;
+  return name === '%' || name === 'valid %' || name === 'cumulative %' || /(?:^|\s)%$/.test(name);
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as {
@@ -234,10 +327,21 @@ function asTable(value: unknown): RunTable | null {
     headers?: unknown;
     variable_names?: unknown;
     note?: unknown;
+    superseded?: unknown;
+    multiple_response?: unknown;
+    mr_base?: unknown;
   };
+  if (record.superseded) return null;
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
-  const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
-  const percentAt = columns.map(column => column.toLowerCase().includes('percent'));
+  let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
+  const titleText = cell(record.title);
+  const title = questionTitle(titleText);
+  const multipleResponse =
+    Boolean(record.multiple_response) || record.mr_base === 'percent_of_respondents';
+  if (looksLikeFrequencyHeaders(columns) || /^frequency table:/i.test(titleText)) {
+    columns = normalizeFrequencyColumns(columns, { multipleResponse });
+  }
+  const percentAt = columns.map(isPercentHeader);
   const rows = Array.isArray(record.rows)
     ? record.rows
         .filter(row => Array.isArray(row))
@@ -250,7 +354,7 @@ function asTable(value: unknown): RunTable | null {
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
   const note = cell(record.note);
-  return { title: questionTitle(cell(record.title)), columns, rows, ...(note ? { note } : {}) };
+  return { title, columns, rows, ...(note ? { note } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -272,7 +376,15 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
     const body: string[][] = [];
     for (const record of records) {
       const label = cell(record.label ?? record.value ?? record.variable);
-      if (!label || label === 'Total' || label === 'Missing') continue;
+      const folded = label.toLowerCase();
+      if (
+        !label ||
+        folded === 'total' ||
+        folded === 'total respondents' ||
+        folded === 'missing' ||
+        folded === 'base'
+      )
+        continue;
       body.push(
         means
           ? [
@@ -294,7 +406,8 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
       ),
       columns: means
         ? ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n']
-        : ['Answer', 'Frequency', 'Percent'],
+        : // Frequency summary quotes valid percent of who answered, not % of all.
+          ['Answer', 'Frequency', 'Valid %'],
       rows: body,
     });
   }
@@ -389,7 +502,10 @@ function recordTable(rows: unknown, title: string, keys: string[]): RunTable | n
     list,
     title,
     keys.map(key => ({
-      header: key.replaceAll('_', ' '),
+      header:
+        key === 'projected_thousands' || key === 'projected'
+          ? 'Projected (000s)'
+          : key.replaceAll('_', ' '),
       keys: [key, key === 'term' ? 'name' : key],
     }))
   );
@@ -453,6 +569,152 @@ function isStageFunnel(table: RunTable): boolean {
   );
 }
 
+function groupFunnelFrom(value: unknown, depth = 0): RunTable | null {
+  if (!value || typeof value !== 'object' || depth > 6) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = groupFunnelFrom(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const grouped = record.by_group;
+  if (Array.isArray(grouped) && grouped.length) {
+    const rows: string[][] = [];
+    for (const item of grouped) {
+      if (!item || typeof item !== 'object') continue;
+      const group = cell((item as { group?: unknown }).group);
+      const stages = (item as { stages?: unknown }).stages;
+      if (!group || !Array.isArray(stages)) continue;
+      for (const stage of stages) {
+        if (!stage || typeof stage !== 'object') continue;
+        const row = stage as Record<string, unknown>;
+        rows.push([
+          cell(row.label ?? row.stage),
+          group,
+          cell(row.count),
+          oneDecimal(row.percent_of_base),
+          oneDecimal(row.conversion_from_previous),
+        ]);
+      }
+    }
+    if (rows.some(row => row.some(Boolean))) {
+      return {
+        title: 'Funnel by group',
+        columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+        rows,
+      };
+    }
+  }
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') {
+      const found = groupFunnelFrom(nested, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function isGroupFunnel(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  return headers.includes('stage') && headers.includes('group');
+}
+
+function stageShare(table: RunTable, stage: string): number | null {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  const stageColumn = headers.indexOf('stage');
+  const shareColumn = headers.findIndex(column => column.includes('% of base'));
+  if (stageColumn < 0 || shareColumn < 0) return null;
+  const wanted = stage.trim().toLowerCase();
+  const values = table.rows
+    .filter(row => (row[stageColumn] || '').trim().toLowerCase() === wanted)
+    .map(row => Number(row[shareColumn]))
+    .filter(value => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** The stage funnel and the by-group table that matches it. Frequency tables stay off this card. */
+function onlyTheFunnel(tables: RunTable[]): RunTable[] {
+  const stage = tables.find(isStageFunnel);
+  if (!stage) return tables;
+  const groups = tables.filter(isGroupFunnel);
+  if (!groups.length) return [stage];
+  const names = stage.rows.map(row => (row[0] || '').trim()).filter(Boolean);
+  const distance = (table: RunTable) => {
+    const gaps = names
+      .map(name => {
+        const overall = stageShare(stage, name);
+        const grouped = stageShare(table, name);
+        if (overall == null || grouped == null) return null;
+        return Math.abs(overall - grouped);
+      })
+      .filter((gap): gap is number => gap != null);
+    if (!gaps.length) return Number.POSITIVE_INFINITY;
+    return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+  };
+  const kept = groups.reduce((best, table) => (distance(table) < distance(best) ? table : best));
+  const gap = distance(kept);
+  if (Number.isFinite(gap) && gap > 5) return [stage];
+  return [stage, kept];
+}
+
+/** A second copy of the same rows, usually the grid beside its markdown twin. */
+function withoutRepeatedTables(tables: RunTable[]): RunTable[] {
+  const stubs = (table: RunTable) => table.rows.map(row => (row[0] || '').trim()).join('\n');
+  return tables.filter((table, index) => {
+    const labels = stubs(table);
+    if (!labels) return true;
+    return !tables.some((other, otherIndex) => {
+      if (otherIndex === index || stubs(other) !== labels) return false;
+      if (other.columns.length < table.columns.length) return false;
+      if (other.columns.length === table.columns.length && otherIndex > index) return false;
+      return table.rows.every((row, rowIndex) =>
+        row.slice(1).every(value => !value || (other.rows[rowIndex] || []).includes(value))
+      );
+    });
+  });
+}
+
+/** Whole-base stage shares, then the highest and lowest group at the last stage. */
+export function funnelHeadline(tables: RunTable[]): string {
+  const stage = tables.find(isStageFunnel);
+  if (!stage) return '';
+  const shareColumn = stage.columns.findIndex(column => column.toLowerCase().includes('% of base'));
+  if (shareColumn < 0) return '';
+  const parts = stage.rows
+    .map(row => {
+      const name = (row[0] || '').trim();
+      const share = (row[shareColumn] || '').trim();
+      if (!name || !share) return '';
+      return `${name} ${share.includes('%') ? share : `${share}%`}`;
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!parts.length) return '';
+  let text = `Of the base, ${parts.join(', ')}.`;
+  const group = tables.find(isGroupFunnel);
+  if (!group) return text;
+  const headers = group.columns.map(column => column.toLowerCase());
+  const stageColumn = headers.indexOf('stage');
+  const groupColumn = headers.findIndex(column => column === 'group' || column.startsWith('group'));
+  const groupedShare = headers.findIndex(column => column.includes('% of base'));
+  const last = (stage.rows[stage.rows.length - 1]?.[0] || '').trim().toLowerCase();
+  const scored = group.rows
+    .filter(row => (row[stageColumn] || '').trim().toLowerCase() === last)
+    .map(row => ({
+      name: (row[groupColumn] || '').trim(),
+      share: Number(String(row[groupedShare] || '').replace('%', '')),
+    }))
+    .filter(item => item.name && Number.isFinite(item.share));
+  if (scored.length < 2) return text;
+  const high = scored.reduce((best, item) => (item.share > best.share ? item : best));
+  const low = scored.reduce((best, item) => (item.share < best.share ? item : best));
+  if (high.name === low.name) return text;
+  return `${text} At the last stage, ${high.name} is highest and ${low.name} is lowest.`;
+}
+
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
 function oneFunnel(tables: RunTable[]): RunTable[] {
   const funnels = tables.filter(isStageFunnel);
@@ -508,6 +770,10 @@ function npsTable(groups: unknown): RunTable | null {
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const records = groups.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+  // Rank and normality results store medians, not means. Groups comes from the builder.
+  if (!records.some(record => record.mean != null && Number.isFinite(Number(record.mean)))) {
+    return null;
+  }
   const weighted = records.some(record => record.weighted_n != null);
   const rows = records
     .map(record => {
@@ -635,6 +901,29 @@ function isFrequencyRecord(record: Record<string, unknown>): boolean {
   );
 }
 
+function filterColumns(value: unknown, found = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) filterColumns(item, found);
+    return found;
+  }
+  if (!value || typeof value !== 'object') return found;
+  const record = value as Record<string, unknown>;
+  const column = cell(record.column ?? record.columnId);
+  if (column && ('value' in record || 'op' in record || 'operator' in record)) found.add(column);
+  for (const nested of Object.values(record)) filterColumns(nested, found);
+  return found;
+}
+
+/** A banner of the audience column is not the audience. The rows have to be filtered to it. */
+function audienceWasUsed(record: Record<string, unknown>): boolean {
+  const columns = record.audience_columns;
+  if (!Array.isArray(columns) || !columns.length) return true;
+  const used = filterColumns(
+    record.row_filters ?? record.filters ?? record.filter ?? record.audience_filter
+  );
+  return columns.every(column => used.has(cell(column)));
+}
+
 function filterText(named: unknown): string {
   if (typeof named === 'string') return named.trim();
   if (named && typeof named === 'object' && !Array.isArray(named)) {
@@ -674,6 +963,9 @@ type SampleBits = {
 };
 
 function wholeNumber(value: unknown): number | null {
+  // null/undefined/'' must stay absent. Number(null) is 0 and would mark an
+  // unweighted frequency base as "0 weighted".
+  if (value == null || value === '') return null;
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(number)) return null;
   return Math.round(number);
@@ -785,8 +1077,8 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       kish_ess?: unknown;
       unweighted_n?: unknown;
     };
-    const label = cell(block.label);
-    const column = cell(block.column);
+    const column = realWeightToken(block.column);
+    const label = stripCodeBrackets(cell(block.label), column);
     if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
       sample.weight = label;
     } else if (column) sample.weight = column;
@@ -804,6 +1096,10 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
         sample.sawN = true;
       }
     }
+  }
+  if (!sample.weight) {
+    const named = weightName(record);
+    if (named) sample.weight = named;
   }
   if (!sample.sawN && Array.isArray(record.stages) && record.stages.length) {
     const first = record.stages[0];
@@ -865,8 +1161,20 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
   }
 }
 
+function sampleWeightPhrase(sample: SampleBits): string {
+  const named = (sample.weight || '').trim();
+  if (named && !/^(none|unweighted|null)$/i.test(named)) {
+    return named.toLowerCase() === 'weighted' ? 'Weight: Weighted' : `Weight: ${named}`;
+  }
+  const weighted = sample.tableWeighted;
+  if (sample.sawTableBase && weighted != null && weighted !== sample.tableUnweighted) {
+    return 'Weight: Weighted';
+  }
+  return 'Weight: Unweighted';
+}
+
 function sampleLine(sample: SampleBits): string {
-  const weight = sample.weight ? `Weight: ${sample.weight}` : 'Weight: none';
+  const weight = sampleWeightPhrase(sample);
   const parts = [weight];
   if (sample.sawTableBase) {
     const weighted = sample.tableWeighted;
@@ -886,6 +1194,7 @@ function sampleLine(sample: SampleBits): string {
     : sample.sawN
       ? sample.n
       : sample.total;
+  // Kish ESS only when the engine sent one. Do not invent "100%" for unweighted runs.
   if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
     const shown =
@@ -893,8 +1202,6 @@ function sampleLine(sample: SampleBits): string {
         ? String(Math.round(sample.ess))
         : sample.ess.toFixed(1);
     parts.push(`effective base = ${shown} (${percent}%)`);
-  } else if (!sample.weight && denom) {
-    parts.push(`effective base = ${denom} (100%)`);
   }
   parts.push('95% confidence level');
   const line = `${parts.join('; ')}.`;
@@ -903,21 +1210,46 @@ function sampleLine(sample: SampleBits): string {
     : line;
 }
 
+function realWeightToken(value: unknown): string {
+  const text = cell(value).trim();
+  if (!text || /^(none|unweighted|null)$/i.test(text)) return '';
+  return text;
+}
+
+/** Drop a trailing "[column_name]" from a weight label a person reads. */
+function stripCodeBrackets(label: string, code = ''): string {
+  const text = label.trim();
+  const match = /^(.*)\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]?\s*$/.exec(text);
+  if (!match) return text;
+  const left = match[1].trim();
+  const right = match[2].trim();
+  if (!left) return text;
+  if (code && right.toLowerCase() === code.toLowerCase()) return left;
+  if (right.includes('_') || right.toLowerCase() === 'label') return left;
+  return text;
+}
+
 function weightName(record: Record<string, unknown>): string {
-  if (record.weight && typeof record.weight === 'object') {
-    return cell((record.weight as { column?: unknown }).column);
+  if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
+    const weight = record.weight as { column?: unknown; label?: unknown };
+    const column = realWeightToken(weight.column);
+    const label = stripCodeBrackets(cell(weight.label).trim(), column);
+    if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
+      return label;
+    }
+    if (column) return column;
   }
   const named =
     typeof record.weight === 'string'
       ? record.weight
-      : typeof record.weight_column === 'string'
-        ? record.weight_column
-        : typeof record.resolved_weight === 'string'
-          ? record.resolved_weight
-          : '';
-  const text = named.trim();
-  if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unweighted') return '';
-  return text;
+      : typeof record.resolved_weight === 'string'
+        ? record.resolved_weight
+        : typeof record.weight_column === 'string'
+          ? record.weight_column
+          : typeof record.active_weight_column === 'string'
+            ? record.active_weight_column
+            : '';
+  return realWeightToken(named);
 }
 
 function isGroupMeanTable(table: RunTable): boolean {
@@ -963,7 +1295,34 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
 }
 
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
+function procedureOfRecord(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  const args = record.args as Record<string, unknown> | undefined;
+  const nested = record.result as Record<string, unknown> | undefined;
+  const name =
+    record.procedure || record.analysis_type || args?.analysis_type || nested?.analysis_type;
+  return typeof name === 'string' ? name : '';
+}
+
+/** A funnel or crosstab card does not keep the frequency tables that ran beside it. */
+function focusRun(results: unknown): unknown {
+  if (!Array.isArray(results)) return results;
+  const names = results.map(procedureOfRecord);
+  const drop =
+    names.includes('brand_duplication') || names.includes('paired_brand_test')
+      ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table', 'funnel'])
+      : names.includes('funnel')
+        ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table'])
+        : names.includes('banner_table')
+          ? new Set(['frequencies', 'descriptives', 'compute'])
+          : null;
+  if (!drop) return results;
+  return results.filter(item => !drop.has(procedureOfRecord(item)));
+}
+
 export function resultViewFromToolResults(results: unknown): ResultView {
+  results = focusRun(results);
   let answered = 0;
   const sample: SampleBits = {
     weight: '',
@@ -985,14 +1344,20 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const view: ResultView = {
     tables: [],
+    charts: [],
     script: '',
     checks: [],
     weight: '',
     filter: '',
+    audience: '',
+    audienceDefinition: '',
+    wave: '',
+    source: '',
     rCheck: '',
     rStatement: '',
     base: '',
     letterNote: '',
+    weightSource: '',
   };
   const seen = new Set<string>();
   let usedSummary = false;
@@ -1144,7 +1509,22 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(recordTable(record.descriptives, 'Descriptives', ['column', 'n', 'mean', 'std']));
     add(statRow(record, 'Test', ['statistic', 'df', 'p_value', 'effect_size']));
     add(recordTable(record.loadings, 'Loadings', ['variable', 'factor', 'loading']));
-    add(recordTable(record.items, 'Reliability', ['item', 'alpha_if_deleted', 'item_total']));
+    // Item statistics are objects. A bare list of item names is not a reliability table.
+    if (
+      Array.isArray(record.item_statistics) ||
+      (Array.isArray(record.items) &&
+        record.items.some(item => item && typeof item === 'object' && !Array.isArray(item)))
+    ) {
+      add(
+        recordTable(record.item_statistics || record.items, 'Items', [
+          'item',
+          'mean',
+          'std_dev',
+          'item_total_correlation',
+          'alpha_if_deleted',
+        ])
+      );
+    }
     const mark = record.r_syntax_verification;
     if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };
@@ -1167,11 +1547,40 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       if (counted > answered) answered = counted;
     }
     if (!view.weight) view.weight = weightName(record);
-    if (!view.filter) {
+    if (view.universeThousands == null && record.weight && typeof record.weight === 'object') {
+      const universe = (record.weight as { universe_thousands?: unknown }).universe_thousands;
+      if (typeof universe === 'number' && Number.isFinite(universe))
+        view.universeThousands = universe;
+    }
+    if (
+      !view.weightSource &&
+      (record.weight_source === 'study_brief' || record.weight_from_brief === true)
+    ) {
+      view.weightSource = 'study_brief';
+    }
+    const labelled = cell(record.filter_text);
+    if (labelled) view.filter = labelled;
+    else if (!view.filter) {
       const named = filterText(
         record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
       );
       if (named) view.filter = named;
+    }
+    if (!view.audience && audienceWasUsed(record)) {
+      const audience = cell(record.audience_label);
+      if (audience) view.audience = audience;
+    }
+    if (!view.audienceDefinition) {
+      const definition = cell(record.audience_definition);
+      if (definition) view.audienceDefinition = definition;
+    }
+    if (!view.wave) {
+      const wave = cell(record.wave_label);
+      if (wave) view.wave = wave;
+    }
+    if (!view.source) {
+      const source = cell(record.source_label);
+      if (source) view.source = source;
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')
@@ -1201,7 +1610,16 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     );
   }
   view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
-  view.tables = oneFunnel(oneNpsBreakdown(view.tables));
+  const hasGroupFunnel = view.tables.some(table => {
+    const headers = table.columns.map(column => column.trim().toLowerCase());
+    return headers.includes('stage') && headers.includes('group');
+  });
+  if (!hasGroupFunnel) {
+    const grouped = groupFunnelFrom(results);
+    if (grouped) view.tables.push(grouped);
+  }
+  view.tables = onlyTheFunnel(oneFunnel(oneNpsBreakdown(view.tables)));
+  view.tables = withoutRepeatedTables(view.tables);
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';
@@ -1216,6 +1634,17 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
   else if (detail) view.baseDetail = detail;
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
+  if (!view.weight && sample.weight) view.weight = sample.weight;
+  if (
+    !view.weight &&
+    sample.sawTableBase &&
+    sample.tableWeighted != null &&
+    sample.tableWeighted !== sample.tableUnweighted
+  ) {
+    // Bases are weighted but the book never named the column. Chip, footnote and base stay aligned.
+    view.weight = 'Weighted';
+  }
+  view.charts = chartsFromToolPayloads(results);
   return view;
 }
 
@@ -1231,12 +1660,19 @@ function answeredCount(record: Record<string, unknown>): number {
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
+function frequencyCountIndex(columns: string[]): number {
+  return columns.findIndex(column => {
+    const name = column.trim().toLowerCase();
+    return name === 'frequency' || name === 'count' || name === 'n';
+  });
+}
+
 /** Valid answers on a frequency table. A partial table that does not add up to its total is left out. */
 function frequencyAnswered(view: ResultView): number {
   let reconciled = 0;
   let open = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     let categories = 0;
     let missing = 0;
@@ -1265,7 +1701,7 @@ function frequencyAnswered(view: ResultView): number {
 function largestFrequencyTotal(view: ResultView): number {
   let largest = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     for (const row of table.rows) {
       if ((row[0] || '').toLowerCase() !== 'total') continue;
@@ -1343,12 +1779,13 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   if (!name || name.toLowerCase() === 'none' || name.toLowerCase() === 'unweighted')
     return 'Unweighted';
   const meta = columnMeta(columns, name);
-  const label = (meta?.label || '').trim();
+  const label = stripCodeBrackets((meta?.label || '').trim(), name);
   if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {
     return `Weight: ${label}`;
   }
   if (name.toLowerCase() === 'weight') return 'Weighted';
-  return `Weight: ${name}`;
+  if (/[a-z]_[a-z0-9]/i.test(name)) return 'Weighted';
+  return `Weight: ${stripCodeBrackets(name)}`;
 }
 
 export function resultFootnote(
@@ -1359,14 +1796,27 @@ export function resultFootnote(
 ): string {
   const filter = labelFilter(view.filter, columns);
   const detail = view.baseDetail || '';
-  const parts = [
-    detail ? '' : base.trim() || view.base,
-    filter ? `Filter: ${filter}` : '',
+  const namedWeight = view.weight ? weightNote(view.weight, columns) : 'Unweighted';
+  const weight =
     detail && /weight:/i.test(detail)
       ? ''
-      : view.weight
-        ? weightNote(view.weight, columns)
-        : 'Unweighted',
+      : view.weightSource === 'study_brief' && view.weight
+        ? `${namedWeight}, the weight named in the study brief`
+        : namedWeight;
+  const universe =
+    typeof view.universeThousands === 'number'
+      ? `Universe ${view.universeThousands.toFixed(1)} thousand`
+      : '';
+  const parts = [
+    detail ? '' : base.trim() || view.base,
+    view.audience
+      ? `Audience: ${view.audience}${view.audienceDefinition ? ` — ${view.audienceDefinition}` : ''}`
+      : '',
+    view.wave ? `Wave: ${view.wave}` : '',
+    view.source ? `Source: ${view.source}` : '',
+    filter ? `Filter: ${filter}` : '',
+    weight,
+    universe,
     test && test !== 'Output' ? test : '',
     view.letterNote,
     detail,

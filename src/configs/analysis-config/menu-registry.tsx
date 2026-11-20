@@ -63,11 +63,13 @@ import {
   CorrespondenceDialog,
   DriversDialog,
   FuseWavesDialog,
+  CalibratedPurchaseIntentDialog,
   FunnelDialog,
   GaborGrangerDialog,
   MaxDiffDialog,
   NpsDialog,
   OpenTextCodingDialog,
+  ShareOfWalletDialog,
   TurfDialog,
   VanWestendorpDialog,
 } from '@/components/templates/analysis/agency-dialogs';
@@ -127,6 +129,8 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Van Westendorp': VanWestendorpDialog,
   'Gabor-Granger': GaborGrangerDialog,
   NPS: NpsDialog,
+  'Calibrated purchase intent': CalibratedPurchaseIntentDialog,
+  'Share of wallet': ShareOfWalletDialog,
   'Brand Funnel': FunnelDialog,
   'MaxDiff (counting / MNL)': MaxDiffDialog,
   'Lag Cases': LagCasesDialog,
@@ -149,6 +153,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Area Chart': chartMenuItem('Area Chart'),
   'Violin Plot': chartMenuItem('Violin Plot'),
   'Density Plot': chartMenuItem('Density Plot'),
+  Sankey: chartMenuItem('Sankey'),
 };
 
 const ML_MENU_INITIAL_BODY: Record<string, Record<string, unknown>> = {

@@ -82,6 +82,8 @@ const DEFAULTS_LINE: Partial<Record<AnalysisKey, string>> = {
   banner_table: 'Column percents and significance letters, with FDR across columns.',
   linear_regression: 'Enter method, intercept included, listwise deletion.',
   poisson_regression: 'Log link and an intercept. Cluster-robust standard errors stay off.',
+  quasi_poisson_regression: 'Poisson mean with Pearson χ² scale for standard errors. Intercept on.',
+  multinomial_logit: 'Reference is the first outcome level. Intercept on for each equation.',
   negative_binomial_regression:
     'Log link and an intercept. Cluster-robust standard errors stay off.',
   ordinal_regression:

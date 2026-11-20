@@ -29,6 +29,27 @@ describe('saved run document', () => {
     },
   };
 
+  it('skips Group means when the result only has medians', () => {
+    const document = runDocument({
+      ...run,
+      op: 'mann_whitney_u',
+      report: {
+        ...run.report,
+        tables: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [['North', '80', '4']],
+          },
+        ],
+      },
+      result: {
+        group_descriptives: [{ group: 'North', n: 80, median: 4 }],
+      },
+    });
+    expect(document.tables.map(table => table.title)).toEqual(['Groups']);
+  });
+
   it('reads the stored summary, base, table, and script', () => {
     const document = runDocument(run);
     expect(document.title).toBe('score by region');

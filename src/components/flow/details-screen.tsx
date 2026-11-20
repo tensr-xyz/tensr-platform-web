@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
-import { pickerColumns, questionKind, type FlowColumn } from '@/lib/flow-columns';
-import { datasetRowId } from '@/components/flow/survey-screens';
+import {
+  questionKind,
+  questionnaireOutline,
+  type FlowColumn,
+  type OutlineSet,
+} from '@/lib/flow-columns';
+import { datasetRowId, downloadExport, fileToBase64 } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SidePanel } from '@/components/flow/side-panel';
@@ -20,6 +25,13 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
+import { AudiencePanel } from '@/components/flow/audience-panel';
+import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import {
+  labelChangeLine,
+  labelsImportApplyLabel,
+  type LabelsImportPreview,
+} from '@/lib/label-workbook';
 
 type DetailFile = {
   dataset_id?: string;
@@ -31,6 +43,17 @@ type DetailFile = {
 };
 
 type Member = { user_id: string; role?: string };
+type AskerTurn = {
+  turn_id: string;
+  question: string;
+  answer: string;
+  checked?: boolean;
+  status?: string;
+  audience?: string;
+  base?: string;
+  weight?: string;
+  source?: string;
+};
 
 function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
   const codes = Object.keys(labels)
@@ -152,8 +175,9 @@ function memberMark(id: string): string {
 
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
-  if (role === 'viewer') return 'Viewer';
-  return 'Editor';
+  if (role === 'viewer') return 'Can view';
+  if (role === 'asker') return 'Can ask';
+  return 'Can edit';
 }
 
 function columnKind(column: FlowColumn): string {
@@ -184,20 +208,115 @@ function objectiveLines(text: string): string[] {
     .filter(Boolean);
 }
 
+function askerBucket(turn: AskerTurn): 'to_check' | 'checked' | 'not_in_data' {
+  if (
+    turn.status === 'not_in_data' ||
+    turn.answer.trim().toLowerCase().startsWith('not in this data')
+  ) {
+    return 'not_in_data';
+  }
+  if (turn.status === 'checked' || turn.checked) return 'checked';
+  return 'to_check';
+}
+
+function AskerLog({
+  turns,
+  onMark,
+}: {
+  turns: AskerTurn[];
+  onMark: (turnId: string, status?: 'checked' | 'flagged') => void;
+}) {
+  const [filter, setFilter] = useState<'to_check' | 'checked' | 'not_in_data' | 'all'>('to_check');
+  const [openId, setOpenId] = useState(turns[0]?.turn_id || '');
+  const shown = filter === 'all' ? turns : turns.filter(turn => askerBucket(turn) === filter);
+  const open = shown.find(turn => turn.turn_id === openId) || shown[0];
+  return (
+    <div className="details-questions">
+      <div className="flow-muted details-label">Can ask questions</div>
+      <div className="flow-row">
+        {(
+          [
+            ['to_check', 'To check'],
+            ['checked', 'Checked'],
+            ['not_in_data', 'Not in data'],
+            ['all', 'All'],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            type="button"
+            className="flow-btn"
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {shown.map(turn => (
+        <div key={turn.turn_id} className="details-member">
+          <Button type="button" className="flow-btn" onClick={() => setOpenId(turn.turn_id)}>
+            <span className="details-member-id">
+              <strong>{turn.question}</strong>
+              <span className="flow-muted">{turn.answer}</span>
+            </span>
+          </Button>
+          {askerBucket(turn) === 'checked' ? (
+            <span className="flow-muted">Checked</span>
+          ) : (
+            <span className="flow-row">
+              <Button type="button" onClick={() => onMark(turn.turn_id, 'checked')}>
+                Mark as checked
+              </Button>
+              <Button type="button" onClick={() => onMark(turn.turn_id, 'flagged')}>
+                Flag a problem
+              </Button>
+            </span>
+          )}
+        </div>
+      ))}
+      {shown.length ? null : <p className="flow-muted">Nothing in this list.</p>}
+      {open ? (
+        <div className="asker-worked">
+          <p>How it was worked out</p>
+          <p>
+            <span className="flow-muted">Audience</span>{' '}
+            {open.audience || 'The rows this answer used'}
+          </p>
+          <p>
+            <span className="flow-muted">Base</span> {open.base || 'The base on this answer'}
+          </p>
+          <p>
+            <span className="flow-muted">Weight</span> {open.weight || 'The weight on this answer'}
+          </p>
+          <p>
+            <span className="flow-muted">Source</span> {open.source || 'This project’s file'}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DetailsScreen({
   project,
   datasets,
+  onChanged,
 }: {
   project?: FlowProject;
   datasets: DetailFile[];
+  onChanged?: () => void;
 }) {
   const projectId = project?.id || '';
   const files = datasets.filter(row => row.project_id === projectId);
   const active = files.find(row => datasetRowId(row) === project?.active_dataset_id) || files[0];
+  const labelsFileRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<BriefDoc[] | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
+  const [variableSets, setVariableSets] = useState<OutlineSet[]>([]);
   const [weightName, setWeightName] = useState('');
+  const [weightLabel, setWeightLabel] = useState('');
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
@@ -205,6 +324,10 @@ export function DetailsScreen({
   const [notes, setNotes] = useState('');
   const [savedText, setSavedText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [labelsBusy, setLabelsBusy] = useState(false);
+  const [labelsPreview, setLabelsPreview] = useState<LabelsImportPreview | null>(null);
+  const [labelsNote, setLabelsNote] = useState<string | null>(null);
+  const [showLabelChanges, setShowLabelChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -215,6 +338,8 @@ export function DetailsScreen({
   const [inviteEmail, setInviteEmail] = useState('');
   const [memberError, setMemberError] = useState<string | null>(null);
   const [inviteNote, setInviteNote] = useState<string | null>(null);
+  const [userId, setUserId] = useState('');
+  const [turns, setTurns] = useState<AskerTurn[] | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -241,9 +366,25 @@ export function DetailsScreen({
   }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) return;
     let cancelled = false;
-    void flowJson<{ active_organization?: { id?: string } }>('/me')
+    void flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
       .then(page => {
+        if (!cancelled) setTurns(page.turns || []);
+      })
+      .catch(() => {
+        if (!cancelled) setTurns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void flowJson<{ user?: { id?: string }; active_organization?: { id?: string } }>('/me')
+      .then(page => {
+        if (!cancelled) setUserId(page.user?.id || '');
         const id = page.active_organization?.id || '';
         if (cancelled) return;
         setOrgId(id || null);
@@ -272,6 +413,9 @@ export function DetailsScreen({
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setVariableSets([]);
+      setWeightName('');
+      setWeightLabel('');
       return;
     }
     let cancelled = false;
@@ -280,7 +424,13 @@ export function DetailsScreen({
       flowJson<{
         columns?: FlowColumn[];
         active_weight_column?: string | null;
-        multiple_response_sets?: { columns?: string[]; variables?: string[] }[] | null;
+        variable_sets?: OutlineSet[] | null;
+        multiple_response_sets?:
+          | {
+              columns?: (string | { column?: string })[];
+              variables?: string[];
+            }[]
+          | null;
       }>(`/datasets/${datasetId}/metadata`),
       flowJson<{ rows?: unknown[][]; headers?: string[] }>(
         `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
@@ -292,10 +442,15 @@ export function DetailsScreen({
         const rows = page.rows || [];
         const multi = new Set(
           (meta.multiple_response_sets || []).flatMap(set => [
-            ...(set.columns || []),
+            ...(set.columns || []).map(entry =>
+              typeof entry === 'string' ? entry : String(entry.column || '')
+            ),
             ...(set.variables || []),
           ])
         );
+        for (const set of meta.variable_sets || []) {
+          for (const column of set.columns || []) multi.add(String(column));
+        }
         const kinds: Record<string, string> = {};
         for (const column of meta.columns || []) {
           const index = headers.findIndex(
@@ -309,10 +464,18 @@ export function DetailsScreen({
         }
         setKinds(kinds);
         setColumns(meta.columns || []);
-        setWeightName(meta.active_weight_column || '');
+        setVariableSets(Array.isArray(meta.variable_sets) ? meta.variable_sets : []);
+        const activeWeight = meta.active_weight_column || '';
+        const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
+        // Audience tags show the weight by its label, never the variable code.
+        setWeightName(activeWeight);
+        setWeightLabel(String(weightColumn?.label || '').trim() || activeWeight);
       })
       .catch(() => {
-        if (!cancelled) setColumns([]);
+        if (!cancelled) {
+          setColumns([]);
+          setVariableSets([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -325,9 +488,7 @@ export function DetailsScreen({
   const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
   const parts = splitBrief(briefText);
   const ready = docs !== null && members !== null && columns !== null;
-  const outline = pickerColumns(columns || []).filter(
-    column => column.name !== weightName && column.name.toLowerCase() !== 'weight'
-  );
+  const outline = questionnaireOutline(columns || [], variableSets, { weightName, kinds });
 
   const save = () => {
     if (!projectId || busy) return;
@@ -352,6 +513,109 @@ export function DetailsScreen({
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The brief did not save.'))
       .finally(() => setBusy(false));
+  };
+
+  const downloadLabels = () => {
+    if (!datasetId || labelsBusy) return;
+    const stem = String(active?.original_filename || 'labels').replace(/\.[^.]+$/, '') || 'labels';
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    void downloadExport(`/datasets/${datasetId}/labels.xlsx`, `${stem}_labels.xlsx`)
+      .then(() => setLabelsNote('Labels downloaded.'))
+      .catch(err =>
+        setLabelsNote(err instanceof Error ? err.message : 'Could not download labels.')
+      )
+      .finally(() => setLabelsBusy(false));
+  };
+
+  const onPickLabelsFile = (file: File | null) => {
+    if (!file || !datasetId) return;
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    setShowLabelChanges(false);
+    void fileToBase64(file)
+      .then(content =>
+        flowJson<{
+          labels_changed?: number;
+          unmatched?: number;
+          code_changed?: number;
+          changes?: LabelsImportPreview['changes'];
+        }>(`/datasets/${datasetId}/labels/import`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content_base64: content,
+            filename: file.name,
+            apply: false,
+          }),
+        }).then(body => {
+          setLabelsPreview({
+            filename: file.name,
+            content_base64: content,
+            labels_changed: Number(body.labels_changed || 0),
+            unmatched: Number(body.unmatched || 0),
+            code_changed: Number(body.code_changed || 0),
+            changes: Array.isArray(body.changes) ? body.changes : [],
+          });
+        })
+      )
+      .catch(err => {
+        setLabelsPreview(null);
+        setLabelsNote(err instanceof Error ? err.message : 'Could not read that labels file.');
+      })
+      .finally(() => {
+        setLabelsBusy(false);
+        if (labelsFileRef.current) labelsFileRef.current.value = '';
+      });
+  };
+
+  const applyLabelsImport = () => {
+    if (!datasetId || !projectId || !labelsPreview || labelsBusy) return;
+    if (labelsPreview.labels_changed < 1) {
+      setLabelsNote('No label changes to apply.');
+      return;
+    }
+    const previousId = datasetId;
+    const content = labelsPreview.content_base64;
+    if (!content) {
+      setLabelsNote('Upload the labels file again, then apply.');
+      return;
+    }
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/labels/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content_base64: content,
+        filename: labelsPreview.filename,
+        apply: true,
+      }),
+    })
+      .then(saved => {
+        const nextId = String(saved.dataset_id || '');
+        if (!nextId || nextId === previousId) {
+          throw new Error('Labels were not saved as a new version.');
+        }
+        setLabelsPreview(null);
+        setShowLabelChanges(false);
+        return flowJson(`/api/projects/${projectId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: nextId }),
+        }).then(() => {
+          showDatasetVersionUndoToast({
+            projectId,
+            previousDatasetId: previousId,
+            currentDatasetId: nextId,
+            title: 'Labels saved as a new version',
+            onRestored: () => onChanged?.(),
+          });
+          setLabelsNote('Labels applied as a new version.');
+          onChanged?.();
+        });
+      })
+      .catch(err =>
+        setLabelsNote(err instanceof Error ? err.message : 'Could not apply those labels.')
+      )
+      .finally(() => setLabelsBusy(false));
   };
 
   const candidates = peopleNotOnProject(workspace || [], members || []);
@@ -425,6 +689,22 @@ export function DetailsScreen({
     );
   }
 
+  const mine = (members || []).find(member => member.user_id === userId);
+  const asker = mine?.role === 'asker';
+  const markChecked = (turnId: string, status: 'checked' | 'flagged' = 'checked') => {
+    void flowJson<{ turn?: AskerTurn }>(`/api/projects/${projectId}/asker-log/${turnId}`, {
+      method: 'POST',
+      body: JSON.stringify({ checked: status === 'checked', status }),
+    })
+      .then(page => {
+        const saved = page.turn;
+        if (!saved) return;
+        setTurns(current =>
+          (current || []).map(turn => (turn.turn_id === saved.turn_id ? saved : turn))
+        );
+      })
+      .catch(() => setMemberError('Could not mark that answer checked.'));
+  };
   const lines = objectiveLines(parts.objectives);
   const startEdit = () => {
     setObjectives(parts.objectives);
@@ -533,13 +813,20 @@ export function DetailsScreen({
                       {active.n_rows ? (
                         <span>{active.n_rows.toLocaleString('en-GB')} respondents</span>
                       ) : null}
-                      {weightName ? <span>{weightName}</span> : null}
+                      {weightName ? <span>{weightLabel || weightName}</span> : null}
                     </div>
                   ) : null}
                 </>
               )}
             </div>
           </div>
+          {active ? (
+            <AudiencePanel
+              datasetId={datasetRowId(active)}
+              columns={columns || []}
+              canEdit={!asker}
+            />
+          ) : null}
           <div>
             <div className="flow-muted details-label">Notes</div>
             {editing ? (
@@ -565,72 +852,158 @@ export function DetailsScreen({
           </div>
           {error ? <p className="flow-error">{error}</p> : null}
           <div>
-            <div className="flow-muted details-label">Fieldwork · coming soon</div>
-            <div className="details-fieldwork" data-soon>
-              {['Panel', 'Target', 'Dates', 'Progress'].map(label => (
-                <div key={label}>
-                  <span>{label}</span>
-                  <strong>{label === 'Panel' ? 'Panel fielding is coming soon' : '—'}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">
                 Questionnaire outline
                 {outline.length ? ` · ${outline.length} questions` : ''}
               </div>
-              {active ? (
-                <Link href={`/flow/p/${projectId}/responses`}>
-                  Linked to {active.original_filename || 'this file'}
-                </Link>
-              ) : (
-                <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
-              )}
+              <div className="details-q-head-actions">
+                {active && datasetId ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="flow-btn"
+                      disabled={labelsBusy}
+                      onClick={() => void downloadLabels()}
+                    >
+                      Download labels (.xlsx)
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flow-btn"
+                      disabled={labelsBusy}
+                      onClick={() => labelsFileRef.current?.click()}
+                    >
+                      Upload labels
+                    </Button>
+                    <Input
+                      ref={labelsFileRef}
+                      className="sr-only"
+                      type="file"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      aria-label="Labels Excel file"
+                      onChange={event => void onPickLabelsFile(event.target.files?.[0] || null)}
+                    />
+                  </>
+                ) : null}
+                {active ? (
+                  <Link href={`/flow/p/${projectId}/responses`}>
+                    Linked to {active.original_filename || 'this file'}
+                  </Link>
+                ) : (
+                  <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
+                )}
+              </div>
             </div>
+            {labelsPreview ? (
+              <div className="details-labels-import" aria-busy={labelsBusy}>
+                <p className="details-labels-import-title">
+                  Upload labels · {labelsPreview.filename}
+                </p>
+                <div className="details-labels-stats">
+                  <div className="details-labels-stat">
+                    <strong data-tone="ok">{labelsPreview.labels_changed}</strong>
+                    <span>labels changed</span>
+                  </div>
+                  <div className="details-labels-stat">
+                    <strong>{labelsPreview.unmatched}</strong>
+                    <span>rows not matched · skipped</span>
+                  </div>
+                  <div className="details-labels-stat">
+                    <strong data-tone="warn">{labelsPreview.code_changed}</strong>
+                    <span>code changed · not allowed</span>
+                  </div>
+                </div>
+                <p className="flow-muted">
+                  Sheets: Questions (name, label) and Answers (name, code, label). Only labels
+                  change, never codes or data.
+                </p>
+                {showLabelChanges && labelsPreview.changes.length ? (
+                  <ul className="details-labels-changes">
+                    {labelsPreview.changes.map((change, index) => (
+                      <li key={`${change.column}-${change.field}-${change.code || ''}-${index}`}>
+                        {labelChangeLine(change)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="details-labels-import-actions">
+                  <Button
+                    type="button"
+                    className="flow-btn"
+                    disabled={!labelsPreview.changes.length}
+                    onClick={() => setShowLabelChanges(open => !open)}
+                  >
+                    {showLabelChanges ? 'Hide changes' : 'See changes'}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flow-btn primary"
+                    disabled={labelsBusy || labelsPreview.labels_changed < 1}
+                    onClick={() => void applyLabelsImport()}
+                  >
+                    {labelsImportApplyLabel(labelsPreview.labels_changed)}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {labelsNote ? <p className="flow-muted">{labelsNote}</p> : null}
             {outline.length ? (
               <div className="details-q">
-                {outline.map((column, index) => {
-                  const kind = kinds[column.name] || columnKind(column);
-                  const shown = displayedMeasure(column);
+                {outline.map((question, index) => {
+                  const measureColumnName = question.measureColumn || question.columns[0] || '';
+                  const column =
+                    (columns || []).find(item => item.name === measureColumnName) || null;
+                  const kind = question.kind || (column ? columnKind(column) : 'single');
+                  const shown = column
+                    ? displayedMeasure(column)
+                    : { measure: 'nominal', source: '' };
+                  const setOnly = question.columns.length > 1;
                   return (
-                    <div key={column.name} className="details-q-row">
+                    <div key={question.key} className="details-q-row">
                       <span className="details-q-num">Q{index + 1}</span>
-                      <span className="details-q-name">{column.label || column.name}</span>
+                      <span className="details-q-name">{question.label}</span>
                       <span
                         className="details-q-kind"
                         data-kind={kind.startsWith('scale') ? 'scale' : kind}
                       >
                         {kind}
                       </span>
-                      <ChoiceSelect
-                        aria-label={`Measurement level for ${column.label || column.name}`}
-                        value={shown.measure}
-                        options={[
-                          { value: 'nominal', label: 'Nominal' },
-                          { value: 'ordinal', label: 'Ordinal' },
-                          { value: 'scale', label: 'Scale' },
-                        ]}
-                        onValueChange={measure => {
-                          setColumns(
-                            current =>
-                              current?.map(item =>
-                                item.name === column.name
-                                  ? { ...item, measure, measure_source: 'override' }
-                                  : item
-                              ) || current
-                          );
-                          if (!datasetId) return;
-                          void flowJson(`/datasets/${datasetId}/metadata`, {
-                            method: 'PUT',
-                            body: JSON.stringify({
-                              columns: { [column.name]: { measure_override: measure } },
-                            }),
-                          });
-                        }}
-                      />
-                      <span className="flow-muted">{measureSourceLabel(shown.source)}</span>
+                      {setOnly || !column ? (
+                        <span className="flow-muted">
+                          {question.columns.length > 1 ? `${question.columns.length} items` : '—'}
+                        </span>
+                      ) : (
+                        <ChoiceSelect
+                          aria-label={`Measurement level for ${question.label}`}
+                          value={shown.measure}
+                          options={[
+                            { value: 'nominal', label: 'Nominal' },
+                            { value: 'ordinal', label: 'Ordinal' },
+                            { value: 'scale', label: 'Scale' },
+                          ]}
+                          onValueChange={measure => {
+                            setColumns(
+                              current =>
+                                current?.map(item =>
+                                  item.name === column.name
+                                    ? { ...item, measure, measure_source: 'override' }
+                                    : item
+                                ) || current
+                            );
+                            if (!datasetId) return;
+                            void flowJson(`/datasets/${datasetId}/metadata`, {
+                              method: 'PUT',
+                              body: JSON.stringify({
+                                columns: { [column.name]: { measure_override: measure } },
+                              }),
+                            });
+                          }}
+                        />
+                      )}
+                      <span className="flow-muted">
+                        {setOnly ? '' : measureSourceLabel(shown.source)}
+                      </span>
                     </div>
                   );
                 })}
@@ -693,9 +1066,11 @@ export function DetailsScreen({
           <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">Team</div>
-              <Button className="details-invite" type="button" onClick={() => setAddOpen(true)}>
-                + Invite
-              </Button>
+              {asker ? null : (
+                <Button className="details-invite" type="button" onClick={() => setAddOpen(true)}>
+                  + Invite
+                </Button>
+              )}
             </div>
             {members.length ? (
               members.map(member => {
@@ -716,6 +1091,7 @@ export function DetailsScreen({
             ) : (
               <p className="flow-muted">No members yet.</p>
             )}
+            {asker || !turns?.length ? null : <AskerLog turns={turns} onMark={markChecked} />}
           </div>
         </SidePanel>
       </div>
@@ -750,8 +1126,9 @@ export function DetailsScreen({
             value={role}
             onValueChange={setRole}
             options={[
-              { value: 'editor', label: 'Editor' },
-              { value: 'viewer', label: 'Viewer' },
+              { value: 'editor', label: 'Can edit' },
+              { value: 'asker', label: 'Can ask' },
+              { value: 'viewer', label: 'Can view' },
             ]}
           />
           <div className="flow-row">

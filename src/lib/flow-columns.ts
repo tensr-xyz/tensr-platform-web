@@ -7,6 +7,7 @@ export type FlowColumn = {
   measure?: string;
   measure_source?: string | null;
   role?: string | null;
+  linked_set?: string | null;
   value_labels?: Record<string, string> | null;
 };
 
@@ -66,8 +67,115 @@ export function pickerColumns<T extends { name: string; role?: string | null }>(
   return columns.filter(column => {
     if (!column || typeof column.name !== 'string' || isInternalColumn(column.name)) return false;
     const role = String(column.role || '').toLowerCase();
-    return role !== 'stacked_source' && role !== 'helper' && role !== 'system';
+    return role !== 'stacked_source' && role !== 'helper' && role !== 'system' && role !== 'admin';
   });
+}
+
+export type OutlineSet = {
+  id?: string;
+  name?: string;
+  label?: string;
+  kind?: string;
+  columns?: string[];
+  items?: { column?: string; label?: string }[];
+  text_columns?: { column?: string; label?: string }[];
+  summary?: string;
+};
+
+export type OutlineQuestion = {
+  key: string;
+  label: string;
+  kind: string;
+  columns: string[];
+  /** First column used for measure override when the unit is a single question. */
+  measureColumn?: string;
+};
+
+export type OutlineSetWithStructure = OutlineSet & { structure?: string };
+
+/** Outline pill for a stored set: open-end boxes, grids, and multi-selects. */
+function outlineSetKind(
+  set: OutlineSetWithStructure,
+  members: string[],
+  kinds: Record<string, string>
+): string {
+  const structure = String(set.structure || '').toLowerCase();
+  if (structure === 'open_end') return 'open';
+  if (set.kind === 'grid') return 'grid';
+  if (set.kind === 'multiple_response' || set.kind === 'brand_list') return 'multi';
+  return kinds[members[0]] || 'multi';
+}
+
+/** One outline row per question in file order; sets collapse; admin and ids stay out. */
+export function questionnaireOutline(
+  columns: FlowColumn[],
+  sets: OutlineSetWithStructure[] = [],
+  options: { weightName?: string; kinds?: Record<string, string> } = {}
+): OutlineQuestion[] {
+  const weightName = String(options.weightName || '').trim();
+  const kinds = options.kinds || {};
+  const visible = pickerColumns(columns).filter(column => {
+    if (column.name === weightName || column.name.toLowerCase() === 'weight') return false;
+    if (String(column.role || '').toLowerCase() === 'weight') return false;
+    if (column.linked_set) return false;
+    if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
+    return true;
+  });
+  const byName = new Map(visible.map(column => [column.name, column]));
+  const covered = new Set<string>();
+  const linkedText = new Set<string>();
+  const setByColumn = new Map<string, { set: OutlineSetWithStructure; members: string[] }>();
+
+  for (const set of sets) {
+    const members = (set.columns || []).map(name => String(name)).filter(name => byName.has(name));
+    for (const text of set.text_columns || []) {
+      const name = String(text.column || '');
+      if (name) linkedText.add(name);
+    }
+    if (members.length < 2) continue;
+    for (const name of members) {
+      if (!setByColumn.has(name)) {
+        setByColumn.set(name, { set, members });
+      }
+    }
+  }
+
+  const units: OutlineQuestion[] = [];
+  for (const column of visible) {
+    if (covered.has(column.name) || linkedText.has(column.name)) continue;
+    const found = setByColumn.get(column.name);
+    if (found) {
+      if (found.members.some(name => covered.has(name))) {
+        covered.add(column.name);
+        continue;
+      }
+      found.members.forEach(name => covered.add(name));
+      for (const text of found.set.text_columns || []) {
+        const name = String(text.column || '');
+        if (name) covered.add(name);
+      }
+      units.push({
+        key: String(found.set.id || found.set.name || found.members[0]),
+        label: String(
+          found.set.label ||
+            found.set.name ||
+            byName.get(found.members[0])?.label ||
+            found.members[0]
+        ),
+        kind: outlineSetKind(found.set, found.members, kinds),
+        columns: found.members,
+      });
+      continue;
+    }
+    units.push({
+      key: column.name,
+      label: String(column.label || column.name),
+      kind: kinds[column.name] || questionKind(column, []),
+      columns: [column.name],
+      measureColumn: column.name,
+    });
+  }
+  return units;
 }
 
 /** Coded open ends for the Theme picker. The value is the stored codes column, the label its open end. */
@@ -137,6 +245,7 @@ export function isIdColumn(name: string, values: unknown[] = []): boolean {
     /^(resp|respondent|record|case|response|participant|panel|user|row|serial|unique)?(id|uuid|no|number|serial)$/.test(
       key
     ) ||
+    /^(respondent|pid|psid|panelid|respid)$/.test(key) ||
     /(^|[_\s-])id$/i.test(name.trim())
   ) {
     return true;

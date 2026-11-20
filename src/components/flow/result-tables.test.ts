@@ -1,10 +1,14 @@
+import { attachStoredRuns, type StoredAnalysisRun } from '@/lib/analysis-runs';
 import {
   answerResultTables,
   formatDecimalText,
+  funnelHeadline,
   resultFootnote,
   resultViewFromToolResults,
+  shownCount,
   weightChipName,
   weightNote,
+  withoutEngineCopies,
 } from './result-tables';
 
 const payloads = [
@@ -90,14 +94,44 @@ const payloads = [
 describe('decimal display', () => {
   it('uses the project decimals for percents, and whole numbers for counts, means at 2 dp, weighted n at 0', () => {
     expect(formatDecimalText('31.400%', 1, 'Valid Percent')).toBe('31.4%');
+    expect(formatDecimalText('31.400', 1, 'Valid %')).toBe('31.4');
     expect(formatDecimalText('12.000', 1, 'Percent')).toBe('12');
+    expect(formatDecimalText('12.000', 1, '%')).toBe('12');
     expect(formatDecimalText('28.200', 1, '% promoters')).toBe('28.2');
     expect(formatDecimalText('57.000', 1, 'Frequency')).toBe('57');
+    expect(formatDecimalText('57.000', 1, 'Count')).toBe('57');
     expect(formatDecimalText('3.534', 1, 'Mean')).toBe('3.53');
     expect(formatDecimalText('1.100', 1, 'SD')).toBe('1.10');
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
     expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+    expect(formatDecimalText('4.000', 1, 'Median')).toBe('4');
+    expect(formatDecimalText('4.500', 1, 'Median')).toBe('4.5');
+    expect(formatDecimalText('4.000', 0, 'Median')).toBe('4');
+    expect(formatDecimalText('4.250', 2, 'Median')).toBe('4.25');
+  });
+
+  it('rewrites a blank-first frequency header so counts stay under Count', () => {
+    const view = resultViewFromToolResults({
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Region',
+          columns: [
+            '',
+            'Frequency',
+            'Percent (incl. missing)',
+            'Valid Percent',
+            'Cumulative Percent',
+          ],
+          rows: [
+            ['North', '120', '13.3', '14.2', '14.2'],
+            ['Total', '900', '100', '', ''],
+          ],
+        },
+      ],
+    });
+    expect(view.tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(view.tables[0].rows[0]).toEqual(['North', '120', '13.3', '14.2', '14.2']);
   });
 });
 
@@ -106,8 +140,8 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
-    expect(views[0].tables[0].columns[0]).toBe('');
-    expect(views[0].tables[0].columns[1]).toBe('Frequency');
+    expect(views[0].tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(views[0].tables[0].rows[0][1]).toBe('12');
     expect(views[1].tables[0].columns).toEqual([
       'Theme',
       'Count',
@@ -123,7 +157,7 @@ describe('result tables', () => {
     expect(views[7].weight).toBe('design_w');
     expect(views[8].filter).toBe('city = Leeds');
     expect(resultFootnote(views[7], 'n = 40', 't-test')).toBe(
-      'n = 40 · Filter: region = North · Weight: design_w · t-test'
+      'n = 40 · Filter: region = North · Weighted · t-test'
     );
   });
 
@@ -193,13 +227,93 @@ describe('result tables', () => {
       'What is your gender?',
       'Which region do you live in?',
     ]);
-    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Percent']);
+    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Valid %']);
     expect(view.tables[0].rows[0]).toEqual(['Female', '12', '60']);
     expect(view.tables[1].rows[0][2]).toBe('55.5');
     expect(view.filter).toBe('region = London');
     expect(resultFootnote(view, 'Unweighted base 191.', 'Frequencies')).toBe(
       'Unweighted base 191. · Filter: region = London · Unweighted · Frequencies'
     );
+  });
+
+  it('TEN-214: unweighted frequency bases say Unweighted, not Weighted (0 weighted)', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'frequencies',
+      statistics_block: { 'N Valid': 379, 'N Missing': 1 },
+      bases: [{ column: 'Q', unweighted: 379, weighted: null }],
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Role years',
+          columns: ['Label', 'Count', '%', 'Valid %', 'Cumulative %'],
+          rows: [
+            ['A', '153', '40.3', '40.4', '40.4'],
+            ['B', '94', '24.7', '24.8', '65.2'],
+            ['Missing', '1', '0.3', '', ''],
+            ['Total', '380', '100', '', ''],
+          ],
+        },
+      ],
+    });
+    expect(view.baseDetail).toMatch(/^Weight: Unweighted; base = 379;/);
+    expect(view.baseDetail).not.toContain('Weighted');
+    expect(view.baseDetail).not.toContain('0 weighted');
+    expect(view.baseDetail).not.toContain('effective base');
+    expect(view.weight).toBe('');
+  });
+
+  it('states the audience definition, the wave, and the source', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        audience_label: 'Regular readers',
+        audience_definition: 'People who read weekly',
+        wave_label: 'Wave 2',
+        source_label: 'readers.sav',
+      },
+    });
+    expect(view.audience).toBe('Regular readers');
+    expect(view.audienceDefinition).toBe('People who read weekly');
+    const foot = resultFootnote(view, 'Unweighted base 40.', 'Frequencies');
+    expect(foot).toContain('Audience: Regular readers — People who read weekly');
+    expect(foot).toContain('Wave: Wave 2');
+    expect(foot).toContain('Source: readers.sav');
+    expect(foot).toContain('Unweighted base 40.');
+  });
+
+  it('does not name an audience the table did not filter to', () => {
+    const unused = resultViewFromToolResults({
+      audience_label: 'Decision makers',
+      audience_columns: ['role'],
+      banner_column: 'role',
+    });
+    expect(resultFootnote(unused, '', 'Crosstab')).not.toContain('Audience:');
+    const used = resultViewFromToolResults({
+      audience_label: 'Decision makers',
+      audience_definition: 'Either of two roles',
+      audience_columns: ['role'],
+      row_filters: [
+        {
+          combine: 'or',
+          filters: [
+            { column: 'role', op: '=', value: '1' },
+            { column: 'role', op: '=', value: '2' },
+          ],
+        },
+      ],
+    });
+    expect(resultFootnote(used, '', 'Crosstab')).toContain(
+      'Audience: Decision makers — Either of two roles'
+    );
+  });
+
+  it('prefers a labelled filter over an earlier column code', () => {
+    const view = resultViewFromToolResults({
+      row_filters: [
+        { column: 'market', op: '=', value: 'United States' },
+        { column: 'inv_institutional', op: '=', value: 1 },
+      ],
+      result: { filter_text: 'Market = United States, Institutional investors = Yes' },
+    });
+    expect(view.filter).toBe('Market = United States, Institutional investors = Yes');
   });
 
   it('writes the filter and the weight with their labels', () => {
@@ -308,6 +422,113 @@ describe('result tables', () => {
     expect(funnels[0].rows).toHaveLength(4);
     expect(funnels[0].rows[0][0]).toBe('Heard');
     expect(view.tables.some(table => table.title === 'Funnel by group')).toBe(true);
+  });
+
+  it('builds the by-group funnel from the result when the summary table was only the overall one', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', '3', '75.0', '75.0']],
+          },
+        ],
+        by_group: [
+          {
+            group: 'North',
+            stages: [
+              {
+                label: 'Heard of it',
+                count: 2,
+                percent_of_base: 100,
+                conversion_from_previous: 100,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const grouped = view.tables.find(table => table.title === 'Funnel by group');
+    expect(grouped?.rows[0]).toEqual(['Heard of it', 'North', '2', '100.0', '100.0']);
+  });
+
+  it('returns the funnel and the by-group table that matches it', () => {
+    const view = resultViewFromToolResults([
+      {
+        args: { analysis_type: 'frequencies' },
+        summary: {
+          table: [
+            {
+              title: 'Heard of the item',
+              columns: ['Value', 'Frequency', 'Percent'],
+              rows: [['Yes', '10', '40.0']],
+            },
+          ],
+        },
+      },
+      {
+        args: { analysis_type: 'funnel' },
+        summary: {
+          table: [
+            {
+              title: 'Funnel',
+              columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+              rows: [['Heard', '8', '40.0', '40.0']],
+            },
+            {
+              title: 'Funnel by group',
+              columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+              rows: [
+                ['Heard', 'East', '5', '50.0', '50.0'],
+                ['Heard', 'West', '3', '30.0', '30.0'],
+              ],
+            },
+            {
+              title: 'Funnel by group',
+              columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+              rows: [['Heard', 'East', '7', '74.0', '98.0']],
+            },
+          ],
+        },
+      },
+    ]);
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel', 'Funnel by group']);
+    const grouped = view.tables[1];
+    expect(grouped.rows).toHaveLength(2);
+    expect(grouped.rows.some(row => row.includes('74.0'))).toBe(false);
+  });
+
+  it('says the footnote weight is the one named in the study brief', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'design_weight' },
+    });
+    expect(
+      resultFootnote(view, '', 'Funnel', [{ name: 'design_weight', label: 'Design weight' }])
+    ).toContain('the weight named in the study brief');
+  });
+
+  it('uses the weight label from the result when the brief named it', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'wgt_col', label: 'Design weight' },
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(resultFootnote(view, '', 'Funnel')).toBe(
+      'Weight: Design weight, the weight named in the study brief · Funnel'
+    );
+  });
+
+  it('does not put a weight column code in the footnote when the brief named it', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'design_weight', label: 'Design weight' },
+      weight_from_brief: true,
+    });
+    const foot = resultFootnote(view, '', 'Funnel');
+    expect(foot).toContain('Weight: Design weight, the weight named in the study brief');
+    expect(foot).not.toContain('design_weight');
   });
 
   it('puts the funnel base on the footnote', () => {
@@ -659,6 +880,25 @@ describe('result tables', () => {
     expect(
       weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
     ).toBe('Design weight');
+    expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
+      'Weight: Raked weight'
+    );
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).toMatch(/Weight: Raked weight;/);
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).not.toContain('weight_5');
   });
 
   it('shows an association table, the filter, and the weight column', () => {
@@ -692,7 +932,76 @@ describe('result tables', () => {
     expect(view.weight).toBe('design_weight');
     expect(view.checks).toContain('Expected counts under 5: 1 cell.');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
-    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weight: design_weight');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weighted');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).not.toContain('design_weight');
+  });
+});
+
+describe('rank comparison tables', () => {
+  it('does not invent Group means when the result only has medians', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        u_statistic: 12,
+        p_value: 0.04,
+        group_descriptives: [
+          { group: '2.0', label: 'Female', n: 10, median: 4 },
+          { group: '1.0', label: 'Male', n: 8, median: 4 },
+        ],
+      },
+      report: {
+        tables: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['Female', '10', '4'],
+              ['Male', '8', '4'],
+            ],
+          },
+          {
+            title: 'Test',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ['U', '12'],
+              ['p', '0.04'],
+              ['r', '0.76'],
+            ],
+          },
+          {
+            title: 'Score by Gender',
+            columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+            rows: [['Female', '10', '4', '9.5', 'included']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Groups', 'Test']);
+  });
+
+  it('drops the status group copy when Groups is already present', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Groups',
+        columns: ['Group', 'n', 'Median'],
+        rows: [['A', '10', '4']],
+      },
+      {
+        title: 'Group means',
+        columns: ['Group', 'n', 'Mean', 'SD'],
+        rows: [['A', '10', '', '']],
+      },
+      {
+        title: 'Rating by Arm',
+        columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+        rows: [['A', '10', '4', '5', 'included']],
+      },
+      {
+        title: 'Test',
+        columns: ['Statistic', 'Value'],
+        rows: [['U', '12']],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual(['Groups', 'Test']);
   });
 });
 
@@ -832,6 +1141,150 @@ describe('summary tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Coefficients', 'Correlations']);
     expect(view.tables[0].rows[0]).toEqual(['Brand trust', '0.420', '0.050', '0.001']);
   });
+
+  it('shows one correlation matrix with a Columns key and drops superseded copies', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Correlations',
+            columns: ['Variable', '1', '2'],
+            rows: [
+              ['1', '1.000', '0.768*** (n=500)'],
+              ['2', '0.768*** (n=500)', '1.000'],
+            ],
+          },
+          {
+            title: 'Columns',
+            columns: ['Column', 'Label'],
+            rows: [
+              ['1', 'How satisfied are you overall with your most recent visit?'],
+              ['2', 'How likely are you to recommend this brand?'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Pearson correlation matrix',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '1', '0.768'],
+                ['recommend', '0.768', '1'],
+              ],
+            },
+            {
+              title: 'Pearson correlation p-values',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '—', '0.001'],
+                ['recommend', '0.001', '—'],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Correlations', 'Columns']);
+    expect(view.tables[0].columns).toEqual(['Variable', '1', '2']);
+    expect(view.tables[1].rows[0][1]).toContain('satisfied');
+  });
+
+  it('keeps labelled factor loadings, fit, and segments from the summary', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Loadings',
+            columns: ['Variable', 'PC1'],
+            rows: [['Price paid', '0.820']],
+          },
+          {
+            title: 'Variance explained',
+            columns: ['Component', 'Eigenvalue', 'Variance %', 'Cumulative %'],
+            rows: [['PC1', '1.900', '64.000', '64.000']],
+          },
+          {
+            title: 'Fit',
+            columns: ['Index', 'Value'],
+            rows: [
+              ['CFI', '0.960'],
+              ['TLI', '0.950'],
+              ['RMSEA', '0.040'],
+              ['SRMR', '0.030'],
+            ],
+          },
+          {
+            title: 'Segments',
+            columns: ['Segment', 'n', 'Price paid'],
+            rows: [
+              ['0', '30', '4.500'],
+              ['1', '10', '2.000'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Component loadings',
+              superseded: true,
+              columns: ['Variable', 'PC1'],
+              rows: [['price', '0.820']],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'Loadings',
+      'Variance explained',
+      'Fit',
+      'Segments',
+    ]);
+    expect(view.tables[0].rows[0][0]).toBe('Price paid');
+    expect(view.tables[2].rows.map(row => row[0])).toEqual(['CFI', 'TLI', 'RMSEA', 'SRMR']);
+    expect(view.tables[3].columns[2]).toBe('Price paid');
+  });
+
+  it('does not invent a Reliability table from a list of item names', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Reliability',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ["Cronbach's alpha", '0.810'],
+              ["McDonald's omega", '0.840'],
+              ['n', '40'],
+            ],
+          },
+          {
+            title: 'Items',
+            columns: ['Item', 'Mean', 'SD', 'Item-total correlation', 'Alpha if deleted'],
+            rows: [['Liking', '3.200', '0.400', '0.550', '0.720']],
+          },
+        ],
+      },
+      result: {
+        items: ['q1', 'q2', 'q3'],
+        cronbach_alpha: 0.81,
+        omega: 0.84,
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Reliability', 'Items']);
+    expect(view.tables[0].rows.map(row => row[0])).toEqual([
+      "Cronbach's alpha",
+      "McDonald's omega",
+      'n',
+    ]);
+  });
 });
 
 describe('answer tables', () => {
@@ -885,7 +1338,83 @@ describe('answer tables', () => {
     expect(view.baseDetail).toContain('500');
     expect(view.baseDetail).toContain('482');
     expect(view.baseDetail).not.toContain('base = 800');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(view.baseDetail).toMatch(/Weight:/i);
     expect(resultFootnote(view)).toContain('500');
+  });
+
+  it('names the same weight on the chip, the base, and the footnote', () => {
+    const columns = [{ name: 'design_weight', label: 'Design weight' }];
+    const view = resultViewFromToolResults({
+      resolved_weight: 'design_weight',
+      weight: {
+        column: 'design_weight',
+        label: 'Design weight',
+        weight_aware: true,
+        unweighted_n: 500,
+        weighted_n: 470,
+      },
+      cells: [
+        {
+          banner_id: 'total',
+          bases: { column: { unweighted_n: 500, weighted_n: 470 } },
+        },
+      ],
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(weightChipName(view.weight, 'none', columns)).toBe('Design weight');
+    expect(view.baseDetail).toContain('Weight: Design weight');
+    expect(view.baseDetail).toContain('500');
+    expect(view.baseDetail).toContain('470');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
+  });
+
+  it('falls through an empty weight object to resolved_weight', () => {
+    const view = resultViewFromToolResults({
+      weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },
+      resolved_weight: 'design_weight',
+    });
+    expect(view.weight).toBe('design_weight');
+    expect(view.baseDetail).toContain('Weight: design_weight');
+    expect(view.baseDetail).not.toContain('Weight: none');
+  });
+
+  it('shows a duplication table and names the audience on the footnote', () => {
+    const view = resultViewFromToolResults([
+      {
+        analysis_type: 'brand_duplication',
+        result: {
+          title: 'Duplication',
+          columns: ['Item', 'Reed', 'Exclusive (000s)'],
+          rows: [
+            ['Quill', '40.0%', '3.1'],
+            ['Net reach', '', '12.4'],
+          ],
+          audience_label: 'Regular readers',
+        },
+      },
+    ]);
+    const table = view.tables.find(item => item.title === 'Duplication');
+    expect(table?.rows.some(row => row.includes('Quill'))).toBe(true);
+    expect(table?.rows.some(row => row.includes('12.4'))).toBe(true);
+    expect(view.audience).toBe('Regular readers');
+    expect(resultFootnote(view, '', '')).toContain('Audience: Regular readers');
+    const stated = resultViewFromToolResults([
+      {
+        result: {
+          audience_label: 'Regular readers',
+          wave_label: 'Spring',
+          source_label: 'Panel',
+          weight: { label: 'People weight' },
+          base_label: 'Base 80',
+        },
+      },
+    ]);
+    const note = resultFootnote(stated, stated.base, '');
+    expect(note).toContain('Audience: Regular readers');
+    expect(note).toContain('Wave: Spring');
+    expect(note).toContain('Source: Panel');
   });
 
   it('shows a p below .001 as < .001', () => {
@@ -895,5 +1424,115 @@ describe('answer tables', () => {
     const test = view.tables.find(table => table.title === 'Test');
     expect(test?.rows[0].join(' ')).toContain('< .001');
     expect(JSON.stringify(test)).not.toContain('9.56e');
+  });
+
+  it('drops a by-group funnel that does not match the overall funnel', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'funnel',
+      summary: {
+        table: [
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', '8', '40.0', '40.0']],
+          },
+          {
+            title: 'Funnel by group',
+            columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', 'East', '7', '74.0', '98.0']],
+          },
+          {
+            title: 'Heard of the item',
+            columns: ['Value', 'Frequency', 'Percent'],
+            rows: [['Yes', '10', '40.0']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel']);
+  });
+
+  it('rebuilds a saved funnel the same way as the live card', () => {
+    const stage = {
+      title: 'Funnel',
+      columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+      rows: [
+        ['Heard', '8', '40.0', '40.0'],
+        ['Visited', '4', '20.0', '50.0'],
+      ],
+    };
+    const stray = {
+      title: 'Funnel by group',
+      columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+      rows: [['Heard', 'East', '7', '74.0', '98.0']],
+    };
+    const frequency = {
+      title: 'Heard of the item',
+      columns: ['Value', 'Frequency', 'Percent'],
+      rows: [['Yes', '10', '40.0']],
+    };
+    const streamed = [
+      {
+        procedure: 'frequencies',
+        run_id: 'freq-1',
+        result: { run_id: 'freq-1' },
+      },
+      {
+        procedure: 'funnel',
+        run_id: 'funnel-1',
+        result: { run_id: 'funnel-1' },
+      },
+    ];
+    const runs = [
+      {
+        id: 'freq-1',
+        dataset_id: 'file',
+        op: 'frequencies',
+        created_at: '',
+        report: {},
+        result: {
+          summary: { table: [frequency] },
+          weight: { column: 'design_weight' },
+          r_syntax_verification: {
+            kind: 'verified',
+            statement: 'R syntax reproduced frequencies',
+          },
+        },
+      },
+      {
+        id: 'funnel-1',
+        dataset_id: 'file',
+        op: 'funnel',
+        created_at: '',
+        report: {},
+        result: {
+          summary: { table: [stage, stray, frequency] },
+          weight: { column: 'design_weight', label: 'Design weight' },
+          r_syntax_verification: {
+            kind: 'verified',
+            statement: 'R syntax reproduced the funnel',
+          },
+        },
+      },
+    ] as StoredAnalysisRun[];
+    const view = resultViewFromToolResults(attachStoredRuns(streamed, runs));
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel']);
+    expect(view.rStatement).toContain('funnel');
+    expect(view.rStatement.toLowerCase()).not.toContain('frequencies');
+    expect(resultFootnote(view, '', 'Funnel')).not.toContain('design_weight');
+    const lead = funnelHeadline(view.tables);
+    expect(lead).toContain('40.0%');
+    expect(lead).toContain('20.0%');
+    expect((lead.match(/%/g) || []).length).toBeLessThan(5);
+  });
+});
+
+describe('counts', () => {
+  it('writes a scientific count as a normal number', () => {
+    expect(shownCount('2.67896e+06')).toBe('2,678,960');
+    expect(shownCount('511423')).toBe('511,423');
+    expect(shownCount('1,054,430')).toBe('1,054,430');
+    expect(shownCount('2.67896e+06')).not.toContain('e');
+    expect(formatDecimalText('2.67896e+06', 1, 'Count')).not.toContain('e');
   });
 });

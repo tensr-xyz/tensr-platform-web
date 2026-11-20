@@ -5,6 +5,7 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { AgentLoopResponse, RunAgentLoopParams } from '@/lib/run-agent-loop';
+import { visibleTurnAnswer } from '@/components/flow/chat-output';
 
 export type AgentLoopStreamProgress = {
   type: string;
@@ -88,6 +89,7 @@ function processSseLine(
     tool_results?: AgentLoopResponse['tool_results'];
     response?: AgentLoopResponse;
     session_id?: string;
+    answer_markdown?: string;
   };
   try {
     payload = JSON.parse(jsonStr);
@@ -166,9 +168,32 @@ function processSseLine(
     return;
   }
 
-  if (payload.type === 'result' && payload.response) {
-    acc.result = payload.response;
+  if (payload.type === 'result') {
+    if (payload.response) {
+      acc.result = payload.response;
+      return;
+    }
+    // Older synthetic gateway events put status on the event itself.
+    if (typeof payload.status === 'string') {
+      acc.result = {
+        status: payload.status,
+        mode: 'agent',
+        session_id: payload.session_id,
+        answer_markdown:
+          typeof payload.answer_markdown === 'string'
+            ? payload.answer_markdown
+            : typeof payload.text === 'string'
+              ? payload.text
+              : '',
+      };
+    }
   }
+}
+
+function withVisibleAnswer(result: AgentLoopResponse): AgentLoopResponse {
+  const answer = visibleTurnAnswer(result.status, result.answer_markdown || '');
+  if (answer === (result.answer_markdown || '')) return result;
+  return { ...result, answer_markdown: answer };
 }
 
 async function readSavedTurn(handlers: AgentLoopStreamHandlers): Promise<AgentLoopResponse | null> {
@@ -369,7 +394,7 @@ export async function streamAgentLoop(
   if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
     const hops = (params.resumeHops ?? 0) + 1;
     if (hops > 3) {
-      return { ...acc.result, status: 'ok' };
+      return withVisibleAnswer({ ...acc.result, status: 'ok' });
     }
     handlers.onDelta?.('\n\n');
     handlers.onProgress?.({
@@ -390,5 +415,5 @@ export async function streamAgentLoop(
     );
   }
 
-  return acc.result;
+  return withVisibleAnswer(acc.result);
 }

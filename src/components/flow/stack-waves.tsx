@@ -422,12 +422,15 @@ export function StackWaves({
   projectNames = {},
   onChanged,
   onDone,
+  onStacked,
 }: {
   projectId: string;
   datasets: StackFile[];
   projectNames?: Record<string, string>;
   onChanged: () => void;
   onDone: () => void;
+  /** Called with the new stacked dataset id after it becomes the project file in use. */
+  onStacked?: (datasetId: string) => void;
 }) {
   const candidates = useMemo(() => stackCandidates(datasets, projectId), [datasets, projectId]);
   const here = useMemo(() => dedupeUploads(candidates.here), [candidates.here]);
@@ -729,9 +732,16 @@ export function StackWaves({
       .then(fused => {
         const nextId = fused.derived_dataset_id || fused.dataset_id || '';
         if (!nextId) throw new Error('The stack did not return a dataset.');
-        return moveDatasetToProject(projectId, nextId);
+        return moveDatasetToProject(projectId, nextId).then(() => nextId);
       })
-      .then(() => {
+      .then(nextId =>
+        flowJson(`/api/projects/${projectId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: nextId }),
+        }).then(() => nextId)
+      )
+      .then(nextId => {
+        onStacked?.(nextId);
         onChanged();
         onDone();
       })

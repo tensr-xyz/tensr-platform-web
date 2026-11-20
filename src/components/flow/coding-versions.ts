@@ -19,7 +19,13 @@ export function isCodingVersion(row: {
 }): boolean {
   const label = String(row.lineageLabel || row.lineage_label || '').toLowerCase();
   const op = String(row.producingOperation || row.producing_operation || '').toLowerCase();
-  return label.includes('coded') || op.includes('open_end') || op === 'coded';
+  return (
+    label.includes('coded') ||
+    label.includes('sentiment') ||
+    op.includes('open_end') ||
+    op.includes('sentiment') ||
+    op === 'coded'
+  );
 }
 
 export function codingStamp(row: {
