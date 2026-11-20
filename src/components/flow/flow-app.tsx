@@ -4945,6 +4945,9 @@ function ReportScreen({
         );
         setFindings((overview.findings || []).map(findingFromOverview));
         setFindingsPhase('ready');
+        // Paint the Report editor shell before tabulating every live spec.
+        // Unbounded parallel GETs were keeping the skeleton up for 40s+.
+        setPhase('ready');
         const meta = await flowJson<{
           columns?: {
             name?: string;
@@ -5003,15 +5006,22 @@ function ReportScreen({
             filename: String(row.filename || ''),
             number: Number(row.table_number) || 0,
           }));
-        const settled = await loadTablesSettled(rows, row => {
-          const cached = byId.get(row.id);
-          if (cached) return Promise.resolve(cached);
-          return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`, {
-            signal: AbortSignal.timeout(30_000),
-          });
-        });
+        const settled = await loadTablesSettled(
+          rows,
+          row => {
+            const cached = byId.get(row.id);
+            if (cached) return Promise.resolve(cached);
+            return flowJson<Record<string, unknown>>(
+              `/datasets/${row.datasetId}/tables/${row.id}`,
+              {
+                signal: AbortSignal.timeout(30_000),
+              }
+            );
+          },
+          { concurrency: 4 }
+        );
         if (!live) return;
-        const ready = settled.ready.map(({ row, detail }) => {
+        const readyRows = settled.ready.map(({ row, detail }) => {
           const note = tableFileNote(row, datasetId);
           const named = titledWithQuestions(row.label, questions);
           const label = note ? `${named} (${note})` : named;
@@ -5025,10 +5035,10 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
-        // A failed tables/open with nothing else to show must not leave a skeleton.
+        // A failed tables/open with nothing else to show must not leave empty deliverables.
         if (
           liveRows.length > 0 &&
-          ready.length === 0 &&
+          readyRows.length === 0 &&
           (openFailed || settled.failed.length > 0)
         ) {
           throw new Error(
@@ -5038,7 +5048,7 @@ function ReportScreen({
           );
         }
         setSpecs(
-          ready.map(row => ({
+          readyRows.map(row => ({
             id: row.id,
             label: row.label,
             spec: row.spec,
@@ -5046,7 +5056,7 @@ function ReportScreen({
             number: row.number,
           }))
         );
-        setPicked(ready.map(row => row.id));
+        setPicked(readyRows.map(row => row.id));
         const refused = liveRows
           .filter(row => staleFromOpen.has(String(row.spec_id || '')))
           .map(row => ({
@@ -5063,12 +5073,11 @@ function ReportScreen({
             label: titledWithQuestions(table.label, questions),
           }))
         );
-        const nextTables = distinctTables(ready.map(row => row.table));
+        const nextTables = distinctTables(readyRows.map(row => row.table));
         setTables(nextTables);
         setSegmentId(null);
         setRowCut(null);
         writeFindings(nextTables, null, null);
-        setPhase('ready');
       })
       .catch(err => {
         if (!live) return;

@@ -29,12 +29,16 @@ export function tableSourceChangedDetail(error: unknown): string {
   return text;
 }
 
+/** Default in-flight GETs when opening many saved tables on the Report tab. */
+export const REPORT_TABLE_LOAD_CONCURRENCY = 4;
+
 /** Load every project table; a fingerprint mismatch becomes a stale card, not a page failure. */
 export async function loadTablesSettled<
   T extends { id: string; datasetId: string; label: string; number: number; filename?: string },
 >(
   rows: T[],
-  fetchTable: (row: T) => Promise<Record<string, unknown>>
+  fetchTable: (row: T) => Promise<Record<string, unknown>>,
+  opts?: { concurrency?: number }
 ): Promise<{
   ready: { row: T; detail: Record<string, unknown> }[];
   stale: StaleTable[];
@@ -43,8 +47,15 @@ export async function loadTablesSettled<
   const ready: { row: T; detail: Record<string, unknown> }[] = [];
   const stale: StaleTable[] = [];
   const failed: { row: T; error: unknown }[] = [];
-  await Promise.all(
-    rows.map(async row => {
+  const limit = Math.max(1, Math.floor(opts?.concurrency ?? REPORT_TABLE_LOAD_CONCURRENCY));
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < rows.length) {
+      const index = cursor;
+      cursor += 1;
+      const row = rows[index];
+      if (!row) continue;
       try {
         const detail = await fetchTable(row);
         ready.push({ row, detail });
@@ -58,12 +69,15 @@ export async function loadTablesSettled<
             filename: row.filename || '',
             detail: tableSourceChangedDetail(error),
           });
-          return;
+          continue;
         }
         failed.push({ row, error });
       }
-    })
-  );
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, Math.max(rows.length, 1)) }, () => worker());
+  await Promise.all(workers);
   return { ready, stale, failed };
 }
 
