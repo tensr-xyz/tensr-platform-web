@@ -49,7 +49,22 @@ import { StudyBrief } from '@/components/flow/study-brief';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import { PROJECT_TABS, visibleProjectSection } from '@/components/flow/project-tabs';
+import {
+  PROJECT_TABS,
+  markVisitedProjectTab,
+  visibleProjectSection,
+} from '@/components/flow/project-tabs';
+import {
+  useDatasetColumns,
+  usePrefetchProjectTab,
+  useProjectOverview,
+} from '@/hooks/api/use-project-data';
+import {
+  invalidateProjectOverview,
+  invalidateReportDocument,
+  projectQueryKeys,
+} from '@/lib/project-query-cache';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   rememberedFileName,
   sourceVersionTitle,
@@ -535,6 +550,17 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const projectId = slug[0] === 'p' ? slug[1] : '';
   const project = projects.find(item => item.id === projectId);
   const [projectReady, setProjectReady] = useState('');
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['chat']));
+  const prefetchTab = usePrefetchProjectTab();
+  const projectFileKey = datasets
+    .filter(row => row.project_id === projectId)
+    .map(row => datasetRowId(row))
+    .filter(Boolean)
+    .join(',');
+  const activeDatasetId =
+    project?.active_dataset_id ||
+    datasets.find(row => row.project_id === projectId)?.dataset_id ||
+    '';
 
   useEffect(() => {
     if (!isAuthenticated || !projectId) return;
@@ -615,6 +641,15 @@ export function FlowApp({ slug }: { slug: string[] }) {
       setCachedName('');
     }
   }, [projectId]);
+  useEffect(() => {
+    // Fresh project: only the landing tab stays mounted until the rest are visited.
+    setVisitedTabs(new Set([PROJECT_TABS.some(([key]) => key === page) ? page : 'chat']));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the project changes
+  }, [projectId]);
+  useEffect(() => {
+    if (!projectId) return;
+    setVisitedTabs(current => markVisitedProjectTab(current, page));
+  }, [projectId, page]);
 
   useEffect(() => {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
@@ -758,6 +793,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     key={key}
                     href={`/flow/p/${projectId}/${key}`}
                     data-active={page === key || (key === 'sources' && section === 'interviews')}
+                    onMouseEnter={() =>
+                      prefetchTab(key, {
+                        projectId,
+                        datasetId: activeDatasetId || undefined,
+                        fileKey: projectFileKey,
+                      })
+                    }
+                    onFocus={() =>
+                      prefetchTab(key, {
+                        projectId,
+                        datasetId: activeDatasetId || undefined,
+                        fileKey: projectFileKey,
+                      })
+                    }
                   >
                     {label}
                   </Link>
@@ -820,54 +869,76 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onLoadMore={loadMoreProjects}
                 onCreate={() => setNewOpen(true)}
               />
-            ) : section === 'details' ? (
-              <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
-            ) : section === 'sources' ? (
-              <SourcesScreen
-                project={project}
-                datasets={datasets}
-                onChanged={reload}
-                projectNames={Object.fromEntries(projects.map(item => [item.id, item.name]))}
-              />
-            ) : section === 'responses' ? (
-              <ResponsesScreen
-                project={project}
-                datasets={datasets}
-                ready={tabReady}
-                onChanged={reload}
-              />
-            ) : section === 'tables' ? (
-              <TablesScreen project={project} datasets={datasets} ready={tabReady} />
-            ) : section === 'report' ? (
-              <ReportScreen
-                projectId={projectId}
-                project={project}
-                datasets={datasets}
-                ready={tabReady}
-                labelsRevision={findReplaceTick}
-              />
-            ) : section === 'interviews' ? (
-              <InterviewsScreen projectId={projectId} />
-            ) : section === 'clips' ? (
-              <section className="flow-panel">
-                <h2>Clips</h2>
-                <p className="flow-soon">Coming soon</p>
-                <p className="flow-muted">
-                  Interview audio and clip reels are not available. Transcripts are on Interviews.
-                </p>
-                <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
-              </section>
-            ) : (
-              <ChatScreen
-                project={project}
-                datasets={datasets}
-                ready={tabReady}
-                pendingAsk={pendingAsk}
-                onAsked={() => setPendingAsk(null)}
-                onChanged={reload}
-                onReportUpdated={() => setFindReplaceTick(tick => tick + 1)}
-              />
-            )}
+            ) : projectId ? (
+              <>
+                {visitedTabs.has('chat') ? (
+                  <div hidden={page !== 'chat'} data-project-tab="chat">
+                    <ChatScreen
+                      project={project}
+                      datasets={datasets}
+                      ready={tabReady}
+                      pendingAsk={pendingAsk}
+                      onAsked={() => setPendingAsk(null)}
+                      onChanged={reload}
+                      onReportUpdated={() => setFindReplaceTick(tick => tick + 1)}
+                    />
+                  </div>
+                ) : null}
+                {visitedTabs.has('details') ? (
+                  <div hidden={page !== 'details'} data-project-tab="details">
+                    <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
+                  </div>
+                ) : null}
+                {visitedTabs.has('sources') ? (
+                  <div hidden={page !== 'sources'} data-project-tab="sources">
+                    <SourcesScreen
+                      project={project}
+                      datasets={datasets}
+                      onChanged={reload}
+                      projectNames={Object.fromEntries(projects.map(item => [item.id, item.name]))}
+                    />
+                  </div>
+                ) : null}
+                {visitedTabs.has('responses') ? (
+                  <div hidden={page !== 'responses'} data-project-tab="responses">
+                    <ResponsesScreen
+                      project={project}
+                      datasets={datasets}
+                      ready={tabReady}
+                      onChanged={reload}
+                    />
+                  </div>
+                ) : null}
+                {visitedTabs.has('tables') ? (
+                  <div hidden={page !== 'tables'} data-project-tab="tables">
+                    <TablesScreen project={project} datasets={datasets} ready={tabReady} />
+                  </div>
+                ) : null}
+                {visitedTabs.has('report') ? (
+                  <div hidden={page !== 'report'} data-project-tab="report">
+                    <ReportScreen
+                      projectId={projectId}
+                      project={project}
+                      datasets={datasets}
+                      ready={tabReady}
+                      labelsRevision={findReplaceTick}
+                    />
+                  </div>
+                ) : null}
+                {section === 'interviews' ? <InterviewsScreen projectId={projectId} /> : null}
+                {section === 'clips' ? (
+                  <section className="flow-panel">
+                    <h2>Clips</h2>
+                    <p className="flow-soon">Coming soon</p>
+                    <p className="flow-muted">
+                      Interview audio and clip reels are not available. Transcripts are on
+                      Interviews.
+                    </p>
+                    <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
+                  </section>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
         {palette ? (
@@ -2526,58 +2597,30 @@ function ChatScreen({
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  const [columns, setColumns] = useState<string[] | null>(null);
-  const [columnLabels, setColumnLabels] = useState<
-    { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
-  >([]);
+  const columnsQuery = useDatasetColumns(datasetId);
+  const columns = useMemo(() => {
+    if (!datasetId) return [] as string[];
+    if (!columnsQuery.data) return columnsQuery.isPending ? null : [];
+    return (columnsQuery.data.columns || [])
+      .map(column => column.name || '')
+      .filter(name => name && !isInternalColumn(name));
+  }, [datasetId, columnsQuery.data, columnsQuery.isPending]);
+  const columnLabels = useMemo(() => {
+    if (!columnsQuery.data) return [];
+    return (columnsQuery.data.columns || [])
+      .filter(column => column.name)
+      .map(column => ({
+        name: column.name || '',
+        label: column.label,
+        value_labels: column.value_labels,
+      }));
+  }, [columnsQuery.data]);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
   const [reportedRun, setReportedRun] = useState('');
   const file = chatFile(project, datasets);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
   const chatProjectId = project?.id || '';
   const reportPins = useProjectPins(chatProjectId, datasetId ? [datasetId] : []);
-
-  useEffect(() => {
-    if (!datasetId) {
-      setColumns([]);
-      setColumnLabels([]);
-      return;
-    }
-    let cancelled = false;
-    setColumns(null);
-    void flowJson<{
-      columns?: {
-        name?: string;
-        label?: string | null;
-        value_labels?: Record<string, string> | null;
-      }[];
-    }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => {
-        if (cancelled) return;
-        const listed = meta.columns || [];
-        setColumns(
-          listed.map(column => column.name || '').filter(name => name && !isInternalColumn(name))
-        );
-        setColumnLabels(
-          listed
-            .filter(column => column.name)
-            .map(column => ({
-              name: column.name || '',
-              label: column.label,
-              value_labels: column.value_labels,
-            }))
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setColumns([]);
-          setColumnLabels([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId]);
 
   const thread = useAgentThread({
     projectId: chatProjectId,
@@ -4803,6 +4846,7 @@ function ReportScreen({
   ready?: boolean;
   labelsRevision?: number;
 }) {
+  const queryClient = useQueryClient();
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -4867,6 +4911,11 @@ function ReportScreen({
     .filter(Boolean)
     .join(',');
   const reportLoadKey = reportFileKey || (ready ? 'ready' : '');
+  const overviewQuery = useProjectOverview(
+    projectId,
+    reportFileKey,
+    Boolean(datasetId && reportLoadKey)
+  );
 
   const writeFindings = useCallback(
     (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
@@ -4891,7 +4940,8 @@ function ReportScreen({
       return;
     }
     let live = true;
-    setPhase('loading');
+    // Stale-while-revalidate: keep the last report visible when cache already has overview.
+    if (!overviewQuery.data) setPhase('loading');
     setError('');
     const fileIds = reportFileKey ? reportFileKey.split(',') : [];
     // The file list arrives after the first paint. Waiting for it keeps the
@@ -4900,23 +4950,31 @@ function ReportScreen({
     const overviewUrl = `/api/projects/${projectId}/overview${
       fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
     }`;
-    void shareRequest(overviewUrl, async () => {
-      const first = await flowJson<{
-        ok?: boolean;
-        tables?: {
-          spec_id?: string;
-          label?: string;
-          dataset_id?: string;
-          filename?: string;
-          table_number?: number | null;
-          stale?: boolean;
-          detail?: string;
-        }[];
-        findings?: { id: string; title: string; number?: number | null }[];
-        runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
-      }>(overviewUrl);
-      return first;
-    })
+    const loadOverview = async () => {
+      // Prefer the shared cache on a warm mount; always re-fetch after an explicit refresh.
+      if (refreshKey === 0 && overviewQuery.data?.ok && Array.isArray(overviewQuery.data.tables)) {
+        return overviewQuery.data;
+      }
+      return shareRequest(overviewUrl, async () => {
+        const first = await flowJson<{
+          ok?: boolean;
+          tables?: {
+            spec_id?: string;
+            label?: string;
+            dataset_id?: string;
+            filename?: string;
+            table_number?: number | null;
+            stale?: boolean;
+            detail?: string;
+          }[];
+          findings?: { id: string; title: string; number?: number | null }[];
+          runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
+        }>(overviewUrl);
+        queryClient.setQueryData(projectQueryKeys.overview(projectId, reportFileKey), first);
+        return first;
+      });
+    };
+    void loadOverview()
       .then(async overview => {
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');
@@ -5087,6 +5145,8 @@ function ReportScreen({
     return () => {
       live = false;
     };
+    // overviewQuery.data is read for a warm cache hit; refreshKey forces a network reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     datasetId,
     writeFindings,
@@ -5096,6 +5156,12 @@ function ReportScreen({
     reportFileKey,
     labelsRevision,
   ]);
+
+  useEffect(() => {
+    if (!refreshKey) return;
+    void invalidateProjectOverview(queryClient, projectId);
+    if (datasetId) void invalidateReportDocument(queryClient, datasetId);
+  }, [refreshKey, queryClient, projectId, datasetId]);
 
   const selected = specs.filter(
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0

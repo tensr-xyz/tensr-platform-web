@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
@@ -11,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { usePageTableBook, useReportDocument } from '@/hooks/api/use-project-data';
+import { invalidateReportDocument, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   addPage,
   applyDefaultLabels,
@@ -230,40 +233,34 @@ export function previewGridFromBannerBook(
   return rowsOut.length > 1 ? rowsOut : [];
 }
 
-function TableObjectPreview({ obj, datasetId }: { obj: ReportObject; datasetId: string | null }) {
+function TableObjectPreview({
+  obj,
+  datasetId,
+  pageId,
+}: {
+  obj: ReportObject;
+  datasetId: string | null;
+  pageId: string;
+}) {
   const style = obj.tableStyle;
   const banded = style.preset === 'banded';
   const minimal = style.preset === 'compact';
   const specId = String(obj.tableSpecId || '').trim();
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>(
-    specId && datasetId ? 'loading' : 'idle'
-  );
-  const [rows, setRows] = useState<string[][]>([]);
-
-  useEffect(() => {
-    if (!specId || !datasetId) {
-      setPhase('idle');
-      setRows([]);
-      return;
-    }
-    let live = true;
-    setPhase('loading');
-    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${specId}`)
-      .then(book => {
-        if (!live) return;
-        const grid = previewGridFromBannerBook(book);
-        setRows(grid);
-        setPhase(grid.length ? 'ready' : 'error');
-      })
-      .catch(() => {
-        if (!live) return;
-        setRows([]);
-        setPhase('error');
-      });
-    return () => {
-      live = false;
-    };
-  }, [datasetId, specId]);
+  const tableQuery = usePageTableBook(datasetId, pageId, specId);
+  const rows = useMemo(() => {
+    if (!tableQuery.data) return [] as string[][];
+    return previewGridFromBannerBook(tableQuery.data);
+  }, [tableQuery.data]);
+  const phase: 'idle' | 'loading' | 'ready' | 'error' =
+    !specId || !datasetId
+      ? 'idle'
+      : tableQuery.isPending && !tableQuery.data
+        ? 'loading'
+        : tableQuery.isError
+          ? 'error'
+          : rows.length
+            ? 'ready'
+            : 'error';
 
   const ruleCount = obj.tableRules.filter(rule => rule.enabled).length;
   const showGrid = phase === 'ready' && rows.length > 0;
@@ -329,12 +326,14 @@ function CanvasObjectView({
   selected,
   paintArmed,
   datasetId,
+  pageId,
   onSelect,
 }: {
   obj: ReportObject;
   selected: boolean;
   paintArmed: boolean;
   datasetId: string | null;
+  pageId: string;
   onSelect: () => void;
 }) {
   const style = obj.textStyle;
@@ -414,7 +413,7 @@ function CanvasObjectView({
           )}
         </span>
       ) : obj.kind === 'table' ? (
-        <TableObjectPreview obj={obj} datasetId={datasetId} />
+        <TableObjectPreview obj={obj} datasetId={datasetId} pageId={pageId} />
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}
@@ -432,6 +431,8 @@ export function ReportEditor({
   /** Bumped after find/replace so the editor reloads the saved document. */
   labelsRevision?: number;
 }) {
+  const queryClient = useQueryClient();
+  const storedDocument = useReportDocument(datasetId);
   const [document, setDocument] = useState<ReportDocument>(() => emptyDocument());
   const [pageId, setPageId] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -442,10 +443,13 @@ export function ReportEditor({
   const [addingRule, setAddingRule] = useState(false);
   const [rowDraft, setRowDraft] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-  const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'ready'>(() =>
+    storedDocument.data || !datasetId ? 'ready' : 'loading'
+  );
   const [saveNote, setSaveNote] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipSave = useRef(true);
+  const bootedFor = useRef('');
 
   const page = useMemo(
     () => document.pages.find(item => item.id === pageId) || document.pages[0] || null,
@@ -461,15 +465,19 @@ export function ReportEditor({
       if (!datasetId) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
+        const payload = { document: reportDocumentForApi(next), has_document: true };
         void flowJson(`/datasets/${datasetId}/report/document`, {
           method: 'PUT',
-          body: JSON.stringify({ document: reportDocumentForApi(next) }),
+          body: JSON.stringify({ document: payload.document }),
         })
-          .then(() => setSaveNote('Saved'))
+          .then(() => {
+            queryClient.setQueryData(projectQueryKeys.reportDocument(datasetId), payload);
+            setSaveNote('Saved');
+          })
           .catch(() => setSaveNote('Could not save'));
       }, 400);
     },
-    [datasetId]
+    [datasetId, queryClient]
   );
 
   const commit = useCallback(
@@ -486,39 +494,53 @@ export function ReportEditor({
   );
 
   useEffect(() => {
-    let live = true;
+    if (labelsRevision > 0 && datasetId) {
+      void invalidateReportDocument(queryClient, datasetId);
+    }
+  }, [labelsRevision, datasetId, queryClient]);
+
+  const pinKey = pins.map(pin => pin.id || pin.runId || '').join(',');
+  useEffect(() => {
     skipSave.current = true;
-    setPhase('loading');
+    const bootKey = `${datasetId || ''}:${labelsRevision}:${pinKey}`;
     const fromPins = pins.length ? documentFromPins(pins) : emptyDocument();
-    const boot = async () => {
-      let next = ensurePages(fromPins);
-      if (datasetId) {
-        try {
-          const stored = await flowJson<{
-            document?: Record<string, unknown> | null;
-            has_document?: boolean;
-          }>(`/datasets/${datasetId}/report/document`);
-          if (stored.has_document && stored.document) {
-            next = ensurePages(normalizeReportDocument(stored.document));
-          }
-        } catch {
-          /* Keep pin-derived document when storage is empty. */
-        }
+    let next = ensurePages(fromPins);
+    const stored = storedDocument.data;
+    const waiting = Boolean(datasetId) && storedDocument.isPending && !stored;
+
+    if (waiting) {
+      // Warm cache: keep showing the last document. Cold start: stay on the skeleton.
+      if (bootedFor.current) {
+        setPhase('ready');
+      } else {
+        setPhase('loading');
       }
-      if (!live) return;
-      setDocument(next);
-      setPageId(next.pages[0]?.id || '');
+      return () => {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+      };
+    }
+
+    if (stored?.has_document && stored.document) {
+      next = ensurePages(normalizeReportDocument(stored.document));
+    }
+
+    setDocument(next);
+    setPageId(current =>
+      next.pages.some(item => item.id === current) ? current : next.pages[0]?.id || ''
+    );
+    if (bootedFor.current !== bootKey) {
       setSelectedId(null);
       setPaintSourceId(null);
-      setPhase('ready');
-      skipSave.current = false;
-    };
-    void boot();
+      bootedFor.current = bootKey;
+    }
+    setPhase('ready');
+    skipSave.current = false;
     return () => {
-      live = false;
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [datasetId, pins, labelsRevision]);
+    // pins content is covered by pinKey; avoid re-booting on a new [] each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, pinKey, labelsRevision, storedDocument.data, storedDocument.isPending]);
 
   useEffect(() => {
     if (!selected) {
@@ -1092,6 +1114,7 @@ export function ReportEditor({
                   selected={obj.id === selectedId}
                   paintArmed={Boolean(paintSourceId)}
                   datasetId={datasetId}
+                  pageId={page?.id || ''}
                   onSelect={() => selectObject(obj.id)}
                 />
               ))}

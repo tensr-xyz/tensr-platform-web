@@ -1,5 +1,6 @@
 import {
   applyClientDeckJobSnapshot,
+  clientDeckJobIsLive,
   clientDeckProgressLine,
   pendingClientDeckFromToolResults,
   resolvePendingClientDeckInResponse,
@@ -418,5 +419,78 @@ describe('client-deck-job', () => {
     expect(String(out?.error || out?.message || '')).toMatch(/two minutes|continue/i);
     // Keep the pending helper unused warning quiet by asserting the fixture shape.
     expect(pending.tool_results[0].result.job_id).toBe('job-stuck');
+  });
+
+  it('never treats a job as stalled while updated_at is under 60s', async () => {
+    const now = Date.now();
+    const updatedAt = new Date(now - 20_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    clientDeckJob.mockResolvedValue({
+      status: 'running',
+      stage: 'tables',
+      tables_done: 9,
+      tables_total: 23,
+      message: 'Computing tables 9 of 23',
+      updated_at: updatedAt,
+    });
+
+    expect(
+      clientDeckJobIsLive(
+        {
+          status: 'running',
+          updated_at: updatedAt,
+        },
+        now
+      )
+    ).toBe(true);
+
+    const { waitForClientDeckJob } = await import('./client-deck-job');
+    const out = await waitForClientDeckJob('ds-live', 'job-live', {
+      intervalMs: 5,
+      attempts: 6,
+      noProgressMs: 10,
+    });
+    expect(out?.status).toBe('running');
+    expect(String(out?.message || '')).toMatch(/Computing tables 9 of 23/);
+  });
+
+  it('finished answer shows slide count and exec preview bullets', () => {
+    const out = applyClientDeckJobSnapshot(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: 'Building',
+        tool_results: [
+          {
+            name: 'build_client_deck',
+            result: {
+              pending: true,
+              job_id: 'job-done',
+              dataset_id: 'ds-done',
+              procedure: 'build_client_deck',
+            },
+          },
+        ],
+      },
+      {
+        status: 'complete',
+        result: {
+          ok: true,
+          key: 'exports/excel/x/client-deck.pptx',
+          filename: 'client-deck.pptx',
+          report_pages: 38,
+          n_slides: 38,
+          n_insights: 12,
+          n_questions: 23,
+          exec_summary_preview: [
+            'Dietitians are more likely to recommend whole foods.',
+            'Most stay informed through professional networks.',
+          ],
+        },
+      }
+    );
+    expect(out.answer_markdown).toContain('Done · 38 slides');
+    expect(out.answer_markdown).toContain('• Dietitians are more likely to recommend whole foods.');
+    expect(out.answer_markdown).toContain('Open in Report');
+    expect(out.tool_results?.[0]?.result?.run_id).toBe('job-done');
   });
 });

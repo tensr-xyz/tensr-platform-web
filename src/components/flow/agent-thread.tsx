@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useProjectSessions } from '@/hooks/api/use-project-data';
+import { invalidateProjectSessions, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   Empty,
   EmptyDescription,
@@ -31,6 +34,8 @@ import {
   outputCardReady,
   outputChecks,
   hasSummaryTable,
+  isClientDeckResult,
+  clientDeckReportHref,
   isProcedurePlaceholder,
   EMPTY_TURN_ANSWER,
   keptModelAnswer,
@@ -339,6 +344,16 @@ export function useAgentThread({
     [projectId, syncAddress]
   );
 
+  const queryClient = useQueryClient();
+  const sessionsQuery = useProjectSessions(projectId || null);
+  useEffect(() => {
+    if (!sessionsQuery.data) {
+      if (sessionsQuery.isError) setSessions(current => current || []);
+      return;
+    }
+    setSessions(sortSessionsByRecency(sessionsQuery.data));
+  }, [sessionsQuery.data, sessionsQuery.isError]);
+
   const noteSession = useCallback(
     (sessionId: string, title: string) => {
       sessionRef.current = sessionId;
@@ -351,25 +366,19 @@ export function useAgentThread({
       if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
-        return sortSessionsByRecency([row, ...rest]);
+        const next = sortSessionsByRecency([row, ...rest]);
+        if (projectId) queryClient.setQueryData(projectQueryKeys.sessions(projectId), next);
+        return next;
       });
       onSessionRef.current?.(row);
     },
-    [rememberChat]
+    [rememberChat, projectId, queryClient]
   );
 
   const loadRail = useCallback(() => {
     if (!projectId) return;
-    void flowJson<{ sessions?: AgentChatSession[] }>(`/api/projects/${projectId}/sessions`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
-      .catch(() => setSessions(current => current || []));
-  }, [projectId]);
-
-  useEffect(() => {
-    loadRail();
-  }, [loadRail]);
+    void invalidateProjectSessions(queryClient, projectId);
+  }, [projectId, queryClient]);
 
   const startDeckWatch = useCallback(
     (result: AgentLoopResponse, watchToken: number) => {
@@ -1059,7 +1068,8 @@ export function useAgentThread({
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
   const kind = outputKind(toolResults);
-  const title = outputTitle(toolResults, answer, columnLabels);
+  const clientDeck = isClientDeckResult(toolResults);
+  const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseClause(toolResults, answer);
   const stat = outputStat(toolResults, answer, takeaway);
@@ -1136,6 +1146,7 @@ export function useAgentThread({
     rememberChat,
     toolResults,
     kind,
+    clientDeck,
     title,
     takeaway,
     baseNote,
@@ -1494,63 +1505,105 @@ export function AgentThreadColumn({
                   {askedOwner ? <span className="flow-muted">Not checked yet</span> : null}
                 </>
               ) : null}
-              <Link
-                className="flow-btn primary"
-                href={
-                  thread.runIds[0]
-                    ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(thread.runIds[0])}`
-                    : `${projectHref}/report?pane=outputs`
-                }
-              >
-                Open
-              </Link>
-              {asker ? null : (
+              {thread.clientDeck ? (
                 <>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    disabled={!thread.runIds[0] || !thread.datasetId || inReport}
-                    onClick={() => {
-                      if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
-                      void savePin(thread.projectId, thread.datasetId, {
-                        id: thread.runIds[0],
-                        runId: thread.runIds[0],
-                        datasetId: thread.datasetId,
-                        headline: thread.title,
-                        support: thread.takeaway,
-                        citation: thread.kind,
-                        afterId: '',
-                        deck: true,
-                        topline: true,
-                        keepLive: true,
-                      })
-                        .then(() => thread.setStatus('Added to the report.'))
-                        .catch(() =>
-                          thread.setStatus('That result could not be added to the report.')
-                        );
-                    }}
+                  <Link className="flow-btn primary" href={clientDeckReportHref(projectHref)}>
+                    Open in Report
+                  </Link>
+                  {thread.downloads[0] ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                    >
+                      Download .pptx
+                    </Button>
+                  ) : null}
+                  {asker || !thread.datasetId ? null : (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      disabled={thread.status === 'Thinking…'}
+                      onClick={() => {
+                        if (!thread.datasetId) return;
+                        thread.setStatus('Exporting PowerPoint…');
+                        void import('@/lib/office-deck-job')
+                          .then(({ exportOfficeDeckAndDownload }) =>
+                            exportOfficeDeckAndDownload(thread.datasetId!, 'deck', {
+                              fill_report: false,
+                            })
+                          )
+                          .then(() => thread.setStatus('PowerPoint downloaded.'))
+                          .catch(() =>
+                            thread.setStatus('That PowerPoint could not be exported again.')
+                          );
+                      }}
+                    >
+                      Export again
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link
+                    className="flow-btn primary"
+                    href={
+                      thread.runIds[0]
+                        ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(thread.runIds[0])}`
+                        : `${projectHref}/report?pane=outputs`
+                    }
                   >
-                    {inReport ? 'In report' : 'Add to report'}
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    disabled={!thread.datasetId}
-                    onClick={saveTable}
-                  >
-                    Save table
-                  </Button>
+                    Open
+                  </Link>
+                  {asker ? null : (
+                    <>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!thread.runIds[0] || !thread.datasetId || inReport}
+                        onClick={() => {
+                          if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
+                          void savePin(thread.projectId, thread.datasetId, {
+                            id: thread.runIds[0],
+                            runId: thread.runIds[0],
+                            datasetId: thread.datasetId,
+                            headline: thread.title,
+                            support: thread.takeaway,
+                            citation: thread.kind,
+                            afterId: '',
+                            deck: true,
+                            topline: true,
+                            keepLive: true,
+                          })
+                            .then(() => thread.setStatus('Added to the report.'))
+                            .catch(() =>
+                              thread.setStatus('That result could not be added to the report.')
+                            );
+                        }}
+                      >
+                        {inReport ? 'In report' : 'Add to report'}
+                      </Button>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!thread.datasetId}
+                        onClick={saveTable}
+                      >
+                        Save table
+                      </Button>
+                    </>
+                  )}
+                  {thread.downloads[0] ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                    >
+                      Download {thread.downloads[0].filename}
+                    </Button>
+                  ) : null}
                 </>
               )}
-              {thread.downloads[0] ? (
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => void openSignedDownload(thread.downloads[0])}
-                >
-                  Download {thread.downloads[0].filename}
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : null}
