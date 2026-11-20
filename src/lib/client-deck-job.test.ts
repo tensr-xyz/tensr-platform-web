@@ -69,6 +69,15 @@ describe('client-deck-job', () => {
         n_saved_tables: 30,
       })
     ).toBe('Computing tables 5 of 23; 30 saved tables including 7 insight crosstabs');
+    expect(
+      clientDeckProgressLine({
+        status: 'running',
+        stage: 'narrative',
+        message: 'Resuming the deck build',
+        insights_done: 0,
+        insights_total: 12,
+      })
+    ).toBe('Resuming the deck build');
   });
 
   it('resolves a completed job into a download without inventing a file when missing', async () => {

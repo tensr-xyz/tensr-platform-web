@@ -61,6 +61,8 @@ export function clientDeckProgressLine(job: ClientDeckJobSnapshot | null | undef
       : '';
   // Prefer the API message when it already explains the plan vs saved difference.
   const apiMessage = String(job.message || '').trim();
+  // Resumed jobs should say so — not jump straight to "Writing insights 0 of N".
+  if (apiMessage && /resuming/i.test(apiMessage)) return apiMessage;
   if (stage === 'tables' && total > 0) {
     if (apiMessage && /computing tables/i.test(apiMessage)) return apiMessage;
     return `Computing tables ${done} of ${total}${savedNote}`;

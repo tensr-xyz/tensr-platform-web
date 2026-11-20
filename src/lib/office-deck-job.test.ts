@@ -23,6 +23,12 @@ describe('isExportableReportPage', () => {
     ).toBe(true);
     expect(isExportableReportPage({ title: 'Region', section: 'Appendix' })).toBe(true);
   });
+
+  it('keeps Executive summary text pages even when title equals section', () => {
+    expect(
+      isExportableReportPage({ title: 'Executive summary', section: 'Executive summary' })
+    ).toBe(true);
+  });
 });
 
 describe('pagesFromReportDocument / groupReportExportPages', () => {
@@ -51,6 +57,28 @@ describe('pagesFromReportDocument / groupReportExportPages', () => {
     expect(groups.find(group => group.key === 'appendix')?.defaultExpanded).toBe(false);
     expect(groups.find(group => group.key === 'summary')?.pages).toHaveLength(1);
     expect(groups.find(group => group.key === 'appendix')?.pages).toHaveLength(2);
+  });
+
+  it('lists Executive summary pages in the Summary group', () => {
+    const pages = pagesFromReportDocument({
+      pages: [
+        {
+          id: 'exec',
+          title: 'Executive summary',
+          section: 'Executive summary',
+          objects: [{ kind: 'text', text: '• Finding one\n• Finding two' }],
+        },
+        {
+          id: 'i1',
+          title: 'Topics advised on',
+          section: 'Insights',
+          objects: [{ table_spec_id: 'spec-topics' }],
+        },
+      ],
+    });
+    expect(pages.map(page => page.title)).toContain('Executive summary');
+    const groups = groupReportExportPages(pages);
+    expect(groups.find(group => group.key === 'summary')?.pages).toHaveLength(1);
   });
 });
 
