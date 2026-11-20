@@ -350,4 +350,46 @@ describe('client-deck-job', () => {
     expect(out.answer_markdown || '').toMatch(/continue/i);
     expect(out.answer_markdown || '').not.toContain('PowerPoint:');
   });
+
+  it('background watch fails when progress is frozen for the no-progress window', async () => {
+    clientDeckJob.mockResolvedValue({
+      status: 'running',
+      stage: 'tables',
+      tables_done: 0,
+      tables_total: 23,
+      message: 'Computing tables 0 of 23',
+      report_pages: 0,
+    });
+
+    const pending = {
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Computing tables 0 of 23',
+      tool_results: [
+        {
+          name: 'build_client_deck',
+          result: {
+            pending: true,
+            job_id: 'job-stuck',
+            dataset_id: 'ds-stuck',
+            procedure: 'build_client_deck',
+            report_pages: 0,
+          },
+        },
+      ],
+    };
+
+    const { waitForClientDeckJob } = await import('./client-deck-job');
+    const out = await waitForClientDeckJob('ds-stuck', 'job-stuck', {
+      intervalMs: 5,
+      attempts: 8,
+      noProgressMs: 15,
+    });
+
+    expect(out?.status).toBe('failed');
+    expect(String(out?.error || out?.message || '')).toMatch(/0 of 23/);
+    expect(String(out?.error || out?.message || '')).toMatch(/two minutes|continue/i);
+    // Keep the pending helper unused warning quiet by asserting the fixture shape.
+    expect(pending.tool_results[0].result.job_id).toBe('job-stuck');
+  });
 });

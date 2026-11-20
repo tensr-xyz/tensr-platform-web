@@ -291,7 +291,9 @@ export function useAgentThread({
   const onReportUpdatedRef = useRef(onReportUpdated);
   const onAskedRef = useRef(onAsked);
   const deckWatchAbort = useRef<AbortController | null>(null);
-  const openChatRef = useRef<(sessionId: string) => void>(() => undefined);
+  const openChatRef = useRef<(sessionId: string, opts?: { allowFallback?: boolean }) => void>(
+    () => undefined
+  );
   const reportPins = useProjectPins(projectId || '', datasetId ? [datasetId] : []);
   const reportPinsRef = useRef(reportPins);
   reportPinsRef.current = reportPins;
@@ -368,6 +370,47 @@ export function useAgentThread({
   useEffect(() => {
     loadRail();
   }, [loadRail]);
+
+  const startDeckWatch = useCallback(
+    (result: AgentLoopResponse, watchToken: number) => {
+      if (!clientDeckStillPending(result)) return;
+      deckWatchAbort.current?.abort();
+      const watch = new AbortController();
+      deckWatchAbort.current = watch;
+      void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
+        watchClientDeckJobInBackground(result, {
+          datasetId: datasetIdRef.current,
+          signal: watch.signal,
+          onProgress: (_step, message) => {
+            if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+            shown(() => {
+              setSteps(current => (current.includes(message) ? current : [...current, message]));
+            });
+          },
+          onReportPages: () => {
+            if (aliveRef.current) onReportUpdatedRef.current?.();
+          },
+          onUpdate: next => {
+            if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
+            const nextAnswer = visibleTurnAnswer(
+              next.status,
+              keptModelAnswer('', next.answer_markdown || '')
+            );
+            shown(() => {
+              setAnswer(nextAnswer);
+              setTurn(next);
+              setDownloads(downloadEntries(next));
+              setNextSteps(
+                nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
+              );
+            });
+            onFinishedRef.current?.(next);
+          },
+        })
+      );
+    },
+    [columnLabels, shown]
+  );
 
   const attachFiles = (list: FileList | null) => {
     void readChatAttachments(list).then(result => {
@@ -628,45 +671,7 @@ export function useAgentThread({
           if (notifyFinishedTurn(result, startedAt)) {
             shown(() => setAwayNote(true));
           }
-          if (clientDeckStillPending(result)) {
-            deckWatchAbort.current?.abort();
-            const watch = new AbortController();
-            deckWatchAbort.current = watch;
-            const watchToken = turnToken;
-            void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
-              watchClientDeckJobInBackground(result, {
-                datasetId: datasetIdRef.current,
-                signal: watch.signal,
-                onProgress: (_step, message) => {
-                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
-                  shown(() => {
-                    setSteps(current =>
-                      current.includes(message) ? current : [...current, message]
-                    );
-                  });
-                },
-                onReportPages: () => {
-                  if (aliveRef.current) onReportUpdatedRef.current?.();
-                },
-                onUpdate: next => {
-                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
-                  const nextAnswer = visibleTurnAnswer(
-                    next.status,
-                    keptModelAnswer('', next.answer_markdown || '')
-                  );
-                  shown(() => {
-                    setAnswer(nextAnswer);
-                    setTurn(next);
-                    setDownloads(downloadEntries(next));
-                    setNextSteps(
-                      nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
-                    );
-                  });
-                  onFinishedRef.current?.(next);
-                },
-              })
-            );
-          }
+          startDeckWatch(result, turnToken);
         }
         publish({
           running: false,
@@ -691,7 +696,17 @@ export function useAgentThread({
         sendingRef.current = false;
       }
     },
-    [columnLabels, datasetId, loadRail, loadSavedTurn, past, projectId, noteSession, shown]
+    [
+      columnLabels,
+      datasetId,
+      loadRail,
+      loadSavedTurn,
+      past,
+      projectId,
+      noteSession,
+      shown,
+      startDeckWatch,
+    ]
   );
 
   useEffect(() => {
@@ -814,37 +829,7 @@ export function useAgentThread({
           if (notifyFinishedTurn(result, startedAt)) {
             shown(() => setAwayNote(true));
           }
-          if (clientDeckStillPending(result)) {
-            deckWatchAbort.current?.abort();
-            const watch = new AbortController();
-            deckWatchAbort.current = watch;
-            const watchToken = turnToken;
-            void import('@/lib/client-deck-job').then(({ watchClientDeckJobInBackground }) =>
-              watchClientDeckJobInBackground(result, {
-                datasetId: datasetIdRef.current,
-                signal: watch.signal,
-                onReportPages: () => {
-                  if (aliveRef.current) onReportUpdatedRef.current?.();
-                },
-                onUpdate: next => {
-                  if (watchToken !== turnTokenRef.current || !aliveRef.current) return;
-                  const nextAnswer = visibleTurnAnswer(
-                    next.status,
-                    keptModelAnswer('', next.answer_markdown || '')
-                  );
-                  shown(() => {
-                    setAnswer(nextAnswer);
-                    setTurn(next);
-                    setDownloads(downloadEntries(next));
-                    setNextSteps(
-                      nextStepsForResult(next, columnLabels, reportPinsRef.current.length > 0)
-                    );
-                  });
-                  onFinishedRef.current?.(next);
-                },
-              })
-            );
-          }
+          startDeckWatch(result, turnToken);
         }
         const current = liveChatRun();
         if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
@@ -898,9 +883,28 @@ export function useAgentThread({
     setPanelOpen(false);
   };
 
+  const resetToEmptyChat = useCallback(() => {
+    sessionRef.current = null;
+    rememberChat(null);
+    setPast([]);
+    setSent('');
+    setAttachedNote('');
+    setAnswer('');
+    setPlan(null);
+    setTurn(null);
+    setSteps([]);
+    setNextSteps([]);
+    setDownloads([]);
+    setAttachments([]);
+    setAttachError(null);
+    setPanelOpen(false);
+    setStatus(null);
+  }, [rememberChat]);
+
   const openChat = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, opts?: { allowFallback?: boolean }) => {
       if (!projectId || !sessionId) return;
+      const allowFallback = opts?.allowFallback !== false;
       const token = ++openToken.current;
       openAbort.current?.abort();
       const controller = new AbortController();
@@ -934,6 +938,15 @@ export function useAgentThread({
           const last = exchanges[exchanges.length - 1];
           const restoredAnswer =
             (last?.answer || '').trim() || (last?.steps?.length ? EMPTY_TURN_ANSWER : '');
+          const restoredTurn: AgentLoopResponse | null = last
+            ? {
+                status: 'ok',
+                mode: 'agent',
+                answer_markdown: restoredAnswer,
+                session_id: sessionId,
+                tool_results: last.toolResults,
+              }
+            : null;
           shown(() => {
             setPast(last ? exchanges.slice(0, -1) : exchanges);
             setSent(last?.user || '');
@@ -943,31 +956,12 @@ export function useAgentThread({
               setQuestion(window.sessionStorage.getItem(draftKey(projectId)) || '');
             }
             setPlan(null);
-            setTurn(
-              last
-                ? {
-                    status: 'ok',
-                    mode: 'agent',
-                    answer_markdown: restoredAnswer,
-                    session_id: sessionId,
-                    tool_results: last.toolResults,
-                  }
-                : null
-            );
+            setTurn(restoredTurn);
             setSteps(stepLines(last?.steps));
             setAwayNote(false);
             setNextSteps(
-              last
-                ? nextStepsForResult(
-                    {
-                      status: 'ok',
-                      mode: 'agent',
-                      answer_markdown: restoredAnswer,
-                      tool_results: last.toolResults,
-                    },
-                    columnLabels,
-                    reportPinsRef.current.length > 0
-                  )
+              restoredTurn
+                ? nextStepsForResult(restoredTurn, columnLabels, reportPinsRef.current.length > 0)
                 : []
             );
             setDownloads([]);
@@ -975,26 +969,30 @@ export function useAgentThread({
             setAttachError(null);
             setStatus(null);
             // Failed tool steps still leave tool_results; only a ready output opens the column.
-            setPanelOpen(
-              outputCardReady(
-                last
-                  ? {
-                      status: 'ok',
-                      tool_results: last.toolResults,
-                    }
-                  : null,
-                false
-              )
-            );
+            setPanelOpen(outputCardReady(restoredTurn, false));
           });
+          // Resume deck progress polling when reopening a chat mid-build.
+          if (restoredTurn) {
+            const watchToken = ++turnTokenRef.current;
+            startDeckWatch(restoredTurn, watchToken);
+          }
         })
         .catch(err => {
           if (token !== openToken.current) return;
           if (err instanceof DOMException && err.name === 'AbortError') return;
-          shown(() => setStatus('That chat could not be opened.'));
+          // Prefer empty chat or one other session over "That chat could not be opened."
+          const fallback = allowFallback
+            ? (sessions || []).find(item => item.session_id !== sessionId)
+            : null;
+          if (fallback?.session_id) {
+            // One fallback attempt only — avoid A↔B loops when both sessions 404.
+            openChatRef.current(fallback.session_id, { allowFallback: false });
+            return;
+          }
+          shown(() => resetToEmptyChat());
         });
     },
-    [columnLabels, projectId, rememberChat, shown]
+    [columnLabels, projectId, rememberChat, resetToEmptyChat, sessions, shown, startDeckWatch]
   );
   openChatRef.current = openChat;
 
