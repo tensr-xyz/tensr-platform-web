@@ -211,10 +211,19 @@ describe('client-deck-job', () => {
       stage: 'narrative',
       report_pages: 24,
       message: 'Writing insights',
+      insights_done: 3,
+      insights_total: 12,
+      tables_done: 23,
+      tables_total: 23,
     });
     expect(out.answer_markdown || '').toContain('Writing insights');
     expect(out.answer_markdown || '').toContain('Report pages: 24');
     expect(out.answer_markdown || '').not.toMatch(/Ask me to continue/i);
+    const result = out.tool_results?.[0]?.result as Record<string, unknown>;
+    expect(result.stage).toBe('narrative');
+    expect(result.status).toBe('running');
+    expect(result.insights_done).toBe(3);
+    expect(result.tables_done).toBe(23);
   });
 
   it('failed jobs with saved tables ask to continue and resume', async () => {
