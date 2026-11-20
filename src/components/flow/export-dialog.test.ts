@@ -3,6 +3,7 @@ import {
   pipelineExportPayload,
   tableSpecIdsFromReportDocument,
 } from '@/components/flow/export-dialog';
+import { groupReportExportPages, pagesFromReportDocument } from '@/lib/office-deck-job';
 
 describe('pipelineExportPayload', () => {
   it('sends the project id so the study brief can be a context page', () => {
@@ -69,5 +70,23 @@ describe('tableSpecIdsFromReportDocument', () => {
   it('returns an empty list when the document has no linked tables', () => {
     expect(tableSpecIdsFromReportDocument({ pages: [{ objects: [] }] })).toEqual([]);
     expect(tableSpecIdsFromReportDocument(null)).toEqual([]);
+  });
+});
+
+describe('grouped report page picker', () => {
+  it('builds Summary / Insights / Appendix groups for the export dialog', () => {
+    const pages = pagesFromReportDocument({
+      pages: [
+        { id: 's1', title: 'Study intro', section: 'Executive summary' },
+        { id: 'i1', title: 'Region mix', section: 'Insights' },
+        { id: 'a1', title: 'Q1 Region', section: 'Appendix' },
+      ],
+    });
+    const groups = groupReportExportPages(pages);
+    expect(groups.map(group => group.label)).toEqual([
+      'Summary',
+      'Insights',
+      'Appendix, one per question',
+    ]);
   });
 });
