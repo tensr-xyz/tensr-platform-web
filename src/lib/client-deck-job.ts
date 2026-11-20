@@ -6,6 +6,8 @@ const CLIENT_DECK_POLL_MS = 1500;
 const CLIENT_DECK_POLL_LIMIT = 200;
 /** Fail visibly when tables_done / stage message has not moved (matches API ~2 min). */
 const CLIENT_DECK_NO_PROGRESS_MS = 120_000;
+/** Insights stage: surface failure within 3 minutes if the worker dies silently. */
+const CLIENT_DECK_NARRATIVE_NO_PROGRESS_MS = 180_000;
 
 export type ClientDeckJobSnapshot = {
   ok?: boolean;
@@ -17,6 +19,8 @@ export type ClientDeckJobSnapshot = {
   tables_total?: number;
   n_saved_tables?: number;
   question_tables_total?: number;
+  insights_done?: number;
+  insights_total?: number;
   report_pages?: number;
   error?: string;
   result?: Record<string, unknown>;
@@ -63,6 +67,11 @@ export function clientDeckProgressLine(job: ClientDeckJobSnapshot | null | undef
   }
   if (stage === 'narrative') {
     if (apiMessage && /writing insights/i.test(apiMessage)) return apiMessage;
+    const insightsDone = Number(job.insights_done || 0);
+    const insightsTotal = Number(job.insights_total || 0);
+    if (insightsTotal > 0) {
+      return `Writing insights ${insightsDone} of ${insightsTotal}${savedNote}`;
+    }
     return `Writing insights${savedNote}`;
   }
   if (stage === 'pptx') return 'Building the PowerPoint file';
@@ -91,9 +100,19 @@ function progressFingerprint(job: ClientDeckJobSnapshot | null | undefined): str
     String(job.stage || ''),
     String(job.tables_done || 0),
     String(job.tables_total || 0),
+    String(job.insights_done || 0),
+    String(job.insights_total || 0),
     String(job.report_pages || 0),
     String(job.message || ''),
   ].join('|');
+}
+
+function noProgressLimitMs(
+  job: ClientDeckJobSnapshot | null | undefined,
+  fallback: number
+): number {
+  if (String(job?.stage || '') === 'narrative') return CLIENT_DECK_NARRATIVE_NO_PROGRESS_MS;
+  return fallback;
 }
 
 /** Wait until a pending client-deck job is complete or failed. */
@@ -135,14 +154,19 @@ export async function waitForClientDeckJob(
     } else if (
       job &&
       (status === 'pending' || status === 'running') &&
-      Date.now() - lastProgressAt >= noProgressMs
+      Date.now() - lastProgressAt >= noProgressLimitMs(job, noProgressMs)
     ) {
+      const stage = String(job.stage || '');
       const total = Number(job.tables_total || 0);
       const done = Number(job.tables_done || 0);
-      const stuck =
+      let stuck =
         total > 0
           ? `The deck build made no progress for two minutes (still ${done} of ${total} tables). Ask me to continue to try again.`
           : 'The deck build made no progress for two minutes. Ask me to continue to try again.';
+      if (stage === 'narrative') {
+        stuck =
+          'Writing insights made no progress for three minutes. Ask me to continue to try again.';
+      }
       const failed: ClientDeckJobSnapshot = {
         ...job,
         status: 'failed',

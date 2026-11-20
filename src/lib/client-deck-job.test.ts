@@ -54,6 +54,15 @@ describe('client-deck-job', () => {
     expect(
       clientDeckProgressLine({
         status: 'running',
+        stage: 'narrative',
+        message: 'Writing insights 5 of 12',
+        insights_done: 5,
+        insights_total: 12,
+      })
+    ).toBe('Writing insights 5 of 12');
+    expect(
+      clientDeckProgressLine({
+        status: 'running',
         stage: 'tables',
         tables_done: 5,
         tables_total: 23,

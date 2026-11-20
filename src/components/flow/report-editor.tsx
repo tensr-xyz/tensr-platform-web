@@ -1018,13 +1018,19 @@ export function ReportEditor({
               className="report-editor-thumb"
               data-active={item.id === page?.id}
               data-hidden={item.hideFromExport}
+              title={item.title || `Page ${index + 1}`}
               onClick={() => {
                 setPageId(item.id);
                 setSelectedId(null);
                 setPaintSourceId(null);
               }}
-              aria-label={`Page ${index + 1}${item.hideFromExport ? ', hidden from export' : ''}`}
-            />
+              aria-label={`Page ${index + 1}${item.hideFromExport ? ', hidden from export' : ''}${
+                item.title ? `: ${item.title}` : ''
+              }`}
+            >
+              <span className="report-editor-thumb-num">{index + 1}</span>
+              {item.title ? <span className="report-editor-thumb-title">{item.title}</span> : null}
+            </Button>
           ))}
           {document.pages.some(item => item.hideFromExport) ? (
             <p className="report-editor-pages-note">

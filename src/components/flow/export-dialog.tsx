@@ -17,7 +17,12 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { downloadExport } from '@/components/flow/survey-screens';
 import { exportDatasetSavAndSps } from '@/lib/dataset-data-export';
 import { flowJson } from '@/lib/flow-api';
-import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
+import {
+  isIdColumn,
+  isInternalColumn,
+  questionnaireOutline,
+  type FlowColumn,
+} from '@/lib/flow-columns';
 import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-logic';
 import {
   estimateOfficeDeckSeconds,
@@ -345,42 +350,66 @@ export function ExportDialog({
         n_cols: 0,
       })),
       flowJson<{
-        columns?: { name?: string; label?: string; measure?: string }[];
+        columns?: {
+          name?: string;
+          label?: string;
+          measure?: string;
+          role?: string;
+          linked_set?: string;
+        }[];
         variable_sets?: unknown[];
         multiple_response_sets?: unknown[];
+        weight_variable?: string;
       }>(`/datasets/${datasetId}/metadata`).catch(
         (): {
-          columns?: { name?: string; label?: string; measure?: string }[];
+          columns?: {
+            name?: string;
+            label?: string;
+            measure?: string;
+            role?: string;
+            linked_set?: string;
+          }[];
           variable_sets?: unknown[];
           multiple_response_sets?: unknown[];
+          weight_variable?: string;
         } => ({})
       ),
     ]).then(([schema, meta]) => {
       if (!live) return;
       const rows = Number(schema.n_rows || 0);
-      const sets = Array.isArray(meta.variable_sets)
-        ? meta.variable_sets
-        : Array.isArray(meta.multiple_response_sets)
-          ? meta.multiple_response_sets
-          : [];
-      const covered = new Set<string>();
-      for (const item of sets) {
-        if (!item || typeof item !== 'object') continue;
-        const columns = (item as { columns?: unknown[] }).columns;
-        if (!Array.isArray(columns)) continue;
-        for (const column of columns) {
-          const name = String(column || '').trim();
-          if (name) covered.add(name);
-        }
-      }
-      const singles = (meta.columns || []).filter(column => {
-        const name = String(column.name || '').trim();
-        if (!name || covered.has(name) || isInternalColumn(name) || isIdColumn(name)) return false;
-        const measure = String(column.measure || '').toLowerCase();
-        return measure !== 'text' && measure !== 'datetime';
-      }).length;
-      // Questionnaire units ≈ sets (collapsed) + remaining single columns.
-      setFileStats({ rows, questions: sets.length + singles });
+      const sets = (
+        Array.isArray(meta.variable_sets)
+          ? meta.variable_sets
+          : Array.isArray(meta.multiple_response_sets)
+            ? meta.multiple_response_sets
+            : []
+      ) as {
+        id?: string;
+        name?: string;
+        label?: string;
+        kind?: string;
+        structure?: string;
+        columns?: string[];
+        text_columns?: { column?: string }[];
+      }[];
+      const flowColumns: FlowColumn[] = (meta.columns || [])
+        .map(column => {
+          const name = String(column.name || '').trim();
+          if (!name || isInternalColumn(name)) return null;
+          return {
+            name,
+            label: String(column.label || name),
+            measure: String(column.measure || ''),
+            role: String(column.role || ''),
+            linked_set: String(column.linked_set || ''),
+          } as FlowColumn;
+        })
+        .filter((column): column is FlowColumn => Boolean(column));
+      // Same outline the Details tab uses — not raw set+single column counts.
+      const outline = questionnaireOutline(flowColumns, sets, {
+        weightName: String(meta.weight_variable || ''),
+      });
+      setFileStats({ rows, questions: outline.length });
     });
     return () => {
       live = false;
@@ -754,7 +783,10 @@ export function ExportDialog({
                     const selected = group.pages.filter(
                       page => pickedPages[page.id] !== false
                     ).length;
-                    const open = expandedGroups[group.key] !== false;
+                    const open =
+                      group.key in expandedGroups
+                        ? expandedGroups[group.key] === true
+                        : group.defaultExpanded;
                     const preview = open
                       ? group.pages
                       : group.pages.slice(0, group.key === 'appendix' ? 2 : 3);
@@ -788,7 +820,7 @@ export function ExportDialog({
                             </span>
                           </Button>
                         </label>
-                        {open || group.key === 'insights' || preview.length > 0 ? (
+                        {open || preview.length > 0 ? (
                           <div className="xr-group-pages">
                             {preview.map(page => {
                               const index = group.pages.findIndex(row => row.id === page.id);
