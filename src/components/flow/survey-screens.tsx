@@ -43,6 +43,7 @@ import {
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
 import { NumberTracePopover } from '@/components/flow/number-trace-popover';
+import { VariablePreviewTrigger } from '@/components/flow/variable-preview-trigger';
 import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
@@ -2825,9 +2826,28 @@ export function TablesBuilder({
               <div className="tables-line">
                 <span>Stub</span>
                 {stub ? (
-                  <Button className="tables-chip accent" type="button" onClick={() => setStub('')}>
-                    {labelFor(stub)} ×
-                  </Button>
+                  <span className="tables-chip-wrap accent">
+                    <VariablePreviewTrigger
+                      datasetId={datasetId}
+                      projectId={projectId}
+                      column={stub}
+                      label={labelFor(stub)}
+                      fileName={
+                        files.find(file => file.id === datasetId)?.name ||
+                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                          ?.original_filename ||
+                        ''
+                      }
+                    />
+                    <Button
+                      className="tables-chip-clear"
+                      type="button"
+                      aria-label={`Remove ${labelFor(stub)}`}
+                      onClick={() => setStub('')}
+                    >
+                      ×
+                    </Button>
+                  </span>
                 ) : null}
                 <ChoiceSelect
                   className="flow-input"
@@ -2848,14 +2868,28 @@ export function TablesBuilder({
               <div className="tables-line">
                 <span>Banner</span>
                 {banners.map(name => (
-                  <Button
-                    key={name}
-                    className="tables-chip"
-                    type="button"
-                    onClick={() => setBanners(current => current.filter(item => item !== name))}
-                  >
-                    {labelFor(name)} ×
-                  </Button>
+                  <span key={name} className="tables-chip-wrap">
+                    <VariablePreviewTrigger
+                      datasetId={datasetId}
+                      projectId={projectId}
+                      column={name}
+                      label={labelFor(name)}
+                      fileName={
+                        files.find(file => file.id === datasetId)?.name ||
+                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                          ?.original_filename ||
+                        ''
+                      }
+                    />
+                    <Button
+                      className="tables-chip-clear"
+                      type="button"
+                      aria-label={`Remove ${labelFor(name)}`}
+                      onClick={() => setBanners(current => current.filter(item => item !== name))}
+                    >
+                      ×
+                    </Button>
+                  </span>
                 ))}
                 <ChoiceSelect
                   className="flow-input"

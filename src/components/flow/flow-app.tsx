@@ -239,6 +239,13 @@ import {
 } from '@/lib/flow-plugins';
 import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
+import { VariableLineagePanel } from '@/components/flow/variable-lineage-panel';
+import {
+  clearResponsesFocus,
+  readResponsesFocus,
+  type ColumnDependencies,
+  type RemovedCase,
+} from '@/components/flow/variable-lineage';
 import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
 import {
   datasetRowId,
@@ -3499,9 +3506,15 @@ function ResponsesScreen({
       }
     >
   >({});
+  const [columnDeps, setColumnDeps] = useState<ColumnDependencies | null>(null);
+  const [removedCases, setRemovedCases] = useState<RemovedCase[]>([]);
+  const [restoringCases, setRestoringCases] = useState(false);
+  const [showLineage, setShowLineage] = useState(false);
   const surveyCell = useSurveyCell();
   const evidenceSheet = useEvidenceSheet();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const focusApplied = useRef('');
+  const lineageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (surveyCell) setSide('evidence');
   }, [surveyCell]);
@@ -3833,6 +3846,92 @@ function ResponsesScreen({
       cancelled = true;
     };
   }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
+
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready' || !variableName) {
+      setColumnDeps(null);
+      return;
+    }
+    let cancelled = false;
+    void flowJson<ColumnDependencies>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/dependencies`
+    )
+      .then(page => {
+        if (!cancelled) setColumnDeps(page);
+      })
+      .catch(() => {
+        if (!cancelled) setColumnDeps(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, sheetPhase, variableName, sheetKey]);
+
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready') {
+      setRemovedCases([]);
+      return;
+    }
+    let cancelled = false;
+    void flowJson<{ removed_cases?: RemovedCase[] }>(`/datasets/${datasetId}/removed-cases`)
+      .then(page => {
+        if (!cancelled) setRemovedCases(page.removed_cases || []);
+      })
+      .catch(() => {
+        if (!cancelled) setRemovedCases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, sheetPhase, sheetKey]);
+
+  useEffect(() => {
+    if (!project?.id || sheetPhase !== 'ready' || !names.length) return;
+    const token = `${project.id}:${datasetId}`;
+    if (focusApplied.current === token) return;
+    const focus = readResponsesFocus(project.id);
+    if (!focus) {
+      focusApplied.current = token;
+      return;
+    }
+    const index = names.findIndex(
+      (name, i) =>
+        name === focus.column ||
+        variableNames[i] === focus.column ||
+        columnMeta(name)?.name === focus.column
+    );
+    if (index < 0) return;
+    focusApplied.current = token;
+    clearResponsesFocus(project.id);
+    const shown = shownCols.findIndex(column => column.index === index);
+    if (shown >= 0) setSelectedCol(shown);
+    setSide('variable');
+    if (focus.showLineage) setShowLineage(true);
+  }, [project?.id, datasetId, sheetPhase, names, variableNames, shownCols]);
+
+  useEffect(() => {
+    if (!showLineage) return;
+    lineageRef.current?.scrollIntoView({ block: 'nearest' });
+    setShowLineage(false);
+  }, [showLineage, variableName]);
+
+  const restoreRemovedCases = (caseIds: string[]) => {
+    if (!datasetId || !caseIds.length) return;
+    const previousId = datasetId;
+    setRestoringCases(true);
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/restore-cases`, {
+      method: 'POST',
+      body: JSON.stringify({ case_ids: caseIds }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        adoptVersion(previousId, next, 'Respondents restored as a new version.');
+      })
+      .catch(err =>
+        setSheetNote(err instanceof Error ? err.message : 'Those respondents were not restored.')
+      )
+      .finally(() => setRestoringCases(false));
+  };
 
   const viewSwitch = (
     <Segmented
@@ -4777,6 +4876,28 @@ function ResponsesScreen({
                     Use as banner column <span aria-hidden="true">+</span>
                   </Link>
                 ) : null}
+                <div ref={lineageRef}>
+                  <VariableLineagePanel
+                    label={activeLabel}
+                    builtFrom={columnDeps?.built_from || []}
+                    usedBy={columnDeps?.used_by || []}
+                    removedCases={removedCases}
+                    restoring={restoringCases}
+                    onRestore={restoreRemovedCases}
+                  />
+                </div>
+              </div>
+            ) : null}
+            {side === 'variable' && codedColumn ? (
+              <div className="output-body" ref={lineageRef}>
+                <VariableLineagePanel
+                  label={activeLabel}
+                  builtFrom={columnDeps?.built_from || []}
+                  usedBy={columnDeps?.used_by || []}
+                  removedCases={removedCases}
+                  restoring={restoringCases}
+                  onRestore={restoreRemovedCases}
+                />
               </div>
             ) : null}
           </ScrollArea>
