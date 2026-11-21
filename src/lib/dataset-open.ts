@@ -1,5 +1,7 @@
 /** First grid page on dataset open. Later pages use the same size. */
 export const FIRST_OPEN_ROWS = 200;
+/** Wide files page columns the same way they page rows (TEN-191). */
+export const FIRST_OPEN_COLS = 80;
 
 export type DatasetOpenTimings = {
   schema?: Record<string, number>;
@@ -9,12 +11,16 @@ export type DatasetOpenTimings = {
 export function previewPageUrl(
   datasetId: string,
   offset: number,
-  limit: number = FIRST_OPEN_ROWS
+  limit: number = FIRST_OPEN_ROWS,
+  columnOffset: number = 0,
+  columnLimit: number = FIRST_OPEN_COLS
 ): string {
   const params = new URLSearchParams({
     offset: String(Math.max(0, offset)),
     limit: String(limit),
     slim: '1',
+    column_offset: String(Math.max(0, columnOffset)),
+    column_limit: String(Math.max(1, columnLimit)),
   });
   return `/datasets/${datasetId}/preview?${params.toString()}`;
 }

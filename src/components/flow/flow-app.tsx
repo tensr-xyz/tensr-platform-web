@@ -71,6 +71,7 @@ import {
   SourcesScreen,
 } from '@/components/flow/sources-screen';
 import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import { previewPageUrl } from '@/lib/dataset-open';
 import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
@@ -3384,7 +3385,7 @@ function ResponsesScreen({
         n_rows?: number;
         columns?: FlowColumn[];
       }>(
-        `/datasets/${datasetId}/preview?limit=${filters.length ? 1000 : pageSize}&offset=${filters.length ? 0 : pageOffset}`
+        previewPageUrl(datasetId, filters.length ? 0 : pageOffset, filters.length ? 1000 : pageSize)
       ).then(page => [{ columns: page.columns || [] }, page] as const);
     const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
     void load()
