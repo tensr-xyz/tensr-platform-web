@@ -40,39 +40,58 @@ describe('sources screen', () => {
       'computed',
       'calibrated',
       'merged',
-      'coded',
+      'coded themes',
       'standardised',
       'derived',
-      'weighted to region',
-      'weighted to age, region',
+      'raked to region',
+      'raked to age, region',
     ];
     for (const label of labels) {
       const titled = sourceVersionTitle({
         parent_dataset_id: 'parent-file',
         lineage_label: label,
-        updated_at: '2026-11-05T15:42:00Z',
+        created_at: '2026-11-05T15:42:07Z',
       });
       const headed = label.charAt(0).toUpperCase() + label.slice(1);
       expect(titled.startsWith(`${headed} · `)).toBe(true);
-      expect(titled).toMatch(/\d{1,2} \w{3} \d{2}:\d{2}$/);
+      expect(titled).toMatch(/\d{1,2} \w{3} \d{2}:\d{2}:\d{2}$/);
       expect(titled).not.toBe(label);
     }
     expect(
       sourceVersionTitle({
         parent_dataset_id: 'parent-file',
-        lineage_label: 'weighted to region · 5 Nov 15:42',
-        updated_at: '2026-11-05T15:42:00Z',
+        lineage_label: 'raked to region · 5 Nov 15:42:07',
+        created_at: '2026-11-05T15:42:07Z',
       })
-    ).toBe('Weighted to region · 5 Nov 15:42');
+    ).toBe('Raked to region · 5 Nov 15:42:07');
     expect(sourceVersionTitle({ original_filename: 'panel.sav' })).toBe('panel.sav');
     expect(
       sourceVersionTitle({
         parent_dataset_id: 'parent-file',
         original_filename: 'cars_EN + DE + FR',
         lineage_label: 'fused',
-        updated_at: '2026-11-05T15:42:00Z',
+        created_at: '2026-11-05T15:42:07Z',
       })
     ).toMatch(/^cars_EN \+ DE \+ FR · /);
+  });
+
+  it('names versions by the operation, not a generic file-style weighted stamp', () => {
+    expect(
+      sourceVersionTitle({
+        parent_dataset_id: 'parent-file',
+        original_filename: 'coffee_tracker_demo - weighted 16 Nov 00:42',
+        lineage_label: 'raked to region · 16 Nov 00:42:01',
+        created_at: '2026-11-16T00:42:01Z',
+      })
+    ).toBe('Raked to region · 16 Nov 00:42:01');
+    expect(
+      sourceVersionTitle({
+        parent_dataset_id: 'parent-file',
+        original_filename: 'coffee_tracker_demo.sav',
+        lineage_label: 'coded themes · 16 Nov 00:42:15',
+        created_at: '2026-11-16T00:42:15Z',
+      })
+    ).toBe('Coded themes · 16 Nov 00:42:15');
   });
 
   it('lists every version of one upload with the newest first', () => {
