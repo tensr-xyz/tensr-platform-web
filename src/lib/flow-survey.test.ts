@@ -114,6 +114,27 @@ describe('flow survey grid', () => {
         index: 131.2,
       })
     ).toBe('39.4% · 102.6 (000s) · 131');
+    expect(
+      mediaCellText({
+        banner_id: 'total',
+        percent: 69.0,
+        projected_thousands: 2678.957,
+        index: 100,
+      })
+    ).toBe('69.0% · 2,679 (000s) · 100');
+    expect(
+      mediaCellText(
+        {
+          banner_id: 'total',
+          percent: 69.0,
+          projected_thousands: 2678.957,
+          index: 100,
+        },
+        'percent',
+        1,
+        { includeProjected: false }
+      )
+    ).toBe('69.0% · 100');
   });
 
   it('names the paired McNemar test when brands are compared inside a column', () => {

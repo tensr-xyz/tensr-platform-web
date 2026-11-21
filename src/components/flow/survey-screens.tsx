@@ -62,6 +62,7 @@ import {
   chartSignificanceNote,
   codedStub,
   lettersFor,
+  formatGroupedNumber,
   mediaCellText,
   selectionFromCell,
   themeRead,
@@ -140,27 +141,52 @@ function columnNames(columns: { name?: string }[]): string[] {
   return columns.map(column => column.name || '').filter(Boolean);
 }
 
-/** A counts table shows the weighted count when a weight is applied, rounded like the export. */
+/** A counts table shows projected thousands when present, otherwise the weighted count. */
 export function displayedCount(
   cell:
-    | { count?: number | null; weighted_n?: number | null; unweighted_n?: number | null }
+    | {
+        count?: number | null;
+        weighted_n?: number | null;
+        unweighted_n?: number | null;
+        projected_thousands?: number | null;
+      }
     | undefined,
   weighted: boolean
 ): string {
   if (!cell) return '—';
   if (weighted) {
+    const projected = cell.projected_thousands;
+    if (typeof projected === 'number' && Number.isFinite(projected)) {
+      const shown = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
+      const unweighted = cell.unweighted_n;
+      if (unweighted != null && !Number.isNaN(Number(unweighted))) {
+        return `${shown} (${formatGroupedNumber(Number(unweighted))})`;
+      }
+      return shown;
+    }
     const raw = cell.count ?? cell.weighted_n;
     if (raw == null || Number.isNaN(Number(raw))) return '—';
-    const weightedShown = String(Math.round(Number(raw)));
+    const weightedShown = formatGroupedNumber(Number(raw));
     const unweighted = cell.unweighted_n;
     if (unweighted != null && !Number.isNaN(Number(unweighted))) {
-      return `${weightedShown} (${Math.round(Number(unweighted))})`;
+      return `${weightedShown} (${formatGroupedNumber(Number(unweighted))})`;
     }
     return weightedShown;
   }
   const raw = cell.unweighted_n ?? cell.count;
   if (raw == null || Number.isNaN(Number(raw))) return '—';
-  return String(Math.round(Number(raw)));
+  return formatGroupedNumber(Number(raw));
+}
+
+/** Weighted tables also ask for projected thousands, index, and the unweighted base. */
+export function tableStatisticsForWeight(selected: string[], weighted: boolean): string[] {
+  const stats = selected.filter(Boolean);
+  if (!weighted) return stats.length ? stats : ['column_proportion'];
+  const out = [...stats];
+  for (const kind of ['projected_thousands', 'index', 'unweighted_base'] as const) {
+    if (!out.includes(kind)) out.push(kind);
+  }
+  return out;
 }
 
 /** The footer says Saved only once the open table matches what was stored. */
@@ -291,14 +317,15 @@ function cellFigure(
   cell: BannerCell | undefined,
   figure: CellFigure,
   digits: number,
-  weighted = false
+  weighted = false,
+  includeProjected = true
 ): string {
   if (!cell) return '—';
   if (figure === 'count') return displayedCount(cell, weighted);
   if (figure === 'mean') {
     return cell.mean != null ? formatStat(cell.mean, 'mean', digits) : '—';
   }
-  return mediaCellText(cell, figure, digits);
+  return mediaCellText(cell, figure, digits, { includeProjected });
 }
 
 function cellFigures(
@@ -307,8 +334,9 @@ function cellFigures(
   digits: number,
   weighted = false
 ): string {
+  const hasCount = figures.includes('count');
   const parts = figures
-    .map(figure => cellFigure(cell, figure, digits, weighted))
+    .map(figure => cellFigure(cell, figure, digits, weighted, !(hasCount && figure !== 'count')))
     .filter(part => part && part !== '—');
   return parts.length ? parts.join(' · ') : '—';
 }
@@ -2272,7 +2300,10 @@ export function TablesBuilder({
     if (token !== tableRequest.current) return;
     nets.push(...customNets);
     setError('');
-    const selectedStats = shownStatistics(statistics, meanOn);
+    const selectedStats = tableStatisticsForWeight(
+      shownStatistics(statistics, meanOn),
+      Boolean(weight)
+    );
     const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
