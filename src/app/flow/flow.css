@@ -7406,6 +7406,63 @@ button.chat-result-top {
   max-height: 300px;
 }
 
+/* 10d · ⌘K with a question selected (For + Recent + ask-chat hint). */
+.flow-palette .palette-card-focused {
+  width: min(420px, 94vw);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px #1b1c1a1a;
+}
+
+.flow-palette .palette-body.focused {
+  display: block;
+  grid-template-columns: none;
+  min-height: 0;
+}
+
+.flow-palette .palette-results-focused {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(420px, 60vh);
+  padding: 12px;
+}
+
+.flow-palette .palette-label-for {
+  padding-block: 4px;
+  padding-inline: 6px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  line-height: 14px;
+}
+
+.flow-palette .palette-hit-plain {
+  gap: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+}
+
+.flow-palette .palette-hit-plain[data-active='true'] {
+  background: var(--color-accent-soft);
+}
+
+.flow-palette .palette-hit-plain .palette-copy strong {
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: var(--weight-regular);
+}
+
+.flow-palette .palette-ask-hint {
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 /* 2d Project details, from the Paper export. */
 .details-audience {
   margin: 0 0 8px;

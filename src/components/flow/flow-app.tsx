@@ -171,10 +171,12 @@ import {
   recordRecentPaletteAction,
 } from '@/lib/palette-recent';
 import {
+  PALETTE_ASK_CHAT_HINT,
   RECENT_PALETTE_SECTION,
   SUGGESTED_PALETTE_SECTION,
   suggestPaletteActionsForKind,
   suggestedPaletteResultsLabel,
+  type PaletteSuggestion,
 } from '@/lib/palette-suggestions';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
@@ -2251,21 +2253,39 @@ function Palette({
     void recentTick;
     return recentPaletteItemsFromCatalog(readRecentPaletteActions(), items);
   }, [items, recentTick]);
-  const suggestedItems = useMemo(
-    () => (columnContext ? suggestPaletteActionsForKind(columnContext.kind, items) : []),
+  const suggestedRows = useMemo(
+    () =>
+      columnContext
+        ? suggestPaletteActionsForKind(columnContext.kind, items, columnContext.label)
+        : [],
     [columnContext, items]
   );
+  const forSectionLabel = columnContext
+    ? suggestedPaletteResultsLabel(columnContext.label)
+    : SUGGESTED_PALETTE_SECTION;
+  /** Paper 10d: idle ⌘K with a question selected → For + Recent only. */
+  const focusedIdle = Boolean(columnContext && !searching && tab !== PLUGINS_TAB_VALUE);
   const catalogSections =
-    searching || tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+    searching || tab === PLUGINS_TAB_VALUE || focusedIdle ? {} : getPaletteTabContent(grouped, tab);
+  const suggestedAsItems = suggestedRows
+    .map(row => row.item)
+    .filter((item): item is AnalysisItem => Boolean(item));
   const sections: Record<string, AnalysisItem[]> = searching
     ? { Matches: ranked }
     : tab === PLUGINS_TAB_VALUE
       ? {}
-      : {
-          ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
-          ...(suggestedItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedItems } : {}),
-          ...catalogSections,
-        };
+      : focusedIdle
+        ? {
+            ...(suggestedAsItems.length || suggestedRows.some(row => row.ask)
+              ? { [forSectionLabel]: suggestedAsItems }
+              : {}),
+            ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+          }
+        : {
+            ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+            ...(suggestedAsItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedAsItems } : {}),
+            ...catalogSections,
+          };
   const sectionNames = Object.keys(sections).filter(
     name => !searching || (sections[name]?.length ?? 0) > 0
   );
@@ -2274,8 +2294,17 @@ function Palette({
   const pluginRows = plugins.filter(plugin =>
     plugin.name.toLowerCase().includes(query.trim().toLowerCase())
   );
-  const rows =
-    tab === PLUGINS_TAB_VALUE
+  type PaletteRow =
+    | { kind: 'plugin'; name: string; id: string }
+    | { kind: 'analysis'; item: AnalysisItem; label?: string }
+    | { kind: 'suggest'; suggestion: PaletteSuggestion<AnalysisItem> }
+    | { kind: 'recent'; item: AnalysisItem };
+  const rows: PaletteRow[] = focusedIdle
+    ? [
+        ...suggestedRows.map(suggestion => ({ kind: 'suggest' as const, suggestion })),
+        ...recentItems.map(item => ({ kind: 'recent' as const, item })),
+      ]
+    : tab === PLUGINS_TAB_VALUE
       ? pluginRows.map(plugin => ({
           kind: 'plugin' as const,
           name: plugin.name,
@@ -2316,8 +2345,45 @@ function Palette({
     else store.openUnavailable(item.name);
   };
 
+  const launchSuggestion = (suggestion: PaletteSuggestion<AnalysisItem>) => {
+    if (suggestion.ask) {
+      onClose();
+      onAsk(suggestion.ask);
+      return;
+    }
+    if (suggestion.item) launchAnalysis(suggestion.item);
+  };
+
   const openChosen = (ask: boolean) => {
-    if (!chosen) return;
+    if (!chosen) {
+      const text = query.trim();
+      if (text) {
+        onClose();
+        onAsk(text);
+      }
+      return;
+    }
+    if (chosen.kind === 'suggest') {
+      if (ask && chosen.suggestion.ask) {
+        onClose();
+        onAsk(chosen.suggestion.ask);
+        return;
+      }
+      if (ask && chosen.suggestion.item) {
+        onAsk(chosen.suggestion.item.name);
+        return;
+      }
+      launchSuggestion(chosen.suggestion);
+      return;
+    }
+    if (chosen.kind === 'recent') {
+      if (ask) {
+        onAsk(chosen.item.name);
+        return;
+      }
+      launchAnalysis(chosen.item);
+      return;
+    }
     if (chosen.kind === 'plugin' || ask) {
       onAsk(chosen.kind === 'plugin' ? chosen.name : chosen.item.name);
       return;
@@ -2327,8 +2393,8 @@ function Palette({
 
   const resultsLabel = searching
     ? 'Best match'
-    : activeSection === SUGGESTED_PALETTE_SECTION
-      ? suggestedPaletteResultsLabel(columnContext?.label)
+    : activeSection === SUGGESTED_PALETTE_SECTION || activeSection === forSectionLabel
+      ? forSectionLabel
       : activeSection || '';
 
   const itemWhere = (item: AnalysisItem) => {
@@ -2336,20 +2402,22 @@ function Palette({
     return `${tabLabel} · ${item.section}`;
   };
 
+  const focusedRecentStart = suggestedRows.length;
+
   return (
     <div className="flow-palette" onClick={onClose}>
       <Command
         shouldFilter={false}
-        className="palette-card"
+        className={focusedIdle ? 'palette-card palette-card-focused' : 'palette-card'}
         onClick={event => event.stopPropagation()}
         onKeyDown={event => {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
-            setIndex(current => Math.min(current + 1, rows.length - 1));
+            setIndex(current => Math.min(current + 1, Math.max(rows.length - 1, 0)));
           } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             setIndex(current => Math.max(current - 1, 0));
-          } else if (event.key === 'Enter' && chosen) {
+          } else if (event.key === 'Enter') {
             event.preventDefault();
             openChosen(event.metaKey || event.ctrlKey);
           } else if (event.key === 'Escape') {
@@ -2361,7 +2429,7 @@ function Palette({
           <CommandInput
             autoFocus
             value={query}
-            placeholder="Search analyses"
+            placeholder="Search analyses…"
             onValueChange={value => {
               setQuery(value);
               setIndex(0);
@@ -2369,38 +2437,101 @@ function Palette({
           />
           <span className="palette-esc">esc</span>
         </div>
-        <div className="palette-tabs">
-          {PALETTE_TAB_ORDER.map(key => (
+        {focusedIdle ? null : (
+          <div className="palette-tabs">
+            {PALETTE_TAB_ORDER.map(key => (
+              <Button
+                key={key}
+                className="palette-tab"
+                type="button"
+                data-active={tab === key}
+                onClick={() => {
+                  setTab(key);
+                  setSection(null);
+                  setIndex(0);
+                }}
+              >
+                {PALETTE_TAB_LABELS[key] || key}
+              </Button>
+            ))}
             <Button
-              key={key}
-              className="palette-tab"
+              className="palette-tab palette-tab-plugins"
               type="button"
-              data-active={tab === key}
+              data-active={tab === PLUGINS_TAB_VALUE}
               onClick={() => {
-                setTab(key);
+                setTab(PLUGINS_TAB_VALUE);
                 setSection(null);
                 setIndex(0);
               }}
             >
-              {PALETTE_TAB_LABELS[key] || key}
+              Plugins
+              {plugins.length ? <span className="palette-count">{plugins.length}</span> : null}
             </Button>
-          ))}
-          <Button
-            className="palette-tab palette-tab-plugins"
-            type="button"
-            data-active={tab === PLUGINS_TAB_VALUE}
-            onClick={() => {
-              setTab(PLUGINS_TAB_VALUE);
-              setSection(null);
-              setIndex(0);
-            }}
-          >
-            Plugins
-            {plugins.length ? <span className="palette-count">{plugins.length}</span> : null}
-          </Button>
-        </div>
-        <div className={tab === PLUGINS_TAB_VALUE ? 'palette-body plugins' : 'palette-body'}>
-          {tab === PLUGINS_TAB_VALUE ? (
+          </div>
+        )}
+        <div
+          className={
+            focusedIdle
+              ? 'palette-body focused'
+              : tab === PLUGINS_TAB_VALUE
+                ? 'palette-body plugins'
+                : 'palette-body'
+          }
+        >
+          {focusedIdle ? (
+            <div className="palette-results palette-results-focused">
+              {suggestedRows.length === 0 && recentItems.length === 0 ? (
+                <PaletteNoMatch query={query} onAsk={onAsk} />
+              ) : (
+                <>
+                  {suggestedRows.length ? (
+                    <p className="palette-label palette-label-for">{forSectionLabel}</p>
+                  ) : null}
+                  {suggestedRows.map((suggestion, rowIndex) => (
+                    <Button
+                      key={`suggest-${suggestion.label}`}
+                      className="palette-hit palette-hit-plain"
+                      type="button"
+                      data-active={rowIndex === index}
+                      onClick={() => {
+                        setIndex(rowIndex);
+                        launchSuggestion(suggestion);
+                      }}
+                    >
+                      <span className="palette-copy">
+                        <strong>{suggestion.label}</strong>
+                      </span>
+                      {rowIndex === index ? <span className="palette-enter">↵</span> : null}
+                    </Button>
+                  ))}
+                  {recentItems.length ? (
+                    <p className="palette-label">{RECENT_PALETTE_SECTION}</p>
+                  ) : null}
+                  {recentItems.map((item, recentIndex) => {
+                    const rowIndex = focusedRecentStart + recentIndex;
+                    return (
+                      <Button
+                        key={`recent-${item.name}`}
+                        className="palette-hit palette-hit-plain"
+                        type="button"
+                        data-active={rowIndex === index}
+                        onClick={() => {
+                          setIndex(rowIndex);
+                          launchAnalysis(item);
+                        }}
+                      >
+                        <span className="palette-copy">
+                          <strong>{item.name}</strong>
+                        </span>
+                        {rowIndex === index ? <span className="palette-enter">↵</span> : null}
+                      </Button>
+                    );
+                  })}
+                  <p className="palette-ask-hint">{PALETTE_ASK_CHAT_HINT}</p>
+                </>
+              )}
+            </div>
+          ) : tab === PLUGINS_TAB_VALUE ? (
             <div className="palette-results">
               {pluginRows.length === 0 ? (
                 <p className="flow-muted">
@@ -2472,7 +2603,8 @@ function Palette({
                                 : itemWhere(item)
                               : item.hint ||
                                 (activeSection === SUGGESTED_PALETTE_SECTION ||
-                                activeSection === RECENT_PALETTE_SECTION
+                                activeSection === RECENT_PALETTE_SECTION ||
+                                activeSection === forSectionLabel
                                   ? itemWhere(item)
                                   : '');
                             return detail ? <span>{detail}</span> : null;
@@ -2487,19 +2619,21 @@ function Palette({
             </>
           )}
         </div>
-        <p className="palette-foot">
-          <span>↑↓ navigate</span>
-          <span>↵ open dialog</span>
-          <span>⌘↵ ask the agent to run it</span>
-          <span className="plugin-spacer" />
-          <span>
-            {dataset
-              ? `Runs on ${dataset.original_filename || 'this dataset'}${
-                  dataset.n_rows ? ` · ${dataset.n_rows.toLocaleString('en-GB')} rows` : ''
-                }`
-              : 'No dataset open'}
-          </span>
-        </p>
+        {focusedIdle ? null : (
+          <p className="palette-foot">
+            <span>↑↓ navigate</span>
+            <span>↵ open dialog</span>
+            <span>⌘↵ ask the agent to run it</span>
+            <span className="plugin-spacer" />
+            <span>
+              {dataset
+                ? `Runs on ${dataset.original_filename || 'this dataset'}${
+                    dataset.n_rows ? ` · ${dataset.n_rows.toLocaleString('en-GB')} rows` : ''
+                  }`
+                : 'No dataset open'}
+            </span>
+          </p>
+        )}
       </Command>
     </div>
   );
