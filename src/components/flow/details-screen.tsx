@@ -34,6 +34,8 @@ import {
 } from '@/lib/label-workbook';
 import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
 import { isAiEnabled } from '@/lib/ai-controls';
+import { defaultTemplateName } from '@/lib/project-templates';
+import { formatApiErrorMessage } from '@/lib/api-error';
 
 type DetailFile = {
   dataset_id?: string;
@@ -253,6 +255,8 @@ export function DetailsScreen({
   const [userId, setUserId] = useState('');
   const [turns, setTurns] = useState<AskerTurn[] | null>(null);
   const [orgAiEnabled, setOrgAiEnabled] = useState(true);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateNote, setTemplateNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -591,6 +595,23 @@ export function DetailsScreen({
       );
   };
 
+  const saveAsTemplate = () => {
+    if (!projectId || templateBusy) return;
+    const label = defaultTemplateName(project?.name);
+    setTemplateBusy(true);
+    setTemplateNote(null);
+    setError(null);
+    void flowJson<{ template?: { name?: string } }>(`/api/projects/${projectId}/save-as-template`, {
+      method: 'POST',
+      body: JSON.stringify({ name: label }),
+    })
+      .then(page => {
+        setTemplateNote(`Saved “${page.template?.name || label}” as a team template.`);
+      })
+      .catch(err => setError(formatApiErrorMessage(err)))
+      .finally(() => setTemplateBusy(false));
+  };
+
   if (!ready) {
     return (
       <section className="details-page">
@@ -650,12 +671,23 @@ export function DetailsScreen({
               </Button>
             </>
           ) : (
-            <Button className="flow-btn primary details-edit" type="button" onClick={startEdit}>
-              <PencilIcon /> Edit brief
-            </Button>
+            <>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={templateBusy || asker}
+                onClick={saveAsTemplate}
+              >
+                {templateBusy ? 'Saving template…' : 'Save as template'}
+              </Button>
+              <Button className="flow-btn primary details-edit" type="button" onClick={startEdit}>
+                <PencilIcon /> Edit brief
+              </Button>
+            </>
           )}
         </div>
       </header>
+      {templateNote ? <p className="flow-muted details-template-note">{templateNote}</p> : null}
       <p className="details-explainer">
         <i />
         The agent reads this brief before every answer, so objectives, audience and notes shape what

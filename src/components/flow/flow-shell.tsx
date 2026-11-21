@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,6 +42,16 @@ import {
   type RememberedUpload,
 } from '@/lib/upload-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
+import {
+  BLANK_START_OPTION,
+  defaultTemplateName,
+  flattenStartOptions,
+  parseStartSelection,
+  startSelectionKey,
+  thenNoteForSelection,
+  type ProjectStartOption,
+  type ProjectStartOptions,
+} from '@/lib/project-templates';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { useAuth } from '@/hooks/api/use-auth';
 
@@ -734,6 +744,10 @@ export function NewProjectDialog({
   const [error, setError] = useState('');
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const [qualtricsOpen, setQualtricsOpen] = useState(false);
+  const [startKey, setStartKey] = useState('blank');
+  const [startOptions, setStartOptions] = useState<ProjectStartOption[]>([BLANK_START_OPTION]);
+  const [thenNote, setThenNote] = useState('');
+  const [templateNote, setTemplateNote] = useState('');
   const createdProjectId = useRef<string | null>(null);
   const uploadedDataset = useRef<RememberedUpload | null>(null);
   const pendingQualtricsId = useRef<string | null>(null);
@@ -747,6 +761,33 @@ export function NewProjectDialog({
         })),
     [datasets]
   );
+  const startSource = parseStartSelection(startKey);
+  const thenHint = thenNoteForSelection(startKey, thenNote);
+  const selectedStart =
+    startOptions.find(row => startSelectionKey(row) === startKey) || BLANK_START_OPTION;
+  const canSaveSourceTemplate =
+    startSource.source_kind === 'project' && Boolean(startSource.source_id);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void flowJson<ProjectStartOptions>('/api/projects/start-options')
+      .then(page => {
+        if (cancelled) return;
+        const rows = flattenStartOptions(page);
+        setStartOptions(rows.length ? rows : [BLANK_START_OPTION]);
+        setThenNote(page.then_note || '');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStartOptions([BLANK_START_OPTION]);
+          setThenNote('');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const reset = () => {
     setStep(1);
@@ -759,6 +800,8 @@ export function NewProjectDialog({
     setProgress(null);
     setProposal(null);
     setQualtricsOpen(false);
+    setStartKey('blank');
+    setTemplateNote('');
     createdProjectId.current = null;
     uploadedDataset.current = null;
     pendingQualtricsId.current = null;
@@ -767,15 +810,44 @@ export function NewProjectDialog({
   const ensureProject = async () => {
     let id = createdProjectId.current;
     if (!id) {
+      const { source_kind, source_id } = parseStartSelection(startKey);
       const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
+        body: JSON.stringify({
+          name: name.trim(),
+          folder: folder || null,
+          keep_empty: true,
+          source_kind,
+          source_id,
+        }),
       });
       id = page.project?.id || null;
       if (!id) throw new Error('The project did not save.');
       createdProjectId.current = id;
     }
     return id;
+  };
+
+  const saveSourceAsTemplate = async () => {
+    if (!canSaveSourceTemplate || !startSource.source_id) return;
+    setBusy(true);
+    setError('');
+    setTemplateNote('');
+    try {
+      const label = defaultTemplateName(selectedStart.name || selectedStart.title);
+      await flowJson(`/api/projects/${startSource.source_id}/save-as-template`, {
+        method: 'POST',
+        body: JSON.stringify({ name: label }),
+      });
+      setTemplateNote(`Saved “${label}” as a team template.`);
+      const page = await flowJson<ProjectStartOptions>('/api/projects/start-options');
+      setStartOptions(flattenStartOptions(page));
+      setThenNote(page.then_note || '');
+    } catch (err) {
+      setError(formatApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const create = async () => {
@@ -862,7 +934,7 @@ export function NewProjectDialog({
             <DialogTitle>{step === 1 ? 'New project' : 'Add data'}</DialogTitle>
             <DialogDescription>
               {step === 1
-                ? 'Name the study. You can rename it or move it to a folder later.'
+                ? 'Start from a blank study, copy another project’s setup, or use a team template.'
                 : `Bring data into ${name.trim() || 'the project'}. You can add more files from Sources.`}
             </DialogDescription>
           </DialogHeader>
@@ -893,6 +965,35 @@ export function NewProjectDialog({
                   ]}
                 />
               </label>
+              <div className="new-project-start">
+                <p className="new-project-start-label">Start from</p>
+                <div className="new-project-start-list" role="radiogroup" aria-label="Start from">
+                  {startOptions.map(option => {
+                    const key = startSelectionKey(option);
+                    return (
+                      <Button
+                        key={key}
+                        type="button"
+                        role="radio"
+                        aria-checked={startKey === key}
+                        className="new-project-choice"
+                        data-active={startKey === key}
+                        onClick={() => setStartKey(key)}
+                      >
+                        <strong>{option.title}</strong>
+                        <span>{option.blurb}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              {thenHint ? (
+                <div className="new-project-then">
+                  <p className="new-project-start-label">Then</p>
+                  <p className="new-project-then-note">{thenHint}</p>
+                </div>
+              ) : null}
+              {templateNote ? <p className="flow-muted">{templateNote}</p> : null}
             </div>
           ) : proposal ? (
             <UploadPrepCard
@@ -1000,7 +1101,16 @@ export function NewProjectDialog({
           {progress !== null && busy ? <p className="flow-muted">Uploading… {progress}%</p> : null}
           {error ? <p className="flow-error">{error}</p> : null}
           <div className="new-project-foot">
-            {step === 2 ? (
+            {step === 1 ? (
+              <button
+                type="button"
+                className="new-project-save-template"
+                disabled={busy || !canSaveSourceTemplate}
+                onClick={() => void saveSourceAsTemplate()}
+              >
+                Save this project as a template
+              </button>
+            ) : step === 2 ? (
               <Button className="flow-btn" type="button" disabled={busy} onClick={() => setStep(1)}>
                 Back
               </Button>
@@ -1009,16 +1119,22 @@ export function NewProjectDialog({
                 Cancel
               </Button>
             )}
-            {proposal ? null : step === 1 ? (
-              <Button
-                className="flow-btn primary"
-                type="button"
-                disabled={!name.trim()}
-                onClick={() => setStep(2)}
-              >
-                Continue
-              </Button>
-            ) : (
+            {step === 1 && !proposal ? (
+              <div className="new-project-foot-actions">
+                <Button className="flow-btn" type="button" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flow-btn primary"
+                  type="button"
+                  disabled={!name.trim()}
+                  onClick={() => setStep(2)}
+                >
+                  Continue
+                </Button>
+              </div>
+            ) : null}
+            {proposal ? null : step === 2 ? (
               <Button
                 className="flow-btn primary"
                 type="button"
@@ -1033,7 +1149,7 @@ export function NewProjectDialog({
                     ? 'Create project'
                     : 'Create and open'}
               </Button>
-            )}
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
