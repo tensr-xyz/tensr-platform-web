@@ -94,6 +94,7 @@ import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
 import { MergeSmallAnswersDialog } from '@/components/flow/merge-small-answers-dialog';
+import { DataChecksDialog } from '@/components/flow/data-checks-dialog';
 import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
@@ -3494,6 +3495,7 @@ function ResponsesScreen({
     field: string;
     label: string;
   } | null>(null);
+  const [dataChecksOpen, setDataChecksOpen] = useState(false);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -4083,6 +4085,15 @@ function ResponsesScreen({
                   />
                 </svg>
                 Filters{needle || valueFilter != null ? ' 1' : ''}
+              </Button>
+              <Button
+                className={surveyCell ? 'flow-btn hidden' : 'flow-btn'}
+                type="button"
+                data-active={dataChecksOpen || undefined}
+                disabled={!datasetId}
+                onClick={() => setDataChecksOpen(true)}
+              >
+                Check data
               </Button>
               {surveyCell ? (
                 <>
@@ -4927,6 +4938,27 @@ function ResponsesScreen({
           }}
         />
       ) : null}
+      <DataChecksDialog
+        datasetId={datasetId || undefined}
+        open={dataChecksOpen}
+        onOpenChange={setDataChecksOpen}
+        onShow={card => {
+          const field = String(card.column || card.columns?.[0] || '').trim();
+          if (!field) return;
+          const index = names.findIndex(
+            (name, i) =>
+              name === field || variableNames[i] === field || columnMeta(name)?.name === field
+          );
+          if (index < 0) {
+            setSheetNote('That question is not on the sheet.');
+            return;
+          }
+          const shown = shownCols.findIndex(column => column.index === index);
+          if (shown >= 0) setSelectedCol(shown);
+          setSide('variable');
+          setSheetNote(card.detail || card.title);
+        }}
+      />
       {weightOpen ? (
         <WeightPanel
           datasetId={datasetId}

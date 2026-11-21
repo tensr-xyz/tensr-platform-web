@@ -12070,6 +12070,113 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   gap: 8px;
 }
 
+/* Paper 10h · Responses → Check data */
+.data-checks-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: 520px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-checks-eyebrow {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.06em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.data-checks-title {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: var(--weight-title);
+  line-height: 22px;
+}
+
+.data-checks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.data-checks-skeleton {
+  height: 62px;
+  border-radius: 8px;
+}
+
+.data-checks-skeleton.short {
+  height: 42px;
+}
+
+.data-checks-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #f3e6d8;
+  background: #fbf6f0;
+}
+
+.data-checks-card-title {
+  color: var(--color-warn);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 16px;
+}
+
+.data-checks-card-detail {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.data-checks-card-action,
+.data-checks-card-action-static {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  line-height: 16px;
+  justify-content: flex-start;
+}
+
+.data-checks-card-action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.data-checks-passed {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  color: var(--color-accent);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.data-checks-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 /* QA round 3. The brief reads as editable. */
 .details-explainer {
   display: flex;
