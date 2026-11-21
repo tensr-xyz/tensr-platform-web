@@ -43,6 +43,11 @@ import {
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import {
+  formatSheetCellDisplay,
+  sheetColumnHint,
+  variablePanelKind,
+} from '@/lib/sheet-cell-format';
 import { openSignedDownload } from '@/lib/excel-download';
 import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
@@ -4193,27 +4198,7 @@ function ResponsesScreen({
                             >
                               <span className="sheet-col-name">{column.name}</span>
                               <span className="sheet-col-label">
-                                {(() => {
-                                  const meta = columnMeta(column.name);
-                                  const measure = String(meta?.measure || '').toLowerCase();
-                                  if (
-                                    measure === 'nominal' ||
-                                    measure === 'ordinal' ||
-                                    measure === 'scale'
-                                  )
-                                    return measure;
-                                  const label =
-                                    meta?.label && meta.label !== column.name ? meta.label : '';
-                                  if (label) return label;
-                                  const type = String(meta?.type || '').toLowerCase();
-                                  if (
-                                    ['numeric', 'number', 'float', 'integer', 'double'].includes(
-                                      type
-                                    )
-                                  )
-                                    return '123';
-                                  return type ? 'abc' : '\u00a0';
-                                })()}
+                                {sheetColumnHint(columnMeta(column.name))}
                               </span>
                               {showStats ? (
                                 <ColumnSpark
@@ -4318,7 +4303,10 @@ function ResponsesScreen({
                                 ) : row[column.index] == null || row[column.index] === 'null' ? (
                                   ''
                                 ) : (
-                                  String(row[column.index])
+                                  formatSheetCellDisplay(
+                                    row[column.index],
+                                    fieldAt(column.index, column.name)
+                                  )
                                 )}
                               </td>
                             ))}
@@ -4683,12 +4671,7 @@ function ResponsesScreen({
             {side === 'variable' && !codedColumn ? (
               <div className="output-body variable-panel">
                 <div className="flow-muted">
-                  {[
-                    columnMeta(activeName)?.measure || columnMeta(activeName)?.type,
-                    `${counts.length} code${counts.length === 1 ? '' : 's'}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {variablePanelKind(columnMeta(activeName), counts.length)}
                 </div>
                 <h2>{columnMeta(activeName)?.name || activeName}</h2>
                 {columnMeta(activeName)?.label &&
