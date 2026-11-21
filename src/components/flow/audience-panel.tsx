@@ -73,16 +73,34 @@ function Definition({ text }: { text: string }) {
   const parts = text.split(/( and | or )/g);
   return (
     <span className="audience-definition">
-      {parts.map((part, index) =>
-        part === ' and ' || part === ' or ' ? (
-          <span key={index}>
-            {' '}
-            <span className="audience-join">{part.trim()}</span>{' '}
-          </span>
-        ) : (
-          <span key={index}>{part}</span>
-        )
-      )}
+      {parts.map((part, index) => {
+        if (part === ' and ' || part === ' or ') {
+          return (
+            <span key={index}>
+              {' '}
+              <span className="audience-join">{part.trim()}</span>{' '}
+            </span>
+          );
+        }
+        const match = part.match(/^(Q\d+)\s+(.+?)\s+(is|includes any)\s+(.+)$/i);
+        if (match) {
+          return (
+            <span key={index}>
+              <span className="audience-def-muted">{match[1]}</span> {match[2]}{' '}
+              <span className="audience-def-muted">{match[3]}</span> {match[4]}
+            </span>
+          );
+        }
+        const plain = part.match(/^(.+?)\s+(is|includes any)\s+(.+)$/i);
+        if (plain) {
+          return (
+            <span key={index}>
+              {plain[1]} <span className="audience-def-muted">{plain[2]}</span> {plain[3]}
+            </span>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
     </span>
   );
 }
@@ -163,6 +181,7 @@ function ValueChoices({
 export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
   const questions = audienceQuestions(columns);
   const [audiences, setAudiences] = useState<SavedAudience[] | null>(null);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
@@ -183,14 +202,20 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
     })
       .then(async response => {
         if (!response.ok) throw new Error('Audiences could not be loaded.');
-        return response.json() as Promise<{ audiences?: SavedAudience[] }>;
+        return response.json() as Promise<{ audiences?: SavedAudience[]; unmatched?: string[] }>;
       })
       .then(page => {
-        if (!cancelled) setAudiences(page.audiences || []);
+        if (!cancelled) {
+          setAudiences(page.audiences || []);
+          setUnmatched(
+            (page.unmatched || []).map(item => String(item || '').trim()).filter(Boolean)
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) {
           setAudiences([]);
+          setUnmatched([]);
           setError('Audiences could not be loaded.');
         }
       });
@@ -445,6 +470,11 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
           </Button>
         ) : null}
       </header>
+      {unmatched.length ? (
+        <p className="audience-unmatched" role="status">
+          Did not carry to this file: {unmatched.join(', ')}.
+        </p>
+      ) : null}
       {audiences === null ? <p className="flow-muted">Loading audiences.</p> : null}
       {audiences && audiences.length === 0 ? <p className="flow-muted">No audiences yet.</p> : null}
       {audiences && audiences.length > 0 ? (
@@ -457,9 +487,11 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
             const definition = audienceDefinitionText(audience.filter, columns);
             return (
               <li key={audience.name} className="audience-row">
-                <strong>{audience.label || audience.name}</strong>
-                <div className="audience-row-copy">
+                <div className="audience-row-name">
+                  <strong>{audience.label || audience.name}</strong>
                   {low ? <div className="audience-low">Low base · flagged in answers</div> : null}
+                </div>
+                <div className="audience-row-copy">
                   {definition ? <Definition text={definition} /> : null}
                 </div>
                 <div className={low ? 'audience-stat low' : 'audience-stat'}>
@@ -513,112 +545,125 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
                 ×
               </Button>
             </header>
-            <label className="audience-field">
-              Name · what people will type in chat
-              <Input
-                aria-label="Name · what people will type in chat"
-                value={label}
-                onChange={event => setLabel(event.target.value)}
-              />
-            </label>
-            <label className="audience-field">
-              Plain description · shown in answers and footnotes
-              <Textarea
-                aria-label="Plain description · shown in answers and footnotes"
-                value={description}
-                onChange={event => setDescription(event.target.value)}
-              />
-            </label>
-            <div className="audience-match">
-              <span>Respondents who match</span>
-              <div
-                className="audience-segment"
-                role="group"
-                aria-label="How the conditions combine"
-              >
-                <Button
-                  type="button"
-                  aria-pressed={combine === 'and'}
-                  className={combine === 'and' ? 'audience-segment-btn on' : 'audience-segment-btn'}
-                  onClick={() => setCombine('and')}
+            <div className="audience-drawer-body">
+              <label className="audience-field">
+                Name · what people will type in chat
+                <Input
+                  aria-label="Name · what people will type in chat"
+                  value={label}
+                  onChange={event => setLabel(event.target.value)}
+                />
+              </label>
+              <label className="audience-field">
+                Plain description · shown in answers and footnotes
+                <Textarea
+                  aria-label="Plain description · shown in answers and footnotes"
+                  value={description}
+                  onChange={event => setDescription(event.target.value)}
+                />
+              </label>
+              <div className="audience-match">
+                <span>Respondents who match</span>
+                <div
+                  className="audience-segment"
+                  role="group"
+                  aria-label="How the conditions combine"
                 >
-                  all
-                </Button>
-                <Button
-                  type="button"
-                  aria-pressed={combine === 'or'}
-                  className={combine === 'or' ? 'audience-segment-btn on' : 'audience-segment-btn'}
-                  onClick={() => setCombine('or')}
-                >
-                  any
-                </Button>
+                  <Button
+                    type="button"
+                    aria-pressed={combine === 'and'}
+                    className={
+                      combine === 'and' ? 'audience-segment-btn on' : 'audience-segment-btn'
+                    }
+                    onClick={() => setCombine('and')}
+                  >
+                    all
+                  </Button>
+                  <Button
+                    type="button"
+                    aria-pressed={combine === 'or'}
+                    className={
+                      combine === 'or' ? 'audience-segment-btn on' : 'audience-segment-btn'
+                    }
+                    onClick={() => setCombine('or')}
+                  >
+                    any
+                  </Button>
+                </div>
+                <span>of these</span>
               </div>
-              <span>of these</span>
-            </div>
-            <div className="audience-conditions">
-              {conditions.map((condition, index) =>
-                condition.group ? (
-                  <div key={`group-${index}`} className="audience-group">
-                    <div className="audience-group-label">any of</div>
-                    {condition.group.map((child, childIndex) =>
-                      renderCondition(child, index, childIndex)
-                    )}
-                    <QuestionSearch
-                      columns={remaining}
-                      onPick={name =>
-                        setConditions(current =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? {
-                                  ...item,
-                                  group: [...(item.group || []), { ...BLANK, column: name }],
-                                }
-                              : item
+              <div className="audience-conditions">
+                {conditions.map((condition, index) =>
+                  condition.group ? (
+                    <div key={`group-${index}`} className="audience-group">
+                      <div className="audience-group-label">any of</div>
+                      {condition.group.map((child, childIndex) =>
+                        renderCondition(child, index, childIndex)
+                      )}
+                      <QuestionSearch
+                        columns={remaining}
+                        onPick={name =>
+                          setConditions(current =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    group: [...(item.group || []), { ...BLANK, column: name }],
+                                  }
+                                : item
+                            )
                           )
-                        )
-                      }
-                    />
+                        }
+                      />
+                    </div>
+                  ) : (
+                    renderCondition(condition, index, null)
+                  )
+                )}
+                <div className="audience-add-row">
+                  <QuestionSearch
+                    columns={remaining}
+                    onPick={name =>
+                      setConditions(current => [...current, { ...BLANK, column: name }])
+                    }
+                  />
+                  <Button
+                    type="button"
+                    className="flow-btn audience-dashed audience-group-add"
+                    onClick={() => setConditions(current => [...current, { ...BLANK, group: [] }])}
+                  >
+                    + Group (any of)
+                  </Button>
+                </div>
+              </div>
+              <div className="audience-size">
+                <div className="audience-size-head">
+                  <div className={size && size.n < LOW_BASE ? 'audience-n low' : 'audience-n'}>
+                    n = {size ? size.n : '…'}
                   </div>
-                ) : (
-                  renderCondition(condition, index, null)
-                )
-              )}
-              <QuestionSearch
-                columns={remaining}
-                onPick={name => setConditions(current => [...current, { ...BLANK, column: name }])}
-              />
-              <Button
-                type="button"
-                className="flow-btn audience-dashed"
-                onClick={() => setConditions(current => [...current, { ...BLANK, group: [] }])}
-              >
-                + Group (any of)
-              </Button>
-            </div>
-            <div className="audience-size">
-              <div className={size && size.n < LOW_BASE ? 'audience-n low' : 'audience-n'}>
-                n = {size ? size.n : '…'}
+                  <div className="flow-muted audience-size-share">
+                    {liveShare !== null
+                      ? `${percent(liveShare)}${typeof size?.weighted_share === 'number' ? ' weighted' : ' of the file'}${
+                          typeof size?.projected_people === 'number'
+                            ? ` · ${peopleCount(size.projected_people)} people`
+                            : ''
+                        }`
+                      : sizeFailed
+                        ? 'The base could not be counted.'
+                        : 'The base appears once a question is chosen.'}
+                  </div>
+                </div>
+                <div className="audience-bar" aria-hidden="true">
+                  <span style={{ width: `${Math.min(100, (liveShare || 0) * 100)}%` }} />
+                </div>
+                <p>
+                  Every answer that uses this audience states this definition and its base.
+                  {size && size.n < LOW_BASE
+                    ? ' Bases under 50 are flagged, under 30 are hidden.'
+                    : ''}
+                </p>
               </div>
-              <div className="flow-muted">
-                {liveShare !== null
-                  ? `${percent(liveShare)}${typeof size?.weighted_share === 'number' ? ' weighted' : ' of the file'}${
-                      typeof size?.projected_people === 'number'
-                        ? ` · ${peopleCount(size.projected_people)} people`
-                        : ''
-                    }`
-                  : sizeFailed
-                    ? 'The base could not be counted.'
-                    : 'The base appears once a question is chosen.'}
-              </div>
-              <div className="audience-bar" aria-hidden="true">
-                <span style={{ width: `${Math.min(100, (liveShare || 0) * 100)}%` }} />
-              </div>
-              <p>
-                Every answer that uses this audience states this definition and its base.
-                {size && size.n < LOW_BASE
-                  ? ' Bases under 50 are flagged, under 30 are hidden.'
-                  : ''}
-              </p>
+              {error ? <p role="alert">{error}</p> : null}
             </div>
             <footer className="audience-footer">
               <p className="audience-try">Test it: “How many {typed || '…'}?”</p>
@@ -641,7 +686,6 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
                 </Button>
               </div>
             </footer>
-            {error ? <p role="alert">{error}</p> : null}
           </form>
         </div>
       ) : null}

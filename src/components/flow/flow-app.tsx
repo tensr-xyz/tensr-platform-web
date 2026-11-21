@@ -20,13 +20,19 @@ import {
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
-  overviewMarketBatchPayload,
+  overviewDeckPayload,
   refreshDecksBatchPayload,
   type MarketDeckRow,
   type OverviewBuildRequest,
   type OverviewSlide,
+  type WaveRefreshBuildRequest,
 } from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
+import { isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
+import { uploadDatasetFile } from '@/lib/upload-dataset';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
+import type { WaveColumn } from '@/lib/wave-match';
+import type { WaveMover } from '@/lib/wave-movers';
 import {
   liveOfTotalLabel,
   loadProjectTables,
@@ -45,6 +51,11 @@ import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { DetailsScreen } from '@/components/flow/details-screen';
+import {
+  AskerQuestionsScreen,
+  askerQuestionsTabLabel,
+  type AskerTurn,
+} from '@/components/flow/asker-questions-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
@@ -52,6 +63,7 @@ import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import {
   PROJECT_TABS,
   markVisitedProjectTab,
+  tabsForRole,
   visibleProjectSection,
 } from '@/components/flow/project-tabs';
 import {
@@ -552,6 +564,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const project = projects.find(item => item.id === projectId);
   const [projectReady, setProjectReady] = useState('');
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['chat']));
+  const [myRole, setMyRole] = useState<string | null>(null);
+  const [askerTurns, setAskerTurns] = useState<AskerTurn[] | null>(null);
   const prefetchTab = usePrefetchProjectTab();
   const projectFileKey = datasets
     .filter(row => row.project_id === projectId)
@@ -651,6 +665,52 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (!projectId) return;
     setVisitedTabs(current => markVisitedProjectTab(current, page));
   }, [projectId, page]);
+  useEffect(() => {
+    if (!projectId || myRole !== 'asker') return;
+    if (page === 'chat') return;
+    router.replace(`/flow/p/${projectId}/chat`);
+  }, [projectId, myRole, page, router]);
+
+  useEffect(() => {
+    if (!projectId || !isAuthenticated) {
+      setMyRole(null);
+      setAskerTurns(null);
+      return;
+    }
+    let live = true;
+    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
+      .then(me => {
+        const userId = me.user_id || me.user?.id || '';
+        return flowJson<{ members?: { user_id?: string; role?: string }[] }>(
+          `/api/projects/${projectId}/members`
+        ).then(page => {
+          if (!live) return;
+          const mine = (page.members || []).find(member => member.user_id === userId);
+          const role = mine?.role || (project?.created_by === userId ? 'owner' : null);
+          setMyRole(role);
+          if (role === 'asker') {
+            setAskerTurns(null);
+            return;
+          }
+          return flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
+            .then(log => {
+              if (live) setAskerTurns(log.turns || []);
+            })
+            .catch(() => {
+              if (live) setAskerTurns([]);
+            });
+        });
+      })
+      .catch(() => {
+        if (live) {
+          setMyRole(null);
+          setAskerTurns(null);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectId, isAuthenticated, project?.created_by]);
 
   useEffect(() => {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
@@ -767,7 +827,10 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 </Button>
                 <div className="proj-actions">
                   <ProjectPresenceAvatars view={presenceView} />
-                  {findReplaceAllowed ? (
+                  {myRole === 'asker' ? (
+                    <span className="output-badge">Asker · ask questions only</span>
+                  ) : null}
+                  {findReplaceAllowed && myRole !== 'asker' ? (
                     <Button
                       className="flow-btn"
                       type="button"
@@ -776,20 +839,24 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       Find &amp; replace
                     </Button>
                   ) : null}
-                  <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
-                    Share
-                  </Button>
-                  <Button
-                    className="flow-btn primary"
-                    type="button"
-                    onClick={() => setExportOpen(true)}
-                  >
-                    Export
-                  </Button>
+                  {myRole === 'asker' ? null : (
+                    <>
+                      <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
+                        Share
+                      </Button>
+                      <Button
+                        className="flow-btn primary"
+                        type="button"
+                        onClick={() => setExportOpen(true)}
+                      >
+                        Export
+                      </Button>
+                    </>
+                  )}
                 </div>
               </header>
               <nav className="proj-tabs">
-                {PROJECT_TABS.map(([key, label]) => (
+                {tabsForRole(myRole).map(([key, label]) => (
                   <Link
                     key={key}
                     href={`/flow/p/${projectId}/${key}`}
@@ -809,7 +876,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       })
                     }
                   >
-                    {label}
+                    {key === 'asker-questions' ? askerQuestionsTabLabel(askerTurns) : label}
                   </Link>
                 ))}
               </nav>
@@ -924,6 +991,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       ready={tabReady}
                       labelsRevision={findReplaceTick}
                     />
+                  </div>
+                ) : null}
+                {visitedTabs.has('asker-questions') && myRole !== 'asker' ? (
+                  <div hidden={page !== 'asker-questions'} data-project-tab="asker-questions">
+                    <AskerQuestionsScreen projectId={projectId} />
                   </div>
                 ) : null}
                 {section === 'interviews' ? <InterviewsScreen projectId={projectId} /> : null}
@@ -4878,6 +4950,11 @@ function ReportScreen({
   const [templateSummary, setTemplateSummary] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [waveOpen, setWaveOpen] = useState(false);
+  const [wavePrevious, setWavePrevious] = useState<WaveColumn[]>([]);
+  const [waveNext, setWaveNext] = useState<WaveColumn[]>([]);
+  const [waveFileName, setWaveFileName] = useState('');
+  const [waveMovers, setWaveMovers] = useState<WaveMover[]>([]);
+  const [waveChoosing, setWaveChoosing] = useState(false);
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
   const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
   const [marketDecks, setMarketDecks] = useState<MarketDeckRow[]>([]);
@@ -5258,6 +5335,79 @@ function ReportScreen({
   };
 
   const deck = async (recipe?: OverviewBuildRequest) => {
+    setError('');
+
+    // Audience overview: auto-build the standard tables from the saved audience.
+    if (recipe && exportFileId) {
+      const overviewOptions = {
+        headline: recipe.headline,
+        footnote: recipe.footnote,
+        hide_low: recipe.hideLow,
+        low_base_threshold: recipe.lowBaseThreshold,
+      };
+      const created = await flowJson<{
+        export_id?: string;
+        filename?: string;
+        n_copies?: number;
+        note?: string;
+        low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
+        slides_built?: string[];
+        detail?: string;
+      }>(`/datasets/${exportFileId}/export/deck/overview`, {
+        method: 'POST',
+        body: overviewDeckPayload({
+          audience: recipe.audience,
+          slides: recipe.slides,
+          options: overviewOptions,
+          templateName: templateName || undefined,
+          templateBase64: template || undefined,
+          perMarket: recipe.perMarket,
+        }),
+      });
+      if (!created.export_id) {
+        throw new Error(created.detail || 'The overview deck did not build.');
+      }
+      await downloadExport(
+        `/exports/${created.export_id}`,
+        created.filename ||
+          (created.n_copies && created.n_copies > 1
+            ? 'audience-overview-by-market.zip'
+            : 'deck.pptx')
+      );
+      if (created.low_bases?.length) {
+        setOverviewSlides(current =>
+          current.map(slide => {
+            const hit = created.low_bases?.find(note => {
+              const title = String(note.title || '').toLowerCase();
+              return (
+                title.includes(slide.title.toLowerCase().slice(0, 10)) ||
+                title.includes(String(slide.id || '').toLowerCase())
+              );
+            });
+            return hit
+              ? {
+                  ...slide,
+                  lowBase: true,
+                  lowBaseNote:
+                    hit.note ||
+                    (hit.base != null
+                      ? `One group has a base of ${hit.base} · shown with a low-base note`
+                      : 'shown with a low-base note'),
+                }
+              : slide;
+          })
+        );
+      }
+      setNote(
+        created.note ||
+          (created.n_copies && created.n_copies > 1
+            ? `Built ${created.n_copies} market decks and saved them as recipes.`
+            : 'Overview deck downloaded and saved as a recipe.')
+      );
+      setDecksTick(value => value + 1);
+      return;
+    }
+
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
@@ -5265,52 +5415,6 @@ function ReportScreen({
           ? 'Rebuild or deselect tables built on an older file before exporting.'
           : 'Add an output to the report, or save a table, before building a deck.'
       );
-      return;
-    }
-    setError('');
-    const overviewName = recipe?.audience
-      ? `Audience overview · ${recipe.audience}`
-      : 'Audience overview';
-    const overviewOptions = recipe
-      ? {
-          headline: recipe.headline,
-          footnote: recipe.footnote,
-          hide_low: recipe.hideLow,
-          low_base_threshold: recipe.lowBaseThreshold,
-        }
-      : undefined;
-
-    if (recipe?.perMarket) {
-      const created = await flowJson<{
-        export_id?: string;
-        filename?: string;
-        n_copies?: number;
-        family_id?: string;
-        note?: string;
-      }>(`/datasets/${exportFileId}/export/deck/batch`, {
-        method: 'POST',
-        body: overviewMarketBatchPayload({
-          specIds: selected.map(row => row.id),
-          groupColumn: recipe.perMarket.groupColumn,
-          values: recipe.perMarket.values,
-          name: overviewName,
-          audience: recipe.audience,
-          slides: recipe.slides,
-          options: overviewOptions,
-          templateName: templateName || undefined,
-        }),
-      });
-      if (!created.export_id) throw new Error('The market decks did not build.');
-      await downloadExport(
-        `/exports/${created.export_id}`,
-        created.filename ||
-          (created.n_copies === 1 ? 'deck.pptx' : 'audience-overview-by-market.zip')
-      );
-      setNote(
-        created.note ||
-          `Built ${created.n_copies || recipe.perMarket.values.length} market decks and saved them as recipes.`
-      );
-      setDecksTick(value => value + 1);
       return;
     }
 
@@ -5336,16 +5440,8 @@ function ReportScreen({
         .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
       ...(template ? { template_base64: template } : {}),
       ...(templateName ? { template_name: templateName } : {}),
-      ...(recipe
-        ? {
-            name: overviewName,
-            audience: recipe.audience,
-            slides: recipe.slides,
-            options: overviewOptions,
-          }
-        : {}),
     });
-    setNote(recipe ? 'Overview deck downloaded and saved as a recipe.' : 'Deck downloaded.');
+    setNote('Deck downloaded.');
     setDecksTick(value => value + 1);
   };
 
@@ -5621,6 +5717,11 @@ function ReportScreen({
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
             datasetId={exportFileId || undefined}
+            projectLabel={project?.name || undefined}
+            dataLabel={
+              datasets.find(row => datasetRowId(row) === exportFileId)?.original_filename ||
+              undefined
+            }
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
@@ -5629,7 +5730,121 @@ function ReportScreen({
           />
         ) : null}
         {waveOpen ? (
-          <WaveRefresh previous={[]} next={[]} onClose={() => setWaveOpen(false)} />
+          <WaveRefresh
+            previous={wavePrevious}
+            next={waveNext}
+            fileName={waveFileName || undefined}
+            deckLabel={
+              marketDecks[0]?.name ||
+              (overviewSlides.length
+                ? `Audience overview (${overviewSlides.length} slides)`
+                : undefined)
+            }
+            audienceLabel={audienceNames[0] || undefined}
+            movers={waveMovers}
+            choosingFile={waveChoosing}
+            onPickFile={async file => {
+              if (!isAcceptedUploadExtension(file.name)) {
+                setError('That file type is not supported for a second wave.');
+                return;
+              }
+              const token = getStytchBearerForTensrApi();
+              if (!token) {
+                setError('Sign in again to upload a second wave.');
+                return;
+              }
+              setWaveChoosing(true);
+              setError('');
+              try {
+                const uploaded = await uploadDatasetFile(file, token, 'workspace');
+                const datasetId = uploaded.dataset_id;
+                const meta = await flowJson<{
+                  columns?: { name?: string; label?: string | null }[];
+                }>(`/datasets/${datasetId}/metadata`);
+                const columns: WaveColumn[] = (meta.columns || [])
+                  .map(column => ({
+                    name: String(column.name || '').trim(),
+                    label: String(column.label || column.name || '').trim(),
+                  }))
+                  .filter(column => column.name && !isInternalColumn(column.name));
+                setWaveNext(columns);
+                setWaveFileName(file.name);
+                setWaveMovers([]);
+              } catch (err) {
+                setError(
+                  err instanceof Error ? err.message : 'Could not read that second-wave file.'
+                );
+                throw err;
+              } finally {
+                setWaveChoosing(false);
+              }
+            }}
+            onBuild={async (request: WaveRefreshBuildRequest) => {
+              if (!exportFileId) {
+                throw new Error('Open a dataset on Report before refreshing a wave.');
+              }
+              // Recipe lives on the open file. Match mapping is validated against the
+              // second wave; refresh stamps a new export and keeps prior versions.
+              const variables = [
+                ...request.matchedByName.map(name => {
+                  const column = wavePrevious.find(item => item.name === name);
+                  return { name, label: column?.label || name };
+                }),
+                ...request.matchedByLabel
+                  .filter(item => request.kept[item.previous] !== false)
+                  .map(item => {
+                    const prior = wavePrevious.find(column => column.name === item.previous);
+                    return { name: item.previous, label: prior?.label || item.label };
+                  }),
+              ];
+              // Unmatched (dropped or still missing) stay out of the remapped list.
+              const droppedLabels = new Set(
+                Object.entries(request.dropped)
+                  .filter(([, value]) => value)
+                  .map(([label]) => label)
+              );
+              const wanted = variables.filter(item => !droppedLabels.has(item.label));
+              const deckId = marketDecks[0]?.id || '';
+              const specIds = selected.map(table => table.id).filter(Boolean);
+              if (!deckId && !specIds.length) {
+                throw new Error('Save a deck or tables before building a new wave version.');
+              }
+              const refreshed = await flowJson<{
+                movers?: WaveMover[];
+                movers_summary?: string;
+                unmatched?: string[];
+                export_id?: string;
+                n_versions?: number;
+              }>(`/datasets/${exportFileId}/export/deck/refresh`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  deck_spec_id: deckId || undefined,
+                  spec_ids: deckId ? undefined : specIds,
+                  variables: wanted,
+                }),
+              });
+              setWaveMovers(Array.isArray(refreshed.movers) ? refreshed.movers : []);
+              const unmatched = (refreshed.unmatched || []).filter(Boolean);
+              const summary = String(refreshed.movers_summary || '').trim();
+              setNote(
+                [
+                  'Built a new deck version. The original stays as it is.',
+                  waveFileName ? `Matched against ${waveFileName}.` : '',
+                  summary,
+                  unmatched.length
+                    ? `${unmatched.length} question${unmatched.length === 1 ? '' : 's'} still unmatched.`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              );
+              setDecksTick(value => value + 1);
+            }}
+            onClose={() => {
+              setWaveOpen(false);
+              setWaveChoosing(false);
+            }}
+          />
         ) : null}
         <div className="report-block">
           <div className="report-head">
@@ -5722,7 +5937,46 @@ function ReportScreen({
               >
                 Audience overview
               </Button>
-              <Button type="button" className="flow-btn" onClick={() => setWaveOpen(true)}>
+              <Button
+                type="button"
+                className="flow-btn"
+                onClick={() => {
+                  setWaveNext([]);
+                  setWaveFileName('');
+                  setWaveMovers([]);
+                  setWaveChoosing(false);
+                  if (exportFileId) {
+                    void flowJson<{
+                      columns?: { name?: string; label?: string | null }[];
+                    }>(`/datasets/${exportFileId}/metadata`)
+                      .then(meta =>
+                        setWavePrevious(
+                          (meta.columns || [])
+                            .map(column => ({
+                              name: String(column.name || '').trim(),
+                              label: String(column.label || column.name || '').trim(),
+                            }))
+                            .filter(column => column.name && !isInternalColumn(column.name))
+                        )
+                      )
+                      .catch(() => setWavePrevious([]));
+                    void flowJson<{ audiences?: { name?: string; label?: string }[] }>(
+                      `/datasets/${exportFileId}/audiences`
+                    )
+                      .then(page =>
+                        setAudienceNames(
+                          (page.audiences || [])
+                            .map(row => String(row.label || row.name || '').trim())
+                            .filter(Boolean)
+                        )
+                      )
+                      .catch(() => undefined);
+                  } else {
+                    setWavePrevious([]);
+                  }
+                  setWaveOpen(true);
+                }}
+              >
                 Refresh wave
               </Button>
             </Card>

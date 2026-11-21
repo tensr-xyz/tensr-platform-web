@@ -55,7 +55,7 @@ export function ShareDialog({
   const [invites, setInvites] = useState<Invite[]>([]);
   const [orgId, setOrgId] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('viewer');
+  const [role, setRole] = useState('asker');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [shares, setShares] = useState<Share[]>([]);
@@ -297,9 +297,9 @@ export function ShareDialog({
     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || '?';
   };
   const roleName = (value?: string) => {
-    if (value === 'asker') return 'Can ask';
-    if (value === 'editor') return 'Can edit';
-    if (value === 'viewer' || !value) return 'Can view';
+    if (value === 'asker') return 'Asker';
+    if (value === 'editor') return 'Editor';
+    if (value === 'viewer' || !value) return 'Viewer';
     if (value === 'owner') return 'Owner';
     return value[0].toUpperCase() + value.slice(1).toLowerCase();
   };
@@ -330,9 +330,9 @@ export function ShareDialog({
                   value={role}
                   onValueChange={setRole}
                   options={[
-                    { value: 'editor', label: 'Can edit' },
-                    { value: 'asker', label: 'Can ask' },
-                    { value: 'viewer', label: 'Can view' },
+                    { value: 'asker', label: 'Asker' },
+                    { value: 'viewer', label: 'Viewer' },
+                    { value: 'editor', label: 'Editor' },
                   ]}
                 />
               </div>
@@ -341,9 +341,9 @@ export function ShareDialog({
               </Button>
             </div>
             <p className="share-roles">
-              <span>Can edit · runs and edits</span>
-              <span>Can ask · asks questions, can’t edit</span>
-              <span>Can view · reads outputs</span>
+              <span>Viewer · reads outputs</span>
+              <span>Asker · asks questions, can&apos;t edit</span>
+              <span>Editor · runs and edits</span>
             </p>
             <span className="share-label">People with access · {count}</span>
             {people === null ? <Skeleton className="h-16" /> : null}

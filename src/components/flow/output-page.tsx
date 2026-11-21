@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SidePanel } from '@/components/flow/side-panel';
@@ -23,6 +23,19 @@ import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dial
 import { documentApa, runDocument, type ReportPin } from '@/components/flow/run-document';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
+import {
+  filterMentionPeople,
+  insertMentionAt,
+  markMentionsSeen,
+  mentionQueryAt,
+  mentionsForReport,
+  notifyMentionReceived,
+  personInitials,
+  roleLabel,
+  unseenMentionIds,
+  type MentionNotice,
+  type MentionPerson,
+} from '@/lib/comment-mentions';
 
 function storedReport(run: Record<string, unknown>): AnalysisReport | null {
   const report = run.report;
@@ -63,6 +76,7 @@ export function OutputPage({
   const fullReport = useMemo(() => storedReport(run), [run]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState('');
+  const [draftCaret, setDraftCaret] = useState(0);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [commentError, setCommentError] = useState('');
   const [adding, setAdding] = useState(false);
@@ -70,11 +84,17 @@ export function OutputPage({
   const [rerunNote, setRerunNote] = useState('');
   const [panel, setPanel] = useState<'info' | 'comments'>('info');
   const [cellAnchor, setCellAnchor] = useState('');
+  const [people, setPeople] = useState<MentionPerson[]>([]);
+  const [myMentions, setMyMentions] = useState<MentionNotice[]>([]);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const pins = useProjectPins(projectId, datasetId ? [datasetId] : []);
   const pinned = pins.some(pin => pin.runId === runId);
   const plot = figureSvg(
     document.tables.find(table => table.title === 'Group means') || document.tables[0]
   );
+  const mentionActive = mentionQueryAt(draft, draftCaret);
+  const mentionChoices = mentionActive ? filterMentionPeople(people, mentionActive.query) : [];
+  const reportMentions = useMemo(() => mentionsForReport(myMentions, runId), [myMentions, runId]);
 
   const loadComments = () => {
     void flowJson<{ comments?: Comment[] }>(
@@ -86,9 +106,91 @@ export function OutputPage({
       );
   };
 
+  const loadMentions = () => {
+    void flowJson<{ mentions?: MentionNotice[] }>('/reports/mentions')
+      .then(page => {
+        const notes = page.mentions || [];
+        setMyMentions(notes);
+        const mine = mentionsForReport(notes, runId);
+        const fresh = unseenMentionIds(mine);
+        if (!fresh.length) return;
+        const first = mine.find(
+          note =>
+            `${note.report_id || ''}#${note.comment_id || ''}#${note.created_at || ''}` === fresh[0]
+        );
+        if (first) {
+          notifyMentionReceived({
+            authorName: first.author_name || 'Someone',
+            text: first.text,
+          });
+        }
+        markMentionsSeen(mine);
+      })
+      .catch(() => setMyMentions([]));
+  };
+
   useEffect(() => {
     loadComments();
+    loadMentions();
   }, [datasetId, runId]);
+
+  useEffect(() => {
+    let live = true;
+    void flowJson<{ active_organization?: { id?: string } }>('/me')
+      .then(async me => {
+        const orgId = me.active_organization?.id || '';
+        const [members, workspace] = await Promise.all([
+          flowJson<{ members?: { user_id?: string; role?: string }[] }>(
+            `/api/projects/${projectId}/members`
+          ),
+          orgId
+            ? flowJson<{
+                members?: { user_id?: string; email?: string; display_name?: string }[];
+              }>(`/api/organizations/${orgId}/members`).catch(() => ({ members: [] }))
+            : Promise.resolve({ members: [] }),
+        ]);
+        if (!live) return;
+        const byId = new Map(
+          (workspace.members || []).map(person => [person.user_id || '', person])
+        );
+        setPeople(
+          (members.members || [])
+            .filter(member => member.user_id)
+            .map(member => {
+              const profile = byId.get(member.user_id || '');
+              const display = String(profile?.display_name || '').trim();
+              const email = String(profile?.email || '').trim();
+              const fromEmail = email ? email.split('@', 1)[0].replace(/[._]/g, ' ').trim() : '';
+              const name = display || fromEmail;
+              return {
+                user_id: String(member.user_id),
+                name,
+                role: member.role,
+              };
+            })
+            .filter(person => person.name.length >= 2)
+        );
+      })
+      .catch(() => {
+        if (live) setPeople([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+
+  const pickMention = (person: MentionPerson) => {
+    const next = insertMentionAt(draft, draftCaret, person.name);
+    if (!next) return;
+    setDraft(next.text);
+    setDraftCaret(next.caret);
+    requestAnimationFrame(() => {
+      const node = draftRef.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(next.caret, next.caret);
+    });
+  };
 
   const post = () => {
     const text = draft.trim();
@@ -107,9 +209,11 @@ export function OutputPage({
     })
       .then(() => {
         setDraft('');
+        setDraftCaret(0);
         setReplyTo(null);
         setCellAnchor('');
         loadComments();
+        loadMentions();
       })
       .catch(err =>
         setCommentError(err instanceof Error ? err.message : 'Could not post the comment')
@@ -184,7 +288,9 @@ export function OutputPage({
             data-active={panel === 'comments'}
             onClick={() => setPanel(current => (current === 'comments' ? 'info' : 'comments'))}
           >
-            Comments{open.length ? ` · ${open.length}` : ''}
+            Comments
+            {open.length ? ` · ${open.length}` : ''}
+            {reportMentions.length ? ` · @${reportMentions.length}` : ''}
           </Button>
           <Button
             className="flow-btn"
@@ -370,6 +476,12 @@ export function OutputPage({
                 ×
               </Button>
             </div>
+            {reportMentions.length ? (
+              <div className="output-mentions-banner" role="status">
+                {reportMentions[0]?.author_name || 'Someone'} mentioned you
+                {reportMentions.length > 1 ? ` · ${reportMentions.length} mentions` : ''}
+              </div>
+            ) : null}
             <div className="output-comments-list">
               {roots.length === 0 ? (
                 <p className="flow-muted output-comments-empty">No comments yet.</p>
@@ -434,14 +546,53 @@ export function OutputPage({
             </div>
             <div className="output-compose">
               <Textarea
+                ref={draftRef}
                 aria-label="Comment"
                 value={draft}
-                placeholder={replyTo ? 'Reply to this comment' : 'Comment on this output'}
-                onChange={event => setDraft(event.target.value)}
+                placeholder={replyTo ? 'Reply to this comment' : 'Worth a look before Friday @'}
+                onChange={event => {
+                  setDraft(event.target.value);
+                  setDraftCaret(event.target.selectionStart ?? event.target.value.length);
+                }}
+                onSelect={event =>
+                  setDraftCaret(event.currentTarget.selectionStart ?? draft.length)
+                }
+                onKeyUp={event => setDraftCaret(event.currentTarget.selectionStart ?? draft.length)}
+                onClick={event => setDraftCaret(event.currentTarget.selectionStart ?? draft.length)}
               />
+              {mentionChoices.length ? (
+                <div className="output-mention-menu" role="listbox" aria-label="Mention someone">
+                  {mentionChoices.map(person => (
+                    <Button
+                      key={person.user_id}
+                      type="button"
+                      role="option"
+                      className="output-mention-option"
+                      onClick={() => pickMention(person)}
+                    >
+                      <span className="output-avatar">{personInitials(person.name)}</span>
+                      <span className="share-who">
+                        <strong>{person.name}</strong>
+                        <span>{roleLabel(person.role)}</span>
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
               <div className="output-compose-row">
                 <span className="flow-muted">
-                  {replyTo ? 'Replying' : cellAnchor ? `On ${cellAnchor}` : 'On this output'}
+                  {mentionActive ? (
+                    <>
+                      <span className="output-mention-hint">@</span>{' '}
+                      {replyTo ? 'Replying' : cellAnchor ? `On ${cellAnchor}` : 'On this output'}
+                    </>
+                  ) : replyTo ? (
+                    'Replying'
+                  ) : cellAnchor ? (
+                    `On ${cellAnchor}`
+                  ) : (
+                    'On this output'
+                  )}
                 </span>
                 {cellAnchor && !replyTo ? (
                   <Button className="output-link" type="button" onClick={() => setCellAnchor('')}>

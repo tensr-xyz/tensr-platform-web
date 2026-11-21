@@ -176,7 +176,7 @@ function memberMark(id: string): string {
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
   if (role === 'viewer') return 'Can view';
-  if (role === 'asker') return 'Can ask';
+  if (role === 'asker') return 'Asker';
   return 'Can edit';
 }
 
@@ -206,96 +206,6 @@ function objectiveLines(text: string): string[] {
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean);
-}
-
-function askerBucket(turn: AskerTurn): 'to_check' | 'checked' | 'not_in_data' {
-  if (
-    turn.status === 'not_in_data' ||
-    turn.answer.trim().toLowerCase().startsWith('not in this data')
-  ) {
-    return 'not_in_data';
-  }
-  if (turn.status === 'checked' || turn.checked) return 'checked';
-  return 'to_check';
-}
-
-function AskerLog({
-  turns,
-  onMark,
-}: {
-  turns: AskerTurn[];
-  onMark: (turnId: string, status?: 'checked' | 'flagged') => void;
-}) {
-  const [filter, setFilter] = useState<'to_check' | 'checked' | 'not_in_data' | 'all'>('to_check');
-  const [openId, setOpenId] = useState(turns[0]?.turn_id || '');
-  const shown = filter === 'all' ? turns : turns.filter(turn => askerBucket(turn) === filter);
-  const open = shown.find(turn => turn.turn_id === openId) || shown[0];
-  return (
-    <div className="details-questions">
-      <div className="flow-muted details-label">Can ask questions</div>
-      <div className="flow-row">
-        {(
-          [
-            ['to_check', 'To check'],
-            ['checked', 'Checked'],
-            ['not_in_data', 'Not in data'],
-            ['all', 'All'],
-          ] as const
-        ).map(([id, label]) => (
-          <Button
-            key={id}
-            type="button"
-            className="flow-btn"
-            aria-pressed={filter === id}
-            onClick={() => setFilter(id)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-      {shown.map(turn => (
-        <div key={turn.turn_id} className="details-member">
-          <Button type="button" className="flow-btn" onClick={() => setOpenId(turn.turn_id)}>
-            <span className="details-member-id">
-              <strong>{turn.question}</strong>
-              <span className="flow-muted">{turn.answer}</span>
-            </span>
-          </Button>
-          {askerBucket(turn) === 'checked' ? (
-            <span className="flow-muted">Checked</span>
-          ) : (
-            <span className="flow-row">
-              <Button type="button" onClick={() => onMark(turn.turn_id, 'checked')}>
-                Mark as checked
-              </Button>
-              <Button type="button" onClick={() => onMark(turn.turn_id, 'flagged')}>
-                Flag a problem
-              </Button>
-            </span>
-          )}
-        </div>
-      ))}
-      {shown.length ? null : <p className="flow-muted">Nothing in this list.</p>}
-      {open ? (
-        <div className="asker-worked">
-          <p>How it was worked out</p>
-          <p>
-            <span className="flow-muted">Audience</span>{' '}
-            {open.audience || 'The rows this answer used'}
-          </p>
-          <p>
-            <span className="flow-muted">Base</span> {open.base || 'The base on this answer'}
-          </p>
-          <p>
-            <span className="flow-muted">Weight</span> {open.weight || 'The weight on this answer'}
-          </p>
-          <p>
-            <span className="flow-muted">Source</span> {open.source || 'This project’s file'}
-          </p>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export function DetailsScreen({
@@ -691,20 +601,6 @@ export function DetailsScreen({
 
   const mine = (members || []).find(member => member.user_id === userId);
   const asker = mine?.role === 'asker';
-  const markChecked = (turnId: string, status: 'checked' | 'flagged' = 'checked') => {
-    void flowJson<{ turn?: AskerTurn }>(`/api/projects/${projectId}/asker-log/${turnId}`, {
-      method: 'POST',
-      body: JSON.stringify({ checked: status === 'checked', status }),
-    })
-      .then(page => {
-        const saved = page.turn;
-        if (!saved) return;
-        setTurns(current =>
-          (current || []).map(turn => (turn.turn_id === saved.turn_id ? saved : turn))
-        );
-      })
-      .catch(() => setMemberError('Could not mark that answer checked.'));
-  };
   const lines = objectiveLines(parts.objectives);
   const startEdit = () => {
     setObjectives(parts.objectives);
@@ -1091,7 +987,12 @@ export function DetailsScreen({
             ) : (
               <p className="flow-muted">No members yet.</p>
             )}
-            {asker || !turns?.length ? null : <AskerLog turns={turns} onMark={markChecked} />}
+            {asker || !turns?.length ? null : (
+              <p className="flow-muted">
+                Review Asker answers on{' '}
+                <a href={`/flow/p/${projectId}/asker-questions`}>Asker questions</a>.
+              </p>
+            )}
           </div>
         </SidePanel>
       </div>
@@ -1126,9 +1027,9 @@ export function DetailsScreen({
             value={role}
             onValueChange={setRole}
             options={[
-              { value: 'editor', label: 'Can edit' },
-              { value: 'asker', label: 'Can ask' },
-              { value: 'viewer', label: 'Can view' },
+              { value: 'asker', label: 'Asker' },
+              { value: 'viewer', label: 'Viewer' },
+              { value: 'editor', label: 'Editor' },
             ]}
           />
           <div className="flow-row">

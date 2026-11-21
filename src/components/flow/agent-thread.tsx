@@ -24,7 +24,6 @@ import {
 } from '@/components/flow/chat-live-run';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisResult } from '@/components/flow/analysis-result';
-import { exportResultAsPptx } from '@/lib/output-pptx';
 import {
   answerTables,
   answerWithoutBase,
@@ -1197,16 +1196,20 @@ export function AgentThreadColumn({
   const [stepsOpen, setStepsOpen] = useState(true);
   const [asker, setAsker] = useState(false);
   const [askedOwner, setAskedOwner] = useState(false);
+  const [audiences, setAudiences] = useState<
+    { name: string; label: string; description?: string }[]
+  >([]);
   useEffect(() => {
     if (!thread.projectId) return;
     let live = true;
-    void flowJson<{ user_id?: string }>('/me')
+    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
       .then(me =>
         flowJson<{ members?: { user_id?: string; role?: string }[] }>(
           `/api/projects/${thread.projectId}/members`
         ).then(page => {
           if (!live) return;
-          const mine = (page.members || []).find(member => member.user_id === me.user_id);
+          const userId = me.user_id || me.user?.id || '';
+          const mine = (page.members || []).find(member => member.user_id === userId);
           setAsker(mine?.role === 'asker');
         })
       )
@@ -1217,6 +1220,39 @@ export function AgentThreadColumn({
       live = false;
     };
   }, [thread.projectId]);
+  useEffect(() => {
+    if (!asker || !thread.datasetId) {
+      setAudiences([]);
+      return;
+    }
+    let live = true;
+    void flowJson<{ audiences?: { name?: string; label?: string; description?: string }[] }>(
+      `/datasets/${thread.datasetId}/audiences`
+    )
+      .then(page => {
+        if (!live) return;
+        setAudiences(
+          (page.audiences || [])
+            .map(item => ({
+              name: String(item.name || '').trim(),
+              label: String(item.label || item.name || '').trim(),
+              description: String(item.description || '').trim(),
+            }))
+            .filter(item => item.label)
+        );
+      })
+      .catch(() => {
+        if (live) setAudiences([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [asker, thread.datasetId]);
+  const notInData =
+    asker &&
+    Boolean(thread.answer) &&
+    (!thread.plan || thread.approving) &&
+    thread.answer.trim().toLowerCase().startsWith('not in this data');
   const reportPins = useProjectPins(
     thread.projectId || '',
     thread.datasetId ? [thread.datasetId] : []
@@ -1243,26 +1279,47 @@ export function AgentThreadColumn({
   const liveChanges = chatTurnChangesFromToolResults(thread.toolResults);
   const showLiveChanges = liveChanges.length > 0 && Boolean(thread.projectId) && !thread.plan;
 
-  return (
-    <div className={panel ? 'agent-thread-panel' : 'chat-column'}>
-      {asker ? (
-        <aside className="asker-rail">
-          <p>Can ask</p>
-          <p className="flow-muted">Audiences you can ask about</p>
+  const askerRail = asker ? (
+    <aside className="asker-rail" aria-label="Asker rail">
+      <div className="asker-rail-block">
+        <p className="asker-rail-label">Audiences you can ask about</p>
+        {audiences.length ? (
+          audiences.map(audience => (
+            <div key={audience.name || audience.label} className="asker-audience-card">
+              <strong>{audience.label}</strong>
+              {audience.description ? (
+                <span className="flow-muted">{audience.description}</span>
+              ) : null}
+            </div>
+          ))
+        ) : (
           <p className="flow-muted">The audiences shared with this project.</p>
-          <p>Your questions</p>
-          {thread.past.map(item => (
-            <p key={item.user}>{item.user}</p>
-          ))}
-          <div>
-            <p>What you can do here</p>
-            <p className="flow-muted">
-              Ask questions and copy answers. You can&apos;t change data, weights, audiences or the
-              report. Answers you mark get checked by the project owner.
+        )}
+      </div>
+      <div className="asker-rail-block">
+        <p className="asker-rail-label">Your questions</p>
+        {thread.past.length ? (
+          thread.past.map(item => (
+            <p key={item.user} className="asker-question-link">
+              {item.user}
             </p>
-          </div>
-        </aside>
-      ) : null}
+          ))
+        ) : (
+          <p className="flow-muted">Questions you ask stay here.</p>
+        )}
+      </div>
+      <div className="asker-rail-note">
+        <p>What you can do here</p>
+        <p className="flow-muted">
+          Ask questions and copy answers. You can&apos;t change data, weights, audiences or the
+          report.
+        </p>
+      </div>
+    </aside>
+  ) : null;
+
+  const mainBody = (
+    <>
       <div className="chat-scroll">
         {!thread.showThread && panel ? (
           <Empty className="min-h-[280px] border-0 bg-transparent">
@@ -1366,7 +1423,14 @@ export function AgentThreadColumn({
           </div>
         ) : null}
         {thread.answer && (!thread.plan || thread.approving) ? (
-          thread.structuredTables.length || thread.resultCharts.length ? (
+          notInData ? (
+            <div className="asker-not-in-data" role="status">
+              <p>
+                <strong>Not in this data.</strong>{' '}
+                {thread.answer.replace(/^not in this data\.?\s*/i, '')}
+              </p>
+            </div>
+          ) : thread.structuredTables.length || thread.resultCharts.length ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
@@ -1384,28 +1448,64 @@ export function AgentThreadColumn({
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
           )
         ) : null}
-        {asker && thread.answer && (!thread.plan || thread.approving) ? (
-          <div className="asker-worked">
-            <p>How it was worked out</p>
-            <p>
-              <span className="flow-muted">Audience</span>{' '}
-              {thread.resultView.audienceDefinition ||
-                thread.resultView.audience ||
-                'The rows this answer used'}
-            </p>
-            <p>
-              <span className="flow-muted">Base</span>{' '}
-              {thread.resultView.base || thread.resultView.baseDetail || 'The base on this answer'}
-            </p>
-            <p>
-              <span className="flow-muted">Weight</span>{' '}
-              {thread.resultView.weight || 'The project weight'}
-            </p>
-            <p>
-              <span className="flow-muted">Source</span>{' '}
-              {[thread.resultView.wave, thread.resultView.source].filter(Boolean).join(' · ') ||
-                'This project’s file'}
-            </p>
+        {asker && thread.answer && !notInData && (!thread.plan || thread.approving) ? (
+          <div className="asker-chips" aria-label="How this answer was worked out">
+            {(
+              [
+                [
+                  'Audience',
+                  thread.resultView.audienceDefinition ||
+                    thread.resultView.audience ||
+                    thread.resultView.filter,
+                ],
+                ['Base', thread.resultView.base || thread.resultView.baseDetail],
+                ['Weight', thread.resultView.weight],
+                ['Wave', thread.resultView.wave],
+                ['Source', thread.resultView.source],
+              ] as const
+            )
+              .filter(([, value]) => Boolean(value))
+              .map(([label, value]) => (
+                <span key={label} className="asker-chip">
+                  <span className="flow-muted">{label}</span> {value}
+                </span>
+              ))}
+          </div>
+        ) : null}
+        {asker && thread.answer && (!thread.plan || thread.approving) && !thread.outputReady ? (
+          <div className="chat-result-actions asker-answer-actions">
+            <span className="output-badge">Asker · ask questions only</span>
+            <Button
+              className="flow-btn"
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(thread.answer);
+              }}
+            >
+              Copy answer
+            </Button>
+            {notInData ? null : (
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={askedOwner || !thread.projectId}
+                onClick={() => {
+                  if (!thread.projectId) return;
+                  void flowJson(`/api/projects/${thread.projectId}/asker-log/request-check`, {
+                    method: 'POST',
+                    body: '{}',
+                  })
+                    .then(() => {
+                      setAskedOwner(true);
+                      thread.setStatus('Sent to the owner to check.');
+                    })
+                    .catch(() => thread.setStatus('Could not ask the owner to check that answer.'));
+                }}
+              >
+                Ask owner to check
+              </Button>
+            )}
+            {askedOwner ? <span className="flow-muted">Not checked yet</span> : null}
           </div>
         ) : null}
         {showLiveChanges ? (
@@ -1447,12 +1547,14 @@ export function AgentThreadColumn({
             <div className="chat-result-actions">
               {asker ? (
                 <>
-                  <span className="output-badge">Can ask · ask questions only</span>
+                  <span className="output-badge">Asker · ask questions only</span>
                   <Button
                     className="flow-btn"
                     type="button"
                     onClick={() => {
-                      const text = [thread.lead, thread.footnote].filter(Boolean).join('\n');
+                      const text = [thread.lead || thread.answer, thread.footnote]
+                        .filter(Boolean)
+                        .join('\n');
                       void navigator.clipboard?.writeText(text);
                     }}
                   >
@@ -1474,34 +1576,29 @@ export function AgentThreadColumn({
                   >
                     Copy table
                   </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    disabled={!thread.structuredTables.length && !thread.lead}
-                    onClick={() => {
-                      void exportResultAsPptx({
-                        runId: thread.runIds[0],
-                        lead: thread.lead || thread.takeaway,
-                        tables: thread.structuredTables,
-                        footnote: thread.footnote,
-                        projectId: thread.projectId,
-                      })
-                        .then(() => thread.setStatus('Slide downloaded.'))
-                        .catch(() => thread.setStatus('That slide could not be downloaded.'));
-                    }}
-                  >
-                    Download slide
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => {
-                      setAskedOwner(true);
-                      thread.setStatus('Sent to the owner to check.');
-                    }}
-                  >
-                    Ask owner to check
-                  </Button>
+                  {notInData ? null : (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      disabled={askedOwner || !thread.projectId}
+                      onClick={() => {
+                        if (!thread.projectId) return;
+                        void flowJson(`/api/projects/${thread.projectId}/asker-log/request-check`, {
+                          method: 'POST',
+                          body: '{}',
+                        })
+                          .then(() => {
+                            setAskedOwner(true);
+                            thread.setStatus('Sent to the owner to check.');
+                          })
+                          .catch(() =>
+                            thread.setStatus('Could not ask the owner to check that answer.')
+                          );
+                      }}
+                    >
+                      Ask owner to check
+                    </Button>
+                  )}
                   {askedOwner ? <span className="flow-muted">Not checked yet</span> : null}
                 </>
               ) : null}
@@ -1654,6 +1751,13 @@ export function AgentThreadColumn({
         }
         attachError={thread.attachError}
       />
+    </>
+  );
+
+  return (
+    <div className={`${panel ? 'agent-thread-panel' : 'chat-column'}${asker ? ' is-asker' : ''}`}>
+      {askerRail}
+      {asker ? <div className="asker-thread-main">{mainBody}</div> : mainBody}
     </div>
   );
 }

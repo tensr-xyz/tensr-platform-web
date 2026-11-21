@@ -1100,6 +1100,165 @@ export function placeObjectInSlot(
   };
 }
 
+export function setPageLayout(
+  document: ReportDocument | unknown,
+  pageId: string,
+  layoutId: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const layout = String(layoutId || '').trim() || 'blank';
+  if (!getPageLayout(layout)) {
+    throw new Error(`Unknown page layout ${layout}.`);
+  }
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        layoutId: layout,
+        objects: page.objects.map(obj => {
+          const slot = obj.slotId ? String(obj.slotId).trim() : null;
+          if (!slot) return obj;
+          const box = frameForSlot(layout, slot);
+          if (!box) return { ...obj, slotId: null };
+          return { ...obj, frame: box };
+        }),
+      };
+    }),
+  };
+}
+
+export type PageTemplate = {
+  kind: 'page';
+  layoutId: string;
+  title: string | null;
+  section: string | null;
+  objects: Array<Record<string, unknown>>;
+};
+
+export type StyleTemplate = {
+  kind: 'chart' | 'table';
+  tableStyle?: TableStyle;
+  tableRules?: TableRule[];
+  textStyle?: TextBoxStyle;
+  frame?: ReportFrame;
+};
+
+export function pageAsTemplate(page: ReportPage | unknown): PageTemplate {
+  const source = page && typeof page === 'object' ? (page as Record<string, unknown>) : {};
+  let layoutId = String(source.layout_id || source.layoutId || 'blank').trim() || 'blank';
+  if (!getPageLayout(layoutId)) layoutId = 'title_and_content';
+  const rawObjects = Array.isArray(source.objects) ? source.objects : [];
+  const objects: Array<Record<string, unknown>> = [];
+  for (const item of rawObjects) {
+    const obj = normalizeObject(item, layoutId);
+    if (!obj) continue;
+    objects.push({
+      kind: obj.kind,
+      frame: { ...obj.frame },
+      zIndex: obj.zIndex,
+      hidden: obj.hidden,
+      slotId: obj.slotId,
+      text: obj.text,
+      textStyle: { ...obj.textStyle },
+      runs: obj.runs.map(run => ({ ...run })),
+      shapeType: obj.shapeType,
+      imageUrl: obj.imageUrl,
+      tableStyle: { ...obj.tableStyle },
+      tableRules: obj.tableRules.map(rule => ({ ...rule })),
+      tableEdits: {
+        ...obj.tableEdits,
+        renames: { ...obj.tableEdits.renames },
+        hiddenRowIds: [...obj.tableEdits.hiddenRowIds],
+        hiddenColumnIds: [...obj.tableEdits.hiddenColumnIds],
+        rowOrder: [...obj.tableEdits.rowOrder],
+        merges: obj.tableEdits.merges.map(merge => ({ ...merge, rowIds: [...merge.rowIds] })),
+      },
+      keepLive: false,
+    });
+  }
+  return {
+    kind: 'page',
+    layoutId,
+    title: String(source.title || '').trim() || null,
+    section: String(source.section || '').trim() || null,
+    objects,
+  };
+}
+
+export function applyPageTemplate(
+  document: ReportDocument | unknown,
+  template: PageTemplate | Record<string, unknown>,
+  options?: { title?: string; afterPageId?: string }
+): ReportDocument {
+  const before = normalizeReportDocument(document);
+  const beforeIds = new Set(before.pages.map(page => page.id));
+  const bag = template && typeof template === 'object' ? (template as Record<string, unknown>) : {};
+  let layoutId = String(bag.layout_id || bag.layoutId || 'blank').trim() || 'blank';
+  if (!getPageLayout(layoutId)) layoutId = 'title_and_content';
+  const title =
+    options?.title !== undefined
+      ? String(options.title).trim() || 'Untitled page'
+      : String(bag.title || '').trim() || 'Untitled page';
+  const withPage = addPage(before, {
+    title,
+    layoutId,
+    section: bag.section ? String(bag.section).trim() || null : null,
+    afterPageId: options?.afterPageId,
+  });
+  const created =
+    withPage.pages.find(page => !beforeIds.has(page.id)) ||
+    withPage.pages[withPage.pages.length - 1];
+  if (!created) return withPage;
+  const objects: ReportObject[] = [];
+  const rawObjects = Array.isArray(bag.objects) ? bag.objects : [];
+  for (const item of rawObjects) {
+    if (!item || typeof item !== 'object') continue;
+    const payload = { ...(item as Record<string, unknown>) };
+    delete payload.id;
+    delete payload.run_id;
+    delete payload.runId;
+    delete payload.pin_id;
+    delete payload.pinId;
+    delete payload.table_spec_id;
+    delete payload.tableSpecId;
+    payload.keepLive = false;
+    const obj = normalizeObject(payload, layoutId);
+    if (obj) objects.push(obj);
+  }
+  return {
+    ...withPage,
+    pages: withPage.pages.map(page => (page.id === created.id ? { ...page, objects } : page)),
+  };
+}
+
+export function objectAsStyleTemplate(obj: ReportObject | unknown): StyleTemplate {
+  const source = obj && typeof obj === 'object' ? (obj as Record<string, unknown>) : {};
+  const kind = String(source.kind || source.type || '')
+    .trim()
+    .toLowerCase();
+  if (kind !== 'chart' && kind !== 'table') {
+    throw new Error('Only chart or table objects can be saved as a style template.');
+  }
+  const normalised = normalizeObject(source, 'blank');
+  if (!normalised) {
+    throw new Error('Object could not be normalised as a style template.');
+  }
+  if (kind === 'table') {
+    return {
+      kind: 'table',
+      tableStyle: { ...normalised.tableStyle },
+      tableRules: normalised.tableRules.map(rule => ({ ...rule })),
+    };
+  }
+  return {
+    kind: 'chart',
+    textStyle: { ...normalised.textStyle },
+    frame: { ...normalised.frame },
+  };
+}
+
 export function bringObjectForward(
   document: ReportDocument | unknown,
   pageId: string,

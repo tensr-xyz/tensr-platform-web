@@ -6,11 +6,22 @@ export const PROJECT_TABS = [
   ['responses', 'Responses'],
   ['tables', 'Tables'],
   ['report', 'Report'],
+  ['asker-questions', 'Asker questions'],
 ] as const;
 
 export type ProjectTabKey = (typeof PROJECT_TABS)[number][0];
 
 const TAB_KEYS = new Set<string>(PROJECT_TABS.map(([key]) => key));
+
+/** Askers only see the ask workspace (Chat). Owners/editors also get Asker questions. */
+export function tabsForRole(
+  role: string | null | undefined
+): readonly (typeof PROJECT_TABS)[number][] {
+  if (role === 'asker') {
+    return PROJECT_TABS.filter(([key]) => key === 'chat');
+  }
+  return PROJECT_TABS;
+}
 
 export function isProjectTabKey(section: string): section is ProjectTabKey {
   return TAB_KEYS.has(section);

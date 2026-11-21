@@ -6,6 +6,7 @@ import {
   alignObjects,
   alignmentGuides,
   applyDefaultLabels,
+  applyPageTemplate,
   bringObjectForward,
   bringToFront,
   copyObjects,
@@ -35,6 +36,8 @@ import {
   moveObject,
   normalizeReportDocument,
   listPageLinks,
+  objectAsStyleTemplate,
+  pageAsTemplate,
   pageHref,
   pagesForExport,
   parseReportReshapeRequest,
@@ -54,6 +57,7 @@ import {
   setObjectText,
   setObjectTextStyle,
   setPageHidden,
+  setPageLayout,
   setTableRules,
   setTableStyle,
   snapFrameToGrid,
@@ -138,6 +142,37 @@ describe('report document page model', () => {
     expect(
       raised.pages[0]?.objects.find(obj => obj.id === chart.id)?.zIndex
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('switches page layouts, remounts slots, and round-trips page templates', () => {
+    const doc = documentFromPins(pins.slice(0, 1));
+    const page = doc.pages[0]!;
+    const chart = page.objects.find(obj => obj.kind === 'chart')!;
+    const slotted = placeObjectInSlot(doc, page.id, chart.id, 'content');
+    const switched = setPageLayout(slotted, page.id, 'two_content');
+    expect(switched.pages[0]?.layoutId).toBe('two_content');
+    expect(switched.pages[0]?.objects.find(obj => obj.id === chart.id)?.slotId).toBeNull();
+    const remounted = placeObjectInSlot(switched, page.id, chart.id, 'content_left');
+    expect(remounted.pages[0]?.objects.find(obj => obj.id === chart.id)?.frame).toEqual(
+      frameForSlot('two_content', 'content_left')
+    );
+    expect(() => setPageLayout(doc, page.id, 'not-a-master')).toThrow(/Unknown page layout/);
+
+    const template = pageAsTemplate(remounted.pages[0]!);
+    expect(template.kind).toBe('page');
+    expect(template.layoutId).toBe('two_content');
+    expect(template.objects.every(obj => !obj.runId && !obj.pinId)).toBe(true);
+    const applied = applyPageTemplate(doc, template, { title: 'From template' });
+    expect(applied.pages.at(-1)?.title).toBe('From template');
+    expect(applied.pages.at(-1)?.layoutId).toBe('two_content');
+    expect(applied.pages.at(-1)?.objects).toHaveLength(template.objects.length);
+    expect(applied.pages.at(-1)?.id).not.toBe(remounted.pages[0]?.id);
+
+    const style = objectAsStyleTemplate(
+      remounted.pages[0]!.objects.find(obj => obj.id === chart.id)!
+    );
+    expect(style.kind).toBe('chart');
+    expect(() => objectAsStyleTemplate({ kind: 'text', text: 'Nope' })).toThrow(/chart or table/);
   });
 
   it('serialises snake_case for the deck export API', () => {

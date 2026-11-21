@@ -5,6 +5,7 @@ import {
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
+  overviewDeckPayload,
   overviewMarketBatchPayload,
   refreshDecksBatchPayload,
 } from './overview-deck';
@@ -22,13 +23,16 @@ jest.mock('@/lib/flow-api', () => ({
           { name: 'region', label: 'Region', measure: 'nominal' },
           { name: 'weight', label: 'Weight', measure: 'numeric' },
         ],
+        active_weight_label: 'Projection weight (people)',
+        original_filename: 'audience_w2.sav',
       };
     }
     if (String(path).includes('/values')) {
       return {
-        values: ['North', 'South'],
-        value_labels: { North: 'North', South: 'South' },
-        counts: { North: 12, South: 8 },
+        values: ['North', 'South', 'Tiny'],
+        value_labels: { North: 'North', South: 'South', Tiny: 'Tiny' },
+        counts: { North: 120, South: 80, Tiny: 12 },
+        weighted_counts: { North: 240000, South: 90000, Tiny: 8000 },
       };
     }
     return {};
@@ -73,20 +77,24 @@ describe('the deck and refresh screens', () => {
     ).toBeTruthy();
   });
 
-  it('offers one copy per market and passes the chosen values to onBuild', async () => {
+  it('shows the market table and builds one deck per selected ready market', async () => {
     const onBuild = jest.fn(async () => undefined);
     render(
       <OverviewDeck
         audience="Total sample"
         datasetId="ds-1"
+        dataLabel="audience_w2.sav"
         onBuild={onBuild}
         onClose={() => undefined}
       />
     );
-    fireEvent.click(screen.getByLabelText('One copy per market'));
+    expect(await screen.findByText('New audience overview · one copy per market')).toBeTruthy();
     expect(await screen.findByTestId('overview-per-market')).toBeTruthy();
-    expect(await screen.findByText(/North/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: `Build ${OVERVIEW_SLIDES.length} slides` }));
+    expect(await screen.findByText('North')).toBeTruthy();
+    expect(screen.getByText('Base under 50 · skipped')).toBeTruthy();
+    expect(screen.getByText('Respondents')).toBeTruthy();
+    expect(screen.getByText('Audience (people)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Build 2 decks' }));
     await waitFor(() => expect(onBuild).toHaveBeenCalled());
     expect(onBuild.mock.calls[0][0].perMarket).toEqual({
       groupColumn: 'region',
@@ -112,6 +120,7 @@ describe('the deck and refresh screens', () => {
             family_id: 'fam',
             new_data: true,
             n_versions: 1,
+            wave_label: 'Q3',
           },
           {
             id: 'b',
@@ -120,14 +129,17 @@ describe('the deck and refresh screens', () => {
             group_column_label: 'Region',
             family_id: 'fam',
             new_data: true,
+            wave_label: 'Q3',
           },
         ]}
+        newWaveLabel="Q4"
         onRefresh={onRefresh}
       />
     );
-    expect(screen.getByText('Market decks')).toBeTruthy();
-    expect(screen.getAllByText('New data')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh 2 decks' }));
+    expect(screen.getByText(/Audience overview · one per Region/i)).toBeTruthy();
+    expect(screen.getByText(/New data: Q4 uploaded/)).toBeTruthy();
+    expect(screen.getByText('North')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh 2 decks with Q4' }));
     expect(onRefresh).toHaveBeenCalled();
   });
 
@@ -156,6 +168,33 @@ describe('the deck and refresh screens', () => {
     });
   });
 
+  it('builds an overview auto-build payload without pre-saved specs', () => {
+    expect(
+      JSON.parse(
+        overviewDeckPayload({
+          audience: 'Weekday readers',
+          slides: OVERVIEW_SLIDES,
+          options: { headline: true, footnote: true, hide_low: false, low_base_threshold: 50 },
+          templateName: 'Client.potx',
+        })
+      )
+    ).toMatchObject({
+      audience: 'Weekday readers',
+      template_name: 'Client.potx',
+      options: { headline: true, low_base_threshold: 50 },
+    });
+    expect(
+      JSON.parse(
+        overviewDeckPayload({
+          audience: 'Weekday readers',
+          slides: OVERVIEW_SLIDES,
+          options: {},
+          perMarket: { groupColumn: 'region', values: ['North'] },
+        })
+      ).per_market
+    ).toEqual({ group_column: 'region', values: ['North'] });
+  });
+
   it('walks the second-wave steps and keeps a movers summary', () => {
     render(
       <WaveRefresh
@@ -164,16 +203,32 @@ describe('the deck and refresh screens', () => {
           { name: 'gone', label: 'Old attitude' },
         ]}
         next={[{ name: 'rank', label: 'Seniority' }]}
+        fileName="wave_b.sav"
+        movers={[
+          {
+            label: 'Reach',
+            from_percent: 29.2,
+            to_percent: 34.0,
+            change: 4.8,
+            significant: true,
+            slide: 3,
+          },
+        ]}
         onClose={() => undefined}
       />
     );
     expect(screen.getByText('Refresh with a new wave')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
-    expect(screen.getByText('1 matched by label · check these')).toBeTruthy();
-    expect(screen.getByText('1 not found · slide affected')).toBeTruthy();
+    expect(screen.getByText('✓ Choose file · wave_b.sav')).toBeTruthy();
+    expect(screen.getByText('matched by label · check these')).toBeTruthy();
+    expect(screen.getByText('not found · slide affected')).toBeTruthy();
     expect(screen.getByText('Needs a look')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Change' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Drop slide' })).toBeTruthy();
+    expect(screen.getByText('+4.8 pts ▲')).toBeTruthy();
+    expect(screen.getByText(/significant at 95%/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Review what moved' }));
-    expect(screen.getByText('Biggest movers since the previous wave')).toBeTruthy();
+    expect(screen.getAllByText('Biggest movers since the previous wave').length).toBeGreaterThan(0);
     expect(screen.getByText(/added as the last slide/)).toBeTruthy();
   });
 

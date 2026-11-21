@@ -4,8 +4,12 @@ import {
   getPageLayout,
   inspectPptxTemplate,
   listPageLayouts,
+  mergeThemeIntoOrgSettings,
   normalizeReportTheme,
+  normalizeVisualizationDefaults,
   reportThemeFromInspection,
+  setVisualizationDefault,
+  textDefaultsFromTheme,
   themeFromOrgSettings,
 } from './report-theme';
 import { resolveSeriesColors } from './chart-theme';
@@ -96,5 +100,35 @@ describe('report page layouts and theme', () => {
     expect(resolveSeriesColors('apa')[0]).toBe('#222222');
     expect(resolveSeriesColors('default', { chartPalette: ['#ABCDEF'] })).toEqual(['#ABCDEF']);
     expect(resolveSeriesColors('default', null, ['#111111'])).toEqual(['#111111']);
+  });
+
+  it('builds text defaults and visualisation stores from the team theme', () => {
+    const defaults = textDefaultsFromTheme({
+      fontFamily: 'Georgia',
+      primaryColour: '#112233',
+      secondaryColour: '#445566',
+    });
+    expect(defaults).toEqual({
+      fontFamily: 'Georgia',
+      color: '#445566',
+      accentColor: '#112233',
+    });
+    const viz = normalizeVisualizationDefaults({
+      table: { tableStyle: { preset: 'banded' } },
+      chart: { textStyle: { bold: true } },
+    });
+    expect(viz.table?.tableStyle).toEqual({ preset: 'banded' });
+    expect(viz.chart?.textStyle).toEqual({ bold: true });
+    const updated = setVisualizationDefault(viz, { kind: 'chart', textStyle: { bold: false } });
+    expect(updated.chart?.textStyle).toEqual({ bold: false });
+    expect(() => setVisualizationDefault(viz, { kind: 'text' })).toThrow(/chart or table/);
+    const settings = mergeThemeIntoOrgSettings(
+      { name: 'Acme' },
+      { theme: { primaryColour: '#ABCDEF' }, visualizations: updated }
+    );
+    expect((settings.reportTheme as { primaryColour: string }).primaryColour).toBe('#ABCDEF');
+    expect((settings.visualizationDefaults as { chart: { kind: string } }).chart.kind).toBe(
+      'chart'
+    );
   });
 });
