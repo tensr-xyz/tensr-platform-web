@@ -20,7 +20,13 @@ import { flowJson } from '@/lib/flow-api';
 import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
-import { documentApa, runDocument, type ReportPin } from '@/components/flow/run-document';
+import {
+  documentApa,
+  runDocument,
+  type ReportPin,
+  type RunTable,
+} from '@/components/flow/run-document';
+import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import {
@@ -45,6 +51,46 @@ function storedReport(run: Record<string, unknown>): AnalysisReport | null {
     return null;
   }
   return record;
+}
+
+/** Several stub labels joined with commas become "stem and N more". */
+function shortOutputTitle(title: string): string {
+  const text = title.trim();
+  if (!text.includes(',') || !text.includes('×')) return text;
+  const [left, right] = text.split('×', 2);
+  const parts = left
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return text;
+  const stems = parts.map(part => (part.includes(':') ? part.split(':', 1)[0].trim() : part));
+  const shared =
+    stems.every(stem => stem.toLowerCase() === stems[0].toLowerCase()) && stems[0]
+      ? stems[0]
+      : parts[0];
+  return `${shared} and ${parts.length - 1} more × ${right.trim()}`;
+}
+
+function runSummaryLine(run: Record<string, unknown>): string {
+  const report =
+    run.report && typeof run.report === 'object' ? (run.report as Record<string, unknown>) : {};
+  if (
+    typeof report.answer === 'string' &&
+    report.answer_from_result === true &&
+    report.answer.trim()
+  ) {
+    return report.answer.trim();
+  }
+  if (typeof report.summary === 'string' && report.summary.trim()) return report.summary.trim();
+  const layers = [run, run.result, (run.result as { result?: unknown } | undefined)?.result];
+  for (const layer of layers) {
+    if (!layer || typeof layer !== 'object') continue;
+    const summary = (layer as { summary?: unknown }).summary;
+    if (!summary || typeof summary !== 'object') continue;
+    const line = (summary as { line?: unknown }).line;
+    if (typeof line === 'string' && line.trim()) return line.trim();
+  }
+  return '';
 }
 
 type Comment = {
@@ -72,7 +118,25 @@ export function OutputPage({
   findings: { id: string; label: string }[];
   onBack: () => void;
 }) {
-  const document = useMemo(() => runDocument(run), [run]);
+  const document = useMemo(() => {
+    const base = runDocument(run);
+    const view = resultViewFromToolResults([
+      {
+        procedure: run.op,
+        result: run.result,
+        report: run.report,
+        summary: (run.result as { summary?: unknown } | undefined)?.summary,
+      },
+    ]);
+    const tables = (base.tables.length ? base.tables : view.tables) as RunTable[];
+    const summary = base.summary || runSummaryLine(run) || view.baseDetail || '';
+    return {
+      ...base,
+      title: shortOutputTitle(base.title),
+      tables,
+      summary,
+    };
+  }, [run]);
   const fullReport = useMemo(() => storedReport(run), [run]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState('');

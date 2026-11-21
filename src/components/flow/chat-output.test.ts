@@ -150,6 +150,22 @@ describe('chat output panel', () => {
     expect(titledWithQuestion('sat_brewco', columns)).toBe('How satisfied are you with Brew & Co?');
   });
 
+  it('shortens several frequency questions to one stem and a count', () => {
+    const results = [
+      {
+        procedure: 'frequencies',
+        summary: {
+          table: [
+            { title: 'Frequency Table: Read or visited: Global Ledger', rows: [] },
+            { title: 'Frequency Table: Read or visited: Capital Daily', rows: [] },
+            { title: 'Frequency Table: Read or visited: Northwind Post', rows: [] },
+          ],
+        },
+      },
+    ];
+    expect(outputTitle(results, 'Chart ready.')).toBe('Read or visited and 2 more');
+  });
+
   it('rewrites a subtitle of column codes into labels', () => {
     const columns = [
       { name: 'item_a', label: 'Ledger' },

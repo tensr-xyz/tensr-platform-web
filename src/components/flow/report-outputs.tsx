@@ -38,6 +38,7 @@ import {
   outputRuns,
   uniqueRuns,
   summaryText,
+  weightedBaseLabel,
   type OutputRun,
 } from '@/components/flow/report-output-runs';
 
@@ -453,7 +454,7 @@ export function ReportOutputs({
                         {[
                           run.file,
                           run.weightedBase != null
-                            ? `Weighted base ${run.weightedBase.toLocaleString('en-GB')}`
+                            ? weightedBaseLabel(run.weightedBase)
                             : run.weighting,
                         ]
                           .filter(Boolean)

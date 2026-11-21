@@ -57,6 +57,17 @@ export function runState(status: string, pinned: boolean): 'In report' | 'Saved'
   return status === 'complete' ? 'Saved' : 'Draft';
 }
 
+/** People-scale weighted bases from a reach table are shown in thousands. */
+export function weightedBaseLabel(value: number): string {
+  if (!Number.isFinite(value)) return '';
+  if (Math.abs(value) >= 10_000) {
+    return `Weighted base ${(value / 1000).toLocaleString('en-GB', {
+      maximumFractionDigits: 1,
+    })} thousand`;
+  }
+  return `Weighted base ${value.toLocaleString('en-GB')}`;
+}
+
 export function outputRuns(rows: unknown[]): OutputRun[] {
   const runs: OutputRun[] = [];
   for (const row of rows) {

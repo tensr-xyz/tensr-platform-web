@@ -990,6 +990,92 @@ function bannerRecord(record: Record<string, unknown>): boolean {
   );
 }
 
+/** Turn a banner book into the same column grid the chat summary.screen carries. */
+function bannerBookTable(record: Record<string, unknown>): RunTable | null {
+  const columns = Array.isArray(record.banner_columns)
+    ? record.banner_columns.filter(
+        (column): column is Record<string, unknown> =>
+          Boolean(column) && typeof column === 'object' && !Array.isArray(column)
+      )
+    : [];
+  const rows = Array.isArray(record.rows)
+    ? record.rows.filter((row): row is Record<string, unknown> => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+        const kind = String((row as { kind?: unknown }).kind || 'value');
+        return !['mean', 'sd', 'base', 'header'].includes(kind);
+      })
+    : [];
+  if (!columns.length || !rows.length) return null;
+  let hasProjected = false;
+  let hasIndex = false;
+  for (const row of rows) {
+    for (const item of Array.isArray(row.cells) ? row.cells : []) {
+      if (!item || typeof item !== 'object') continue;
+      const cell = item as Record<string, unknown>;
+      if (typeof cell.projected_thousands === 'number') hasProjected = true;
+      if (typeof cell.index === 'number') hasIndex = true;
+    }
+  }
+  const headers = ['Item'];
+  for (const column of columns) {
+    const heading = cell(column.label) || 'Total';
+    headers.push(columns.length === 1 && heading.toLowerCase() === 'total' ? '%' : `${heading} %`);
+    if (hasProjected) {
+      headers.push(columns.length === 1 ? 'People (000s)' : `${heading} (000s)`);
+    }
+    if (hasIndex) {
+      headers.push(columns.length === 1 ? 'Index vs total' : `${heading} index`);
+    }
+  }
+  const matrix: string[][] = [];
+  for (const row of rows.slice(0, 40)) {
+    let label = cell(row.label);
+    if (label.includes(': ')) label = label.split(': ').slice(-1)[0].trim() || label;
+    const cells = Array.isArray(row.cells)
+      ? row.cells.filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+        )
+      : [];
+    const byId = new Map(cells.map(item => [cell(item.banner_id), item]));
+    const line = [label];
+    columns.forEach((column, index) => {
+      const item = byId.get(cell(column.id)) || cells[index] || {};
+      const percent =
+        typeof item.percent === 'number' && Number.isFinite(item.percent)
+          ? `${item.percent.toFixed(1)}%`
+          : '—';
+      line.push(percent);
+      if (hasProjected) {
+        const projected = item.projected_thousands;
+        line.push(
+          typeof projected === 'number' && Number.isFinite(projected)
+            ? projected.toLocaleString('en-GB', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })
+            : '—'
+        );
+      }
+      if (hasIndex) {
+        const indexValue = item.index;
+        line.push(
+          typeof indexValue === 'number' && Number.isFinite(indexValue)
+            ? String(Math.round(indexValue))
+            : '—'
+        );
+      }
+    });
+    matrix.push(line);
+  }
+  if (!matrix.length) return null;
+  return {
+    title: cell(record.title) || 'Banner',
+    columns: headers,
+    rows: matrix,
+  };
+}
+
 function rememberTableBase(record: Record<string, unknown>, sample: SampleBits): void {
   const weight = record.weight;
   if (
@@ -1281,7 +1367,10 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
   const found: RunTable[] = [];
   const summary = record.summary;
   if (summary && typeof summary === 'object') {
-    const block = summary as { table?: unknown; title?: unknown };
+    const block = summary as { table?: unknown; screen?: unknown; title?: unknown };
+    // Banner runs put the readable grid on screen; table may be markdown only.
+    const screen = asTable(block.screen);
+    if (screen) found.push(screen);
     found.push(...summaryTables(block.table, cell(block.title)));
     if (Array.isArray(block.table)) {
       for (const item of block.table) {
@@ -1429,7 +1518,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const syntaxDump =
       record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
     if (!syntaxDump) {
-      const table = asTable(record);
+      const table = asTable(record) || (bannerRecord(record) ? bannerBookTable(record) : null);
       if (table && (record.id === 'group_statistics' || table.title === 'Group Statistics')) {
         spareGroupTables.push(table);
       } else {
@@ -1449,6 +1538,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       notes(block.notes);
       const letter = cell(block.letter_test);
       if (letter && !view.letterNote) view.letterNote = letter;
+      const screen = asTable((block as { screen?: unknown }).screen);
+      if (screen) add(screen, 'summary');
       for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
     }
     notes(record.notes);

@@ -566,7 +566,17 @@ export function outputTitle(
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );
-  if (questions.length) return questions.join(', ');
+  if (questions.length === 1) return questions[0];
+  if (questions.length > 1) {
+    const stems = questions.map(question =>
+      question.includes(':') ? question.split(':', 1)[0].trim() : question
+    );
+    const shared =
+      stems.every(stem => stem.toLowerCase() === stems[0].toLowerCase()) && stems[0]
+        ? stems[0]
+        : questions[0];
+    return `${shared} and ${questions.length - 1} more`;
+  }
   const preferred = preferredProcedure(items);
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;

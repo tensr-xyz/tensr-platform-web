@@ -850,6 +850,38 @@ describe('result tables', () => {
     expect(view.script).toContain('nrow(df)');
   });
 
+  it('reads the banner screen grid and builds a table from a stored book', () => {
+    const fromScreen = resultViewFromToolResults({
+      procedure: 'banner_table',
+      summary: {
+        line: 'The weighted base for this table is 12.5 thousand (unweighted 40).',
+        screen: {
+          title: 'Read or visited',
+          columns: ['Item', '%', 'People (000s)'],
+          rows: [['Global Ledger', '41.2%', '12.5']],
+        },
+      },
+    });
+    expect(fromScreen.tables[0].title).toBe('Read or visited');
+    expect(fromScreen.tables[0].rows[0]).toEqual(['Global Ledger', '41.2%', '12.5']);
+    const fromBook = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Read or visited',
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'value',
+            label: 'Read or visited: Global Ledger',
+            cells: [{ banner_id: 'total', percent: 41.2, projected_thousands: 12.5 }],
+          },
+        ],
+      },
+    });
+    expect(fromBook.tables[0].rows[0][0]).toBe('Global Ledger');
+    expect(fromBook.tables[0].columns).toContain('People (000s)');
+  });
+
   it('shows the new column and not a preview of the whole file', () => {
     const view = resultViewFromToolResults({
       derived: {
