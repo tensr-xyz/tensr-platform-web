@@ -31,6 +31,15 @@ export function withoutEngineCopies<
 >(tables: T[]): T[] {
   const titles = tables.map(table => (table.title || '').trim().toLowerCase());
   const has = (name: string) => titles.includes(name);
+  const hasAnova = tables.some(table => {
+    const title = (table.title || '').trim().toLowerCase();
+    const columns = (table.columns || []).map(column => column.trim().toLowerCase());
+    return (
+      title === 'anova' ||
+      title === 'welch anova' ||
+      (columns.includes('source') && columns.includes('f'))
+    );
+  });
   const labelledCoefficients = tables.some(
     table =>
       (table.title || '').trim().toLowerCase() === 'coefficients' &&
@@ -46,6 +55,9 @@ export function withoutEngineCopies<
     ) {
       return false;
     }
+    // Rank Groups/Test/Pairwise(U) must not sit under an ANOVA source table.
+    if (hasAnova && (title === 'groups' || title === 'test')) return false;
+    if (hasAnova && title === 'pairwise' && columns.includes('u')) return false;
     if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
     if (
       has('groups') &&

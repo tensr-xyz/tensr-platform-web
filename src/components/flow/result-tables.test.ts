@@ -1072,6 +1072,49 @@ describe('rank comparison tables', () => {
     ]);
     expect(tables.map(table => table.title)).toEqual(['Groups', 'Test']);
   });
+
+  it('drops rank Groups/Test/Pairwise when an ANOVA source table is present', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Trust by market',
+        columns: ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'Status'],
+        rows: [['United States', '1500', '2400000', '4.2', 'included']],
+      },
+      {
+        title: 'ANOVA',
+        columns: ['Source', 'SS', 'df', 'MS', 'F', 'p', 'η²'],
+        rows: [['Between Groups', '12', '2', '6', '6.2', '0.004', '0.18']],
+      },
+      {
+        title: 'Groups',
+        columns: ['Group', 'n', 'Mean'],
+        rows: [['1.0', '2400000', '4.2']],
+      },
+      {
+        title: 'Test',
+        columns: ['Statistic', 'Value'],
+        rows: [
+          ['p', '0.004'],
+          ['Effect size', '0.18'],
+        ],
+      },
+      {
+        title: 'Pairwise',
+        columns: ['Group', 'Group', 'U', 'p', 'Adjusted p'],
+        rows: [['1.0', '2.0', '—', '—', '0.03']],
+      },
+      {
+        title: 'Post hoc (tukey)',
+        columns: ['Group', 'Compared with', 'Difference', 'p'],
+        rows: [['United States', 'United Kingdom', '1.1', '0.03']],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual([
+      'Trust by market',
+      'ANOVA',
+      'Post hoc (tukey)',
+    ]);
+  });
 });
 
 describe('mean comparison tables', () => {
