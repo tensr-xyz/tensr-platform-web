@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
 import {
@@ -36,6 +37,17 @@ import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
 import { isAiEnabled } from '@/lib/ai-controls';
 import { defaultTemplateName } from '@/lib/project-templates';
 import { formatApiErrorMessage } from '@/lib/api-error';
+import {
+  useDatasetColumns,
+  useDatasetPreview,
+  useMe,
+  useOrganizationDetail,
+  useOrganizationMembers,
+  useProjectAskerLog,
+  useProjectContextDocs,
+  useProjectMembers,
+} from '@/hooks/api/use-project-data';
+import { projectQueryKeys } from '@/lib/project-query-cache';
 
 type DetailFile = {
   dataset_id?: string;
@@ -225,13 +237,96 @@ export function DetailsScreen({
   const files = datasets.filter(row => row.project_id === projectId);
   const active = files.find(row => datasetRowId(row) === project?.active_dataset_id) || files[0];
   const labelsFileRef = useRef<HTMLInputElement>(null);
-  const [docs, setDocs] = useState<BriefDoc[] | null>(null);
-  const [members, setMembers] = useState<Member[] | null>(null);
-  const [columns, setColumns] = useState<FlowColumn[] | null>(null);
-  const [variableSets, setVariableSets] = useState<OutlineSet[]>([]);
-  const [weightName, setWeightName] = useState('');
-  const [weightLabel, setWeightLabel] = useState('');
-  const [kinds, setKinds] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
+  const docsQuery = useProjectContextDocs(projectId || null);
+  const membersQuery = useProjectMembers(projectId || null);
+  const askerQuery = useProjectAskerLog(projectId || null);
+  const meQuery = useMe();
+  const orgId = meQuery.data?.active_organization?.id || '';
+  const orgMembersQuery = useOrganizationMembers(orgId || null);
+  const orgDetailQuery = useOrganizationDetail(orgId || null);
+  const datasetId = active ? datasetRowId(active) : '';
+  const columnsQuery = useDatasetColumns(datasetId || null);
+  const previewQuery = useDatasetPreview(datasetId || null);
+
+  const docs = (docsQuery.data || null) as BriefDoc[] | null;
+  const members = (membersQuery.data || null) as Member[] | null;
+  const turns = (askerQuery.data || null) as AskerTurn[] | null;
+  const userId = meQuery.data?.user?.id || meQuery.data?.user_id || '';
+  const workspaceError = orgMembersQuery.isError ? 'Workspace members could not be loaded.' : null;
+  const workspace = useMemo(() => {
+    if (!orgId) return [] as WorkspacePerson[];
+    if (!orgMembersQuery.data) return null;
+    return orgMembersQuery.data.map(workspacePerson);
+  }, [orgId, orgMembersQuery.data]);
+  const orgAiEnabled = isAiEnabled(orgDetailQuery.data?.organization?.ai_enabled);
+
+  const meta = columnsQuery.data as
+    | {
+        columns?: FlowColumn[];
+        active_weight_column?: string | null;
+        variable_sets?: OutlineSet[] | null;
+        multiple_response_sets?:
+          | {
+              columns?: (string | { column?: string })[];
+              variables?: string[];
+            }[]
+          | null;
+      }
+    | undefined;
+  const preview = previewQuery.data;
+  const { columns, variableSets, weightName, weightLabel, kinds } = useMemo(() => {
+    if (!datasetId) {
+      return {
+        columns: [] as FlowColumn[],
+        variableSets: [] as OutlineSet[],
+        weightName: '',
+        weightLabel: '',
+        kinds: {} as Record<string, string>,
+      };
+    }
+    if (!meta) {
+      return {
+        columns: null as FlowColumn[] | null,
+        variableSets: [] as OutlineSet[],
+        weightName: '',
+        weightLabel: '',
+        kinds: {} as Record<string, string>,
+      };
+    }
+    const headers = preview?.headers || [];
+    const rows = preview?.rows || [];
+    const multi = new Set(
+      (meta.multiple_response_sets || []).flatMap(set => [
+        ...(set.columns || []).map(entry =>
+          typeof entry === 'string' ? entry : String(entry.column || '')
+        ),
+        ...(set.variables || []),
+      ])
+    );
+    for (const set of meta.variable_sets || []) {
+      for (const column of set.columns || []) multi.add(String(column));
+    }
+    const nextKinds: Record<string, string> = {};
+    for (const column of meta.columns || []) {
+      const index = headers.findIndex(header => header === column.name || header === column.label);
+      nextKinds[column.name] = questionKind(
+        column,
+        index >= 0 ? rows.map(row => row[index]) : [],
+        multi
+      );
+    }
+    const activeWeight = meta.active_weight_column || '';
+    const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
+    return {
+      columns: (meta.columns || []) as FlowColumn[],
+      variableSets: (Array.isArray(meta.variable_sets) ? meta.variable_sets : []) as OutlineSet[],
+      weightName: activeWeight,
+      weightLabel: String(weightColumn?.label || '').trim() || activeWeight,
+      kinds: nextKinds,
+    };
+  }, [datasetId, meta, preview]);
+
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
   const [audience, setAudience] = useState('');
@@ -244,177 +339,24 @@ export function DetailsScreen({
   const [showLabelChanges, setShowLabelChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [workspace, setWorkspace] = useState<WorkspacePerson[] | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [picked, setPicked] = useState('');
   const [role, setRole] = useState('editor');
   const [inviteEmail, setInviteEmail] = useState('');
   const [memberError, setMemberError] = useState<string | null>(null);
   const [inviteNote, setInviteNote] = useState<string | null>(null);
-  const [userId, setUserId] = useState('');
-  const [turns, setTurns] = useState<AskerTurn[] | null>(null);
-  const [orgAiEnabled, setOrgAiEnabled] = useState(true);
   const [templateBusy, setTemplateBusy] = useState(false);
   const [templateNote, setTemplateNote] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    setDocs(null);
-    setMembers(null);
-    void flowJson<{ docs?: BriefDoc[] }>(`/api/projects/${projectId}/context-docs`)
-      .then(page => {
-        if (!cancelled) setDocs(page.docs || []);
-      })
-      .catch(() => {
-        if (!cancelled) setDocs([]);
-      });
-    void flowJson<{ members?: Member[] }>(`/api/projects/${projectId}/members`)
-      .then(page => {
-        if (!cancelled) setMembers(page.members || []);
-      })
-      .catch(() => {
-        if (!cancelled) setMembers([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    void flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
-      .then(page => {
-        if (!cancelled) setTurns(page.turns || []);
-      })
-      .catch(() => {
-        if (!cancelled) setTurns([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void flowJson<{ user?: { id?: string }; active_organization?: { id?: string } }>('/me')
-      .then(page => {
-        if (!cancelled) setUserId(page.user?.id || '');
-        const id = page.active_organization?.id || '';
-        if (cancelled) return;
-        setOrgId(id || null);
-        if (!id) {
-          setWorkspace([]);
-          setOrgAiEnabled(true);
-          return;
-        }
-        return Promise.all([
-          flowJson<{ members?: Record<string, unknown>[] }>(
-            `/api/organizations/${id}/members`
-          ).then(body => {
-            if (!cancelled) setWorkspace((body.members || []).map(workspacePerson));
-          }),
-          flowJson<{ organization?: { ai_enabled?: boolean } }>(`/api/organizations/${id}`)
-            .then(body => {
-              if (!cancelled) setOrgAiEnabled(isAiEnabled(body.organization?.ai_enabled));
-            })
-            .catch(() => {
-              if (!cancelled) setOrgAiEnabled(true);
-            }),
-        ]);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWorkspace([]);
-          setWorkspaceError('Workspace members could not be loaded.');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const datasetId = active ? datasetRowId(active) : '';
-  useEffect(() => {
-    if (!datasetId) {
-      setColumns([]);
-      setVariableSets([]);
-      setWeightName('');
-      setWeightLabel('');
-      return;
-    }
-    let cancelled = false;
-    setColumns(null);
-    void Promise.all([
-      flowJson<{
-        columns?: FlowColumn[];
-        active_weight_column?: string | null;
-        variable_sets?: OutlineSet[] | null;
-        multiple_response_sets?:
-          | {
-              columns?: (string | { column?: string })[];
-              variables?: string[];
-            }[]
-          | null;
-      }>(`/datasets/${datasetId}/metadata`),
-      flowJson<{ rows?: unknown[][]; headers?: string[] }>(
-        `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
-      ).catch(() => ({ rows: [], headers: [] })),
-    ])
-      .then(([meta, page]) => {
-        if (cancelled) return;
-        const headers = page.headers || [];
-        const rows = page.rows || [];
-        const multi = new Set(
-          (meta.multiple_response_sets || []).flatMap(set => [
-            ...(set.columns || []).map(entry =>
-              typeof entry === 'string' ? entry : String(entry.column || '')
-            ),
-            ...(set.variables || []),
-          ])
-        );
-        for (const set of meta.variable_sets || []) {
-          for (const column of set.columns || []) multi.add(String(column));
-        }
-        const kinds: Record<string, string> = {};
-        for (const column of meta.columns || []) {
-          const index = headers.findIndex(
-            header => header === column.name || header === column.label
-          );
-          kinds[column.name] = questionKind(
-            column,
-            index >= 0 ? rows.map(row => row[index]) : [],
-            multi
-          );
-        }
-        setKinds(kinds);
-        setColumns(meta.columns || []);
-        setVariableSets(Array.isArray(meta.variable_sets) ? meta.variable_sets : []);
-        const activeWeight = meta.active_weight_column || '';
-        const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
-        // Audience tags show the weight by its label, never the variable code.
-        setWeightName(activeWeight);
-        setWeightLabel(String(weightColumn?.label || '').trim() || activeWeight);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setColumns([]);
-          setVariableSets([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId]);
 
   const brief = (docs || [])
     .filter(doc => !doc.kind || doc.kind === 'brief')
     .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0];
   const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
   const parts = splitBrief(briefText);
-  const ready = docs !== null && members !== null && columns !== null;
+  // Cached data paints immediately on revisit — only the first load shows a skeleton.
+  const ready =
+    (docsQuery.isSuccess || docs !== null) &&
+    (membersQuery.isSuccess || members !== null) &&
+    (columnsQuery.isSuccess || columns !== null || !datasetId);
   const outline = questionnaireOutline(columns || [], variableSets, { weightName, kinds });
 
   const save = () => {
@@ -432,10 +374,12 @@ export function DetailsScreen({
     })
       .then(page => {
         setSavedText(text);
-        setDocs(current => [
-          page.doc || { text, kind: 'brief', updated_at: new Date().toISOString() },
-          ...(current || []),
-        ]);
+        const nextDoc =
+          page.doc || ({ text, kind: 'brief', updated_at: new Date().toISOString() } as BriefDoc);
+        queryClient.setQueryData(
+          projectQueryKeys.contextDocs(projectId),
+          (current: BriefDoc[] | undefined) => [nextDoc, ...(current || [])]
+        );
         setEditing(false);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The brief did not save.'))
@@ -557,7 +501,10 @@ export function DetailsScreen({
     })
       .then(page => {
         const member = page.member || { user_id: selected, role };
-        setMembers(current => [...(current || []), member]);
+        queryClient.setQueryData(
+          projectQueryKeys.members(projectId),
+          (current: Member[] | undefined) => [...(current || []), member]
+        );
         setPicked('');
         setAddOpen(false);
       })
@@ -929,21 +876,28 @@ export function DetailsScreen({
                             { value: 'scale', label: 'Scale' },
                           ]}
                           onValueChange={measure => {
-                            setColumns(
-                              current =>
-                                current?.map(item =>
-                                  item.name === column.name
-                                    ? { ...item, measure, measure_source: 'override' }
-                                    : item
-                                ) || current
-                            );
-                            if (!datasetId) return;
-                            void flowJson(`/datasets/${datasetId}/metadata`, {
-                              method: 'PUT',
-                              body: JSON.stringify({
-                                columns: { [column.name]: { measure_override: measure } },
-                              }),
-                            });
+                            if (datasetId) {
+                              queryClient.setQueryData(
+                                projectQueryKeys.columns(datasetId),
+                                (current: { columns?: FlowColumn[] } | undefined) => {
+                                  if (!current) return current;
+                                  return {
+                                    ...current,
+                                    columns: (current.columns || []).map(item =>
+                                      item.name === column.name
+                                        ? { ...item, measure, measure_source: 'override' }
+                                        : item
+                                    ),
+                                  };
+                                }
+                              );
+                              void flowJson(`/datasets/${datasetId}/metadata`, {
+                                method: 'PUT',
+                                body: JSON.stringify({
+                                  columns: { [column.name]: { measure_override: measure } },
+                                }),
+                              });
+                            }
                           }}
                         />
                       )}
@@ -1018,8 +972,8 @@ export function DetailsScreen({
                 </Button>
               )}
             </div>
-            {members.length ? (
-              members.map(member => {
+            {(members || []).length ? (
+              (members || []).map(member => {
                 const person = (workspace || []).find(item => item.userId === member.user_id);
                 const label = person ? workspacePersonLabel(person) : member.user_id;
                 return (

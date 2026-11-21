@@ -129,6 +129,57 @@ export async function prefetchProjectTab(
       );
     }
   }
+  if (tab === 'details') {
+    jobs.push(
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.contextDocs(projectId),
+        queryFn: async () => {
+          const page = await flowJson<{ docs?: ProjectContextDoc[] }>(
+            `/api/projects/${projectId}/context-docs`
+          );
+          return page.docs || [];
+        },
+        staleTime: PROJECT_STALE_MS.details,
+      }),
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.members(projectId),
+        queryFn: async () => {
+          const page = await flowJson<{ members?: ProjectMemberRow[] }>(
+            `/api/projects/${projectId}/members`
+          );
+          return page.members || [];
+        },
+        staleTime: PROJECT_STALE_MS.details,
+      }),
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.askerLog(projectId),
+        queryFn: async () => {
+          const page = await flowJson<{ turns?: AskerLogTurn[] }>(
+            `/api/projects/${projectId}/asker-log`
+          );
+          return page.turns || [];
+        },
+        staleTime: PROJECT_STALE_MS.details,
+      }),
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.me(),
+        queryFn: () => flowJson<MePayload>('/me'),
+        staleTime: PROJECT_STALE_MS.details,
+      })
+    );
+    if (datasetId) {
+      jobs.push(
+        client.prefetchQuery({
+          queryKey: projectQueryKeys.preview(datasetId),
+          queryFn: () =>
+            flowJson<DatasetPreviewPayload>(
+              `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
+            ),
+          staleTime: PROJECT_STALE_MS.columns,
+        })
+      );
+    }
+  }
   if (tab === 'chat') {
     jobs.push(
       client.prefetchQuery({
@@ -170,4 +221,125 @@ export function usePrefetchProjectTab() {
   return (tab: string, args: { projectId: string; datasetId?: string; fileKey?: string }) => {
     void prefetchProjectTab(client, tab, args);
   };
+}
+
+export type ProjectContextDoc = {
+  id?: string;
+  name?: string;
+  kind?: string;
+  text?: string;
+  excerpt?: string;
+  updated_at?: string;
+};
+
+export type ProjectMemberRow = { user_id: string; role?: string };
+
+export type AskerLogTurn = {
+  id?: string;
+  question?: string;
+  answer?: string;
+  created_at?: string;
+  user_id?: string;
+};
+
+export type MePayload = {
+  user?: { id?: string };
+  user_id?: string;
+  active_organization?: { id?: string };
+};
+
+export type DatasetPreviewPayload = {
+  rows?: unknown[][];
+  headers?: string[];
+};
+
+export function useProjectContextDocs(projectId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.contextDocs(projectId || ''),
+    queryFn: async () => {
+      const page = await flowJson<{ docs?: ProjectContextDoc[] }>(
+        `/api/projects/${projectId}/context-docs`
+      );
+      return page.docs || [];
+    },
+    enabled: Boolean(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useProjectMembers(projectId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.members(projectId || ''),
+    queryFn: async () => {
+      const page = await flowJson<{ members?: ProjectMemberRow[] }>(
+        `/api/projects/${projectId}/members`
+      );
+      return page.members || [];
+    },
+    enabled: Boolean(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useProjectAskerLog(projectId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.askerLog(projectId || ''),
+    queryFn: async () => {
+      const page = await flowJson<{ turns?: AskerLogTurn[] }>(
+        `/api/projects/${projectId}/asker-log`
+      );
+      return page.turns || [];
+    },
+    enabled: Boolean(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useMe() {
+  return useQuery({
+    queryKey: projectQueryKeys.me(),
+    queryFn: () => flowJson<MePayload>('/me'),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useOrganizationMembers(orgId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.orgMembers(orgId || ''),
+    queryFn: async () => {
+      const body = await flowJson<{ members?: Record<string, unknown>[] }>(
+        `/api/organizations/${orgId}/members`
+      );
+      return body.members || [];
+    },
+    enabled: Boolean(orgId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useOrganizationDetail(orgId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.orgDetail(orgId || ''),
+    queryFn: () =>
+      flowJson<{ organization?: { ai_enabled?: boolean } }>(`/api/organizations/${orgId}`),
+    enabled: Boolean(orgId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useDatasetPreview(datasetId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.preview(datasetId || ''),
+    queryFn: () =>
+      flowJson<DatasetPreviewPayload>(`/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`),
+    enabled: Boolean(datasetId),
+    staleTime: PROJECT_STALE_MS.columns,
+    refetchOnMount: true,
+  });
 }

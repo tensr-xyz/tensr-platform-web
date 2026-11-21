@@ -36,6 +36,15 @@ describe('projectQueryKeys', () => {
     expect(PROJECT_STALE_MS.tables).toBe(60_000);
     expect(PROJECT_STALE_MS.report).toBe(10_000);
     expect(PROJECT_STALE_MS.page).toBe(60_000);
+    expect(PROJECT_STALE_MS.details).toBe(60_000);
+  });
+
+  it('keys Details tab reads under the shared root', () => {
+    expect(projectQueryKeys.contextDocs('p1')).toEqual(['project-data', 'contextDocs', 'p1']);
+    expect(projectQueryKeys.members('p1')).toEqual(['project-data', 'members', 'p1']);
+    expect(projectQueryKeys.askerLog('p1')).toEqual(['project-data', 'askerLog', 'p1']);
+    expect(projectQueryKeys.me()).toEqual(['project-data', 'me']);
+    expect(projectQueryKeys.preview('d1')).toEqual(['project-data', 'preview', 'd1']);
   });
 
   it('matches a project id anywhere in the key', () => {

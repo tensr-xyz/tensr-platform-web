@@ -13,6 +13,7 @@ export const PROJECT_STALE_MS = {
   outputs: 30_000,
   report: 10_000,
   page: 60_000,
+  details: 60_000,
 } as const;
 
 export const projectQueryKeys = {
@@ -31,6 +32,13 @@ export const projectQueryKeys = {
     [...projectQueryKeys.root, 'pageTable', datasetId, pageId, specId] as const,
   tableBook: (datasetId: string, specId: string) =>
     [...projectQueryKeys.root, 'tableBook', datasetId, specId] as const,
+  contextDocs: (projectId: string) => [...projectQueryKeys.root, 'contextDocs', projectId] as const,
+  members: (projectId: string) => [...projectQueryKeys.root, 'members', projectId] as const,
+  askerLog: (projectId: string) => [...projectQueryKeys.root, 'askerLog', projectId] as const,
+  me: () => [...projectQueryKeys.root, 'me'] as const,
+  orgMembers: (orgId: string) => [...projectQueryKeys.root, 'orgMembers', orgId] as const,
+  orgDetail: (orgId: string) => [...projectQueryKeys.root, 'orgDetail', orgId] as const,
+  preview: (datasetId: string) => [...projectQueryKeys.root, 'preview', datasetId] as const,
 };
 
 export function matchesProjectId(key: readonly unknown[], projectId: string): boolean {

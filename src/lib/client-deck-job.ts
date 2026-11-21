@@ -1,7 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 import type { AgentLoopResponse, AgentLoopToolResult } from '@/lib/run-agent-loop';
 
-const CLIENT_DECK_POLL_MS = 1500;
+/** Poll every 3s while a deck job is live (acceptance: 3–5s). */
+const CLIENT_DECK_POLL_MS = 3000;
 /** ~5 minutes: multi-chunk table builds on the 180s worker need room to finish. */
 const CLIENT_DECK_POLL_LIMIT = 200;
 /** Fail visibly when tables_done / stage message has not moved (matches API ~2 min). */
@@ -33,7 +34,7 @@ export type ClientDeckJobSnapshot = {
   result?: Record<string, unknown>;
 };
 
-/** Pending build_client_deck result that still needs a background job poll. */
+/** Pending/running build_client_deck result that still needs a background job poll. */
 export function pendingClientDeckFromToolResults(
   results: AgentLoopToolResult[] | undefined
 ): { datasetId: string; jobId: string; entryIndex: number } | null {
@@ -44,12 +45,20 @@ export function pendingClientDeckFromToolResults(
     if (!result || typeof result !== 'object') continue;
     const procedure = String(entry.name || result.procedure || '');
     if (procedure !== 'build_client_deck' && result.procedure !== 'build_client_deck') continue;
-    const pending = result.pending === true || String(result.status || '') === 'pending';
+    const status = String(result.status || '');
+    if (status === 'complete' || status === 'failed') continue;
     const jobId = String(result.job_id || '').trim();
     const datasetId = String(
       result.dataset_id || entry.args?.dataset_id || entry.args?.input || ''
     ).trim();
-    if (pending && jobId && datasetId) {
+    // Match live cards even when status flipped to "running" without pending=true
+    // (saved turns / mid-build reopen) — otherwise the watch exits and never polls.
+    const live =
+      result.pending === true ||
+      status === 'pending' ||
+      status === 'running' ||
+      Boolean(jobId && status !== 'complete' && status !== 'failed');
+    if (live && jobId && datasetId) {
       return { datasetId, jobId, entryIndex: index };
     }
   }
