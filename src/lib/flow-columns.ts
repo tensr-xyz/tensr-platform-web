@@ -63,11 +63,55 @@ export function isInternalColumn(name: unknown): boolean {
   );
 }
 
-export function pickerColumns<T extends { name: string; role?: string | null }>(columns: T[]): T[] {
+/** Admin / system fields by name or label (Submitted On, ResponseId, …), even without a role. */
+const ADMIN_FIELD_RE =
+  /^(response|respondent|record|case|participant|panel|user|row|serial|unique)?(id|uuid|no|number|serial)$|^(respondent|pid|psid|panelid|respid)$|^(start|end|recorded|submitted)(date|on|at)?$|^(ip|location)(address|latitude|longitude)?$|^(status|progress|finished|duration.*|distributionchannel|userlanguage|recipient(lastname|firstname|email)|external(data)?reference|tags?|tickets?|q_recaptchascore|q_relevantid.*|meta_.*)$/i;
+
+const OTHER_SPECIFY_RE = /\bother\b.*\b(please\s+)?specify\b|\bother\s+choice\b|\bother\b\s*$/i;
+
+function fieldKey(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+/** True for Qualtrics admin columns and similar system fields. */
+export function isAdminField(name: string, label = ''): boolean {
+  if (!name.trim()) return false;
+  return ADMIN_FIELD_RE.test(fieldKey(name)) || ADMIN_FIELD_RE.test(fieldKey(label));
+}
+
+/** Free-text "Other Choice" / "Other (please specify)" columns stay off the stub picker. */
+export function isOtherSpecifyField(name: string, label = ''): boolean {
+  return OTHER_SPECIFY_RE.test(name) || OTHER_SPECIFY_RE.test(label);
+}
+
+/** Split "Question - Option" / "Question: Option" labels into stem and option. */
+export function labelAxisParts(label: string): [string, string] | null {
+  const text = String(label || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!text) return null;
+  for (const sep of [' - ', ': ', ' – ', ' — ', ':'] as const) {
+    if (!text.includes(sep)) continue;
+    const [left, right] = text.split(sep, 2).map(part => part.trim());
+    if (left && right) return [left, right];
+  }
+  return null;
+}
+
+export function pickerColumns<
+  T extends { name: string; label?: string | null; role?: string | null },
+>(columns: T[]): T[] {
   return columns.filter(column => {
     if (!column || typeof column.name !== 'string' || isInternalColumn(column.name)) return false;
     const role = String(column.role || '').toLowerCase();
-    return role !== 'stacked_source' && role !== 'helper' && role !== 'system' && role !== 'admin';
+    if (role === 'stacked_source' || role === 'helper' || role === 'system' || role === 'admin') {
+      return false;
+    }
+    if (isAdminField(column.name, String(column.label || ''))) return false;
+    return true;
   });
 }
 
@@ -108,6 +152,36 @@ function outlineSetKind(
   return kinds[members[0]] || 'multi';
 }
 
+/** Infer multi-select / grid groups from shared "Question - Option" labels when sets are missing. */
+function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
+  const buckets = new Map<string, { stem: string; members: string[] }>();
+  for (const column of columns) {
+    const label = String(column.label || column.name || '');
+    if (isOtherSpecifyField(column.name, label)) continue;
+    const parts = labelAxisParts(label);
+    if (!parts || parts[0].length < 12) continue;
+    // Numbered form boxes ("Question - 1") are open-end slots, not tick-box options.
+    if (/^\d+$/.test(parts[1])) continue;
+    const key = parts[0].toLowerCase();
+    const bucket = buckets.get(key);
+    if (bucket) bucket.members.push(column.name);
+    else buckets.set(key, { stem: parts[0], members: [column.name] });
+  }
+  const sets: OutlineSetWithStructure[] = [];
+  for (const bucket of buckets.values()) {
+    const members = [...new Set(bucket.members)];
+    if (members.length < 2) continue;
+    sets.push({
+      id: `label:${bucket.stem}`,
+      name: bucket.stem,
+      label: bucket.stem,
+      kind: 'multiple_response',
+      columns: members,
+    });
+  }
+  return sets;
+}
+
 /** One outline row per question in file order; sets collapse; admin and ids stay out. */
 export function questionnaireOutline(
   columns: FlowColumn[],
@@ -121,14 +195,16 @@ export function questionnaireOutline(
     if (String(column.role || '').toLowerCase() === 'weight') return false;
     if (column.linked_set) return false;
     if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
+    if (isOtherSpecifyField(column.name, String(column.label || ''))) return false;
     return true;
   });
   const byName = new Map(visible.map(column => [column.name, column]));
   const covered = new Set<string>();
   const linkedText = new Set<string>();
   const setByColumn = new Map<string, { set: OutlineSetWithStructure; members: string[] }>();
+  const effectiveSets = sets.length ? sets : inferredLabelSets(visible);
 
-  for (const set of sets) {
+  for (const set of effectiveSets) {
     // Data Preparation is a folder for flag columns, not a questionnaire question.
     const setId = String(set.id || '').toLowerCase();
     const setLabel = String(set.label || set.name || '').toLowerCase();

@@ -125,6 +125,35 @@ describe('picker columns', () => {
     ]);
   });
 
+  it('groups shared Question - Option labels when sets are missing and hides admin / Other', () => {
+    const options = tableStubPickerOptions(
+      [
+        { name: 'SubmittedOn', label: 'Submitted On' },
+        {
+          name: 't1',
+          label: 'What food and nutrition topics do you keep informed about? - Obesity',
+        },
+        {
+          name: 't2',
+          label: 'What food and nutrition topics do you keep informed about? - Diabetes',
+        },
+        {
+          name: 't3',
+          label: 'What food and nutrition topics do you keep informed about? - Other Choice',
+          type: 'string',
+        },
+        { name: 'region', label: 'Region', value_labels: { '1': 'North', '2': 'South' } },
+      ],
+      [],
+      []
+    );
+    expect(options.map(item => item.label)).toEqual([
+      'What food and nutrition topics do you keep informed about?',
+      'Region',
+    ]);
+    expect(options[0].value).toBe('What food and nutrition topics do you keep informed about?');
+  });
+
   it('keeps questionnaire order and groups open-end boxes as one open question', () => {
     const outline = questionnaireOutline(
       [

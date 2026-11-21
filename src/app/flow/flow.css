@@ -1907,21 +1907,27 @@ select.flow-input {
 }
 
 .analysis-table .output-grid {
-  width: max-content;
+  table-layout: fixed;
+  width: 100%;
   min-width: 100%;
-  table-layout: auto;
 }
 
 .analysis-table .output-grid th:first-child,
 .analysis-table .output-grid td:first-child {
-  min-width: 8rem;
+  width: 40%;
+  max-width: 45%;
+  min-width: 0;
   text-align: left;
-}
-
-.analysis-table .output-grid th,
-.analysis-table .output-grid td {
   white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+}
+
+.analysis-table .output-grid th:not(:first-child),
+.analysis-table .output-grid td:not(:first-child) {
+  min-width: 4.5rem;
+  white-space: nowrap;
   vertical-align: top;
 }
 
@@ -4968,6 +4974,13 @@ button.chat-result-top {
   line-height: 19px;
 }
 
+.banner-grid {
+  /* Keep number columns in view when the stub label or question header is long
+     (Paper 5 · Project · Tables: label lane ~140px, figures stay on-screen). */
+  table-layout: fixed;
+  width: 100%;
+}
+
 .banner-grid th,
 .banner-grid td {
   padding: 7px 8px;
@@ -4984,9 +4997,21 @@ button.chat-result-top {
   vertical-align: bottom;
 }
 
+.banner-grid thead th:first-child,
+.banner-grid tbody th {
+  width: 40%;
+  max-width: 45%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+}
+
 .banner-grid thead th:not(:first-child),
 .banner-grid td {
   text-align: right;
+  min-width: 4.5rem;
+  white-space: nowrap;
 }
 
 .banner-grid tbody th {
@@ -9461,6 +9486,11 @@ button.chat-result-top {
   align-items: start;
 }
 
+.output-grid {
+  table-layout: fixed;
+  width: 100%;
+}
+
 .output-grid th,
 .output-grid td {
   padding: 7px 6px;
@@ -9475,9 +9505,22 @@ button.chat-result-top {
   font-weight: var(--weight-regular);
 }
 
+.output-grid th:first-child,
+.output-grid td:first-child {
+  width: 40%;
+  max-width: 45%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+}
+
 .output-grid td:not(:first-child),
 .output-grid th:not(:first-child) {
   text-align: right;
+  min-width: 4.5rem;
+  white-space: nowrap;
 }
 
 .output-cell {
