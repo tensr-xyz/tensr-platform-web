@@ -1259,7 +1259,7 @@ describe('summary tables', () => {
       summary: {
         table: [
           {
-            title: 'Correlations',
+            title: 'Pearson correlations',
             columns: ['Variable', '1', '2'],
             rows: [
               ['1', '1.000', '0.768*** (n=500)'],
@@ -1301,9 +1301,36 @@ describe('summary tables', () => {
         },
       },
     });
-    expect(view.tables.map(table => table.title)).toEqual(['Correlations', 'Columns']);
+    expect(view.tables.map(table => table.title)).toEqual(['Pearson correlations', 'Columns']);
     expect(view.tables[0].columns).toEqual(['Variable', '1', '2']);
     expect(view.tables[1].rows[0][1]).toContain('satisfied');
+  });
+
+  it('drops engine copies when the builder table is a two-variable Pearson pair', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Pearson correlation',
+        columns: ['Variables', 'r', 'p', 'n'],
+        rows: [['Trust with Income', '0.012', '0.494', '3000']],
+      },
+      {
+        title: 'Pearson correlation matrix',
+        columns: ['', 'trust', 'income'],
+        rows: [
+          ['trust', '1', '0.012'],
+          ['income', '0.012', '1'],
+        ],
+      },
+      {
+        title: 'Pearson correlation p-values',
+        columns: ['', 'trust', 'income'],
+        rows: [
+          ['trust', '—', '0.494'],
+          ['income', '0.494', '—'],
+        ],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual(['Pearson correlation']);
   });
 
   it('keeps labelled factor loadings, fit, and segments from the summary', () => {

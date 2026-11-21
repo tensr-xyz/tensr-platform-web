@@ -89,12 +89,12 @@ describe('stored analysis reports', () => {
       },
       {
         id: 'correlations',
-        title: 'Correlations',
-        columns: ['Variable', 'Price paid'],
-        rows: [['Price paid', '1.000']],
+        title: 'Pearson correlation',
+        columns: ['Variables', 'r', 'p', 'n'],
+        rows: [['Price paid with Taste', '0.200', '0.200', '80']],
       },
     ];
     const shown = presentStoredReport(report, 3);
-    expect(shown.tables.map(table => table.title)).toEqual(['Correlations']);
+    expect(shown.tables.map(table => table.title)).toEqual(['Pearson correlation']);
   });
 });

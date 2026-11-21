@@ -45,12 +45,19 @@ export function withoutEngineCopies<
       (table.title || '').trim().toLowerCase() === 'coefficients' &&
       (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
   );
+  const hasLabelledCorrelation = titles.some(title => {
+    if (title.includes('partial') || title.includes('canonical') || title.includes('matrix')) {
+      return false;
+    }
+    if (title === 'correlations') return true;
+    return /^(pearson|spearman|kendall) correlations?$/.test(title);
+  });
   return tables.filter(table => {
     if (table.superseded) return false;
     const title = (table.title || '').trim().toLowerCase();
     const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
-      has('correlations') &&
+      hasLabelledCorrelation &&
       (title.includes('correlation matrix') || title.includes('correlation p-value'))
     ) {
       return false;

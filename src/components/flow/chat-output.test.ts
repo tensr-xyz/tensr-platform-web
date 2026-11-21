@@ -508,7 +508,8 @@ describe('chat output panel', () => {
   it('leads with Mann-Whitney and correlation when the reply did not finish', () => {
     const mw =
       'Trust for Men and Women: U = 12.000, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
-    const corr = 'Trust and Income: r = 0.012, p = 0.494, consistent with chance.';
+    const corr =
+      'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance. n = 3000.';
     const lead = resultLead(EMPTY_TURN_ANSWER, [
       {
         procedure: 'mann_whitney_u',
@@ -521,12 +522,12 @@ describe('chat output panel', () => {
         procedure: 'correlation',
         summary: {
           line: corr,
-          statistic: 'Trust and Income: r = 0.012, p = 0.494, consistent with chance.',
+          statistic: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
         },
       },
     ]);
     expect(lead).toContain('U = 12.000');
-    expect(lead).toContain('r = 0.012');
+    expect(lead).toContain('Pearson r = 0.012');
     expect(lead.toLowerCase()).not.toContain('did not finish');
     expect(
       outputStat(
