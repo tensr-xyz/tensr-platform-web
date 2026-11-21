@@ -940,7 +940,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : projectId ? (
               <>
                 {visitedTabs.has('chat') ? (
-                  <div hidden={page !== 'chat'} data-project-tab="chat">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'chat'}
+                    data-project-tab="chat"
+                  >
                     <ChatScreen
                       project={project}
                       datasets={datasets}
@@ -953,12 +957,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('details') ? (
-                  <div hidden={page !== 'details'} data-project-tab="details">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'details'}
+                    data-project-tab="details"
+                  >
                     <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
                   </div>
                 ) : null}
                 {visitedTabs.has('sources') ? (
-                  <div hidden={page !== 'sources'} data-project-tab="sources">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'sources'}
+                    data-project-tab="sources"
+                  >
                     <SourcesScreen
                       project={project}
                       datasets={datasets}
@@ -968,7 +980,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('responses') ? (
-                  <div hidden={page !== 'responses'} data-project-tab="responses">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'responses'}
+                    data-project-tab="responses"
+                  >
                     <ResponsesScreen
                       project={project}
                       datasets={datasets}
@@ -978,12 +994,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('tables') ? (
-                  <div hidden={page !== 'tables'} data-project-tab="tables">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'tables'}
+                    data-project-tab="tables"
+                  >
                     <TablesScreen project={project} datasets={datasets} ready={tabReady} />
                   </div>
                 ) : null}
                 {visitedTabs.has('report') ? (
-                  <div hidden={page !== 'report'} data-project-tab="report">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'report'}
+                    data-project-tab="report"
+                  >
                     <ReportScreen
                       projectId={projectId}
                       project={project}
@@ -994,7 +1018,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('asker-questions') && myRole !== 'asker' ? (
-                  <div hidden={page !== 'asker-questions'} data-project-tab="asker-questions">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'asker-questions'}
+                    data-project-tab="asker-questions"
+                  >
                     <AskerQuestionsScreen projectId={projectId} />
                   </div>
                 ) : null}

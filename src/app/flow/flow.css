@@ -267,6 +267,26 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   flex-direction: column;
 }
 
+/* Keep project tabs in the flex height chain so chat (and siblings) fill
+   flow-body even when the thread is short or still streaming. Without this,
+   the plain wrapper is display:block/auto and flow-split sizes to content. */
+.project-tab-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-tab-pane[hidden] {
+  display: none;
+}
+
+.project-tab-pane > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .flow-project {
   background: var(--color-well);
 }
