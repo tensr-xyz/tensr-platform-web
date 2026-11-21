@@ -20,7 +20,7 @@ import {
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
-  overviewMarketBatchPayload,
+  overviewDeckPayload,
   refreshDecksBatchPayload,
   type MarketDeckRow,
   type OverviewBuildRequest,
@@ -5269,6 +5269,79 @@ function ReportScreen({
   };
 
   const deck = async (recipe?: OverviewBuildRequest) => {
+    setError('');
+
+    // Audience overview: auto-build the standard tables from the saved audience.
+    if (recipe && exportFileId) {
+      const overviewOptions = {
+        headline: recipe.headline,
+        footnote: recipe.footnote,
+        hide_low: recipe.hideLow,
+        low_base_threshold: recipe.lowBaseThreshold,
+      };
+      const created = await flowJson<{
+        export_id?: string;
+        filename?: string;
+        n_copies?: number;
+        note?: string;
+        low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
+        slides_built?: string[];
+        detail?: string;
+      }>(`/datasets/${exportFileId}/export/deck/overview`, {
+        method: 'POST',
+        body: overviewDeckPayload({
+          audience: recipe.audience,
+          slides: recipe.slides,
+          options: overviewOptions,
+          templateName: templateName || undefined,
+          templateBase64: template || undefined,
+          perMarket: recipe.perMarket,
+        }),
+      });
+      if (!created.export_id) {
+        throw new Error(created.detail || 'The overview deck did not build.');
+      }
+      await downloadExport(
+        `/exports/${created.export_id}`,
+        created.filename ||
+          (created.n_copies && created.n_copies > 1
+            ? 'audience-overview-by-market.zip'
+            : 'deck.pptx')
+      );
+      if (created.low_bases?.length) {
+        setOverviewSlides(current =>
+          current.map(slide => {
+            const hit = created.low_bases?.find(note => {
+              const title = String(note.title || '').toLowerCase();
+              return (
+                title.includes(slide.title.toLowerCase().slice(0, 10)) ||
+                title.includes(String(slide.id || '').toLowerCase())
+              );
+            });
+            return hit
+              ? {
+                  ...slide,
+                  lowBase: true,
+                  lowBaseNote:
+                    hit.note ||
+                    (hit.base != null
+                      ? `One group has a base of ${hit.base} · shown with a low-base note`
+                      : 'shown with a low-base note'),
+                }
+              : slide;
+          })
+        );
+      }
+      setNote(
+        created.note ||
+          (created.n_copies && created.n_copies > 1
+            ? `Built ${created.n_copies} market decks and saved them as recipes.`
+            : 'Overview deck downloaded and saved as a recipe.')
+      );
+      setDecksTick(value => value + 1);
+      return;
+    }
+
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
@@ -5276,52 +5349,6 @@ function ReportScreen({
           ? 'Rebuild or deselect tables built on an older file before exporting.'
           : 'Add an output to the report, or save a table, before building a deck.'
       );
-      return;
-    }
-    setError('');
-    const overviewName = recipe?.audience
-      ? `Audience overview · ${recipe.audience}`
-      : 'Audience overview';
-    const overviewOptions = recipe
-      ? {
-          headline: recipe.headline,
-          footnote: recipe.footnote,
-          hide_low: recipe.hideLow,
-          low_base_threshold: recipe.lowBaseThreshold,
-        }
-      : undefined;
-
-    if (recipe?.perMarket) {
-      const created = await flowJson<{
-        export_id?: string;
-        filename?: string;
-        n_copies?: number;
-        family_id?: string;
-        note?: string;
-      }>(`/datasets/${exportFileId}/export/deck/batch`, {
-        method: 'POST',
-        body: overviewMarketBatchPayload({
-          specIds: selected.map(row => row.id),
-          groupColumn: recipe.perMarket.groupColumn,
-          values: recipe.perMarket.values,
-          name: overviewName,
-          audience: recipe.audience,
-          slides: recipe.slides,
-          options: overviewOptions,
-          templateName: templateName || undefined,
-        }),
-      });
-      if (!created.export_id) throw new Error('The market decks did not build.');
-      await downloadExport(
-        `/exports/${created.export_id}`,
-        created.filename ||
-          (created.n_copies === 1 ? 'deck.pptx' : 'audience-overview-by-market.zip')
-      );
-      setNote(
-        created.note ||
-          `Built ${created.n_copies || recipe.perMarket.values.length} market decks and saved them as recipes.`
-      );
-      setDecksTick(value => value + 1);
       return;
     }
 
@@ -5347,16 +5374,8 @@ function ReportScreen({
         .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
       ...(template ? { template_base64: template } : {}),
       ...(templateName ? { template_name: templateName } : {}),
-      ...(recipe
-        ? {
-            name: overviewName,
-            audience: recipe.audience,
-            slides: recipe.slides,
-            options: overviewOptions,
-          }
-        : {}),
     });
-    setNote(recipe ? 'Overview deck downloaded and saved as a recipe.' : 'Deck downloaded.');
+    setNote('Deck downloaded.');
     setDecksTick(value => value + 1);
   };
 

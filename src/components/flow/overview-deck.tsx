@@ -64,6 +64,32 @@ export type OverviewBuildRequest = {
   perMarket?: { groupColumn: string; values: string[] };
 };
 
+/** Body for /export/deck/overview — auto-builds tables from a saved audience. */
+export function overviewDeckPayload(args: {
+  audience: string;
+  slides: OverviewSlide[];
+  options: Record<string, unknown>;
+  templateName?: string;
+  templateBase64?: string;
+  perMarket?: { groupColumn: string; values: string[] };
+}): string {
+  return JSON.stringify({
+    audience: args.audience || '',
+    slides: args.slides || [],
+    options: args.options || {},
+    template_name: args.templateName || '',
+    ...(args.templateBase64 ? { template_base64: args.templateBase64 } : {}),
+    ...(args.perMarket
+      ? {
+          per_market: {
+            group_column: args.perMarket.groupColumn,
+            values: args.perMarket.values,
+          },
+        }
+      : {}),
+  });
+}
+
 /** Body for /export/deck/batch when saving a market-deck family. */
 export function overviewMarketBatchPayload(args: {
   specIds: string[];

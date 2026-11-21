@@ -5,6 +5,7 @@ import {
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
+  overviewDeckPayload,
   overviewMarketBatchPayload,
   refreshDecksBatchPayload,
 } from './overview-deck';
@@ -154,6 +155,33 @@ describe('the deck and refresh screens', () => {
       family_id: 'fam',
       only_new_data: true,
     });
+  });
+
+  it('builds an overview auto-build payload without pre-saved specs', () => {
+    expect(
+      JSON.parse(
+        overviewDeckPayload({
+          audience: 'Weekday readers',
+          slides: OVERVIEW_SLIDES,
+          options: { headline: true, footnote: true, hide_low: false, low_base_threshold: 50 },
+          templateName: 'Client.potx',
+        })
+      )
+    ).toMatchObject({
+      audience: 'Weekday readers',
+      template_name: 'Client.potx',
+      options: { headline: true, low_base_threshold: 50 },
+    });
+    expect(
+      JSON.parse(
+        overviewDeckPayload({
+          audience: 'Weekday readers',
+          slides: OVERVIEW_SLIDES,
+          options: {},
+          perMarket: { groupColumn: 'region', values: ['North'] },
+        })
+      ).per_market
+    ).toEqual({ group_column: 'region', values: ['North'] });
   });
 
   it('walks the second-wave steps and keeps a movers summary', () => {
