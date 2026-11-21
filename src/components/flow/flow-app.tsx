@@ -99,6 +99,7 @@ import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-output
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { FindReplaceDialog } from '@/components/flow/find-replace-dialog';
+import { RecipeEditorDialog } from '@/components/flow/recipe-editor-dialog';
 import { ProjectPresenceAvatars, useProjectPresence } from '@/components/flow/project-presence';
 import {
   documentApa,
@@ -257,6 +258,11 @@ type FlowRecipe = {
   version?: number;
   ops?: unknown[];
   created_from?: string;
+  description?: string;
+  when_to_use?: string;
+  instructions?: string;
+  reference_files?: { label: string; filename?: string; dataset_id?: string; note?: string }[];
+  applies_as_house_style?: boolean;
 };
 
 type DatasetRow = {
@@ -2822,6 +2828,7 @@ function ChatScreen({
     outputs?: boolean;
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
+  const [editingRecipe, setEditingRecipe] = useState<FlowRecipe | null>(null);
 
   const recipesAbort = useRef<AbortController | null>(null);
   const loadRecipes = useCallback(() => {
@@ -2988,26 +2995,42 @@ function ChatScreen({
                     .length
                 : 0;
               return (
-                <Button
-                  key={recipe.recipe_id}
-                  className="chat-recipe"
-                  type="button"
-                  disabled={Boolean(recipeBusy)}
-                  title={`Run on ${file?.original_filename || 'the open file'}`}
-                  onClick={() => void runRecipe(recipe)}
-                >
-                  <span>{recipe.name || 'Recipe'}</span>
-                  <span className="chat-recipe-steps">
-                    {recipeBusy === recipe.recipe_id
-                      ? 'Running…'
-                      : `${steps} step${steps === 1 ? '' : 's'} · Run`}
-                  </span>
-                </Button>
+                <div key={recipe.recipe_id}>
+                  <div className="chat-recipe-row">
+                    <Button
+                      className="chat-recipe"
+                      type="button"
+                      disabled={Boolean(recipeBusy)}
+                      title={`Run on ${file?.original_filename || 'the open file'}`}
+                      onClick={() => void runRecipe(recipe)}
+                    >
+                      <span>{recipe.name || 'Recipe'}</span>
+                      <span className="chat-recipe-steps">
+                        {recipeBusy === recipe.recipe_id
+                          ? 'Running…'
+                          : `${steps} step${steps === 1 ? '' : 's'} · Run`}
+                      </span>
+                    </Button>
+                    <Button
+                      className="chat-recipe-edit"
+                      type="button"
+                      disabled={Boolean(recipeBusy)}
+                      aria-label={`Edit ${recipe.name || 'recipe'}`}
+                      onClick={() => setEditingRecipe(recipe)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                  {recipe.applies_as_house_style ? (
+                    <span className="chat-recipe-house">House style</span>
+                  ) : null}
+                </div>
               );
             })}
             {recipes.length === 0 ? (
               <p className="flow-muted chat-recipe-hint">
-                Save any run as a recipe, then run it on another file.
+                Save any run as a recipe, then run it on another file. Edit a recipe to add standing
+                instructions.
               </p>
             ) : null}
           </>
@@ -3024,6 +3047,27 @@ function ChatScreen({
             ) : null}
           </p>
         ) : null}
+        <RecipeEditorDialog
+          recipe={editingRecipe}
+          open={Boolean(editingRecipe)}
+          onOpenChange={open => {
+            if (!open) setEditingRecipe(null);
+          }}
+          canRun={Boolean(datasetId)}
+          runBusy={Boolean(editingRecipe?.recipe_id && recipeBusy === editingRecipe.recipe_id)}
+          onRun={() => {
+            if (editingRecipe) void runRecipe(editingRecipe);
+          }}
+          onSaved={saved => {
+            setEditingRecipe(null);
+            setRecipeNote({
+              text: saved.applies_as_house_style
+                ? `Saved “${saved.name}” with instructions. It is the house style for leads and reports.`
+                : `Saved “${saved.name}” with standing instructions.`,
+            });
+            loadRecipes();
+          }}
+        />
       </aside>
       {showThread ? (
         <>
