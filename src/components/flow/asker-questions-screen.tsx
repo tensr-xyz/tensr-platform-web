@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { flowJson } from '@/lib/flow-api';
 
 export type AskerTurn = {
@@ -174,7 +175,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
         {shown.map(turn => {
           const active = (open?.turn_id || '') === turn.turn_id;
           return (
-            <button
+            <Button
               key={turn.turn_id}
               type="button"
               className={active ? 'asker-log-row is-active' : 'asker-log-row'}
@@ -190,7 +191,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
               </span>
               <strong>{turn.question}</strong>
               <span className="flow-muted">{summaryLine(turn)}</span>
-            </button>
+            </Button>
           );
         })}
         {shown.length ? null : <p className="flow-muted">Nothing in this list.</p>}
@@ -248,7 +249,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
             )}
             <label className="asker-note">
               <span className="flow-muted">Note to asker (optional)</span>
-              <textarea
+              <Textarea
                 value={note}
                 onChange={event => setNote(event.target.value)}
                 placeholder="Add context before they use this with a client…"

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/rest';
+
 import {
   Dialog,
   DialogContent,
@@ -832,7 +834,7 @@ export function WaveRefresh({
             3 · Review what moved
           </span>
         </div>
-        <input
+        <Input
           ref={fileInput}
           type="file"
           accept={ACCEPTED_UPLOAD_ACCEPT}
