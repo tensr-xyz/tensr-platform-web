@@ -243,3 +243,82 @@ export function reportThemeFromInspection(
   }
   return theme;
 }
+
+export type ThemeTextDefaults = {
+  fontFamily: string;
+  color: string;
+  accentColor: string;
+};
+
+export type VisualizationDefaults = {
+  chart?: Record<string, unknown>;
+  table?: Record<string, unknown>;
+};
+
+export function textDefaultsFromTheme(theme: unknown): ThemeTextDefaults {
+  const normalised = normalizeReportTheme(theme);
+  return {
+    fontFamily: normalised.fontFamily,
+    color: normalised.secondaryColour,
+    accentColor: normalised.primaryColour,
+  };
+}
+
+export function normalizeVisualizationDefaults(raw: unknown): VisualizationDefaults {
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const out: VisualizationDefaults = {};
+  for (const key of Object.keys(source)) {
+    const kind = String(key || '')
+      .trim()
+      .toLowerCase();
+    const value = source[key];
+    if ((kind !== 'chart' && kind !== 'table') || !value || typeof value !== 'object') continue;
+    const bag = value as Record<string, unknown>;
+    const entry: Record<string, unknown> = { kind };
+    if (kind === 'table') {
+      const style = bag.table_style ?? bag.tableStyle;
+      if (style && typeof style === 'object') entry.tableStyle = { ...(style as object) };
+      const rules = bag.table_rules ?? bag.tableRules;
+      if (Array.isArray(rules)) {
+        entry.tableRules = rules.filter(rule => rule && typeof rule === 'object');
+      }
+    } else {
+      const style = bag.text_style ?? bag.textStyle;
+      if (style && typeof style === 'object') entry.textStyle = { ...(style as object) };
+      const frame = bag.frame;
+      if (frame && typeof frame === 'object') entry.frame = { ...(frame as object) };
+    }
+    out[kind] = entry;
+  }
+  return out;
+}
+
+export function setVisualizationDefault(
+  defaults: unknown,
+  styleTemplate: { kind: string } & Record<string, unknown>
+): VisualizationDefaults {
+  const bag = normalizeVisualizationDefaults(defaults);
+  const kind = String(styleTemplate.kind || '')
+    .trim()
+    .toLowerCase();
+  if (kind !== 'chart' && kind !== 'table') {
+    throw new Error('Style template must be a chart or table.');
+  }
+  bag[kind] = { ...styleTemplate, kind };
+  return bag;
+}
+
+export function mergeThemeIntoOrgSettings(
+  settings: unknown,
+  options?: { theme?: unknown; visualizations?: unknown }
+): Record<string, unknown> {
+  const bag =
+    settings && typeof settings === 'object' ? { ...(settings as Record<string, unknown>) } : {};
+  if (options?.theme !== undefined) {
+    bag.reportTheme = normalizeReportTheme(options.theme);
+  }
+  if (options?.visualizations !== undefined) {
+    bag.visualizationDefaults = normalizeVisualizationDefaults(options.visualizations);
+  }
+  return bag;
+}
