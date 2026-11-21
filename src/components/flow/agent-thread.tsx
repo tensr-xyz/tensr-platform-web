@@ -71,7 +71,9 @@ import {
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import {
+  chatRunFinishedWhileAway,
   chatTurnChangesFromToolResults,
+  ensureChatNotificationPermission,
   notifyChatRunFinished,
   numberedNextStepsFromTurn,
   resolveNumberedNextStep,
@@ -186,11 +188,15 @@ function nextStepsForResult(
 
 function notifyFinishedTurn(result: AgentLoopResponse, startedAt: number): boolean {
   const body = (result.answer_markdown || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  return notifyChatRunFinished({
+  const away = chatRunFinishedWhileAway({ startedAt });
+  notifyChatRunFinished({
     title: 'Tensr finished a chat reply',
     body: body || undefined,
     startedAt,
   });
+  // In-thread banner whenever a long run finished in a hidden tab (Paper 9e),
+  // even if the OS blocked the desktop notification.
+  return away;
 }
 
 function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
@@ -466,6 +472,7 @@ export function useAgentThread({
         return false;
       if (projectId && chatRunInFlight(projectId)) return false;
       sendingRef.current = true;
+      ensureChatNotificationPermission();
       const startedAt = Date.now();
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
         if (!projectId) return;
@@ -1392,6 +1399,7 @@ export function AgentThreadColumn({
           const pastChanges = chatTurnChangesFromToolResults(
             (item.toolResults || []).map(entry => ({
               name: entry.name,
+              args: entry.args,
               result: entry.result,
             }))
           );
@@ -1410,6 +1418,7 @@ export function AgentThreadColumn({
                 <ChatTurnChangesPanel
                   projectId={thread.projectId}
                   changes={pastChanges}
+                  responsesHref={`${projectHref}/responses`}
                   disabled={thread.status === 'Thinking…'}
                   onRestored={() => thread.setStatus('Restored the previous version.')}
                 />
@@ -1568,6 +1577,7 @@ export function AgentThreadColumn({
           <ChatTurnChangesPanel
             projectId={thread.projectId}
             changes={liveChanges}
+            responsesHref={`${projectHref}/responses`}
             disabled={thread.status === 'Thinking…'}
             onRestored={() => thread.setStatus('Restored the previous version.')}
           />

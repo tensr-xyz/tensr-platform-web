@@ -20,7 +20,29 @@ export type ChatTurnChange = {
   operation?: string;
   previousDatasetId?: string;
   currentDatasetId?: string;
+  /** Paper 9e: offer "See them" for row-removal edits. */
+  seeDropped?: boolean;
 };
+
+/** Generic fillers so a finished turn always offers three numbered next steps. */
+const NEXT_STEP_FILLERS: Array<{ label: string; prompt: string }> = [
+  {
+    label: 'What should I check next?',
+    prompt: 'What should I check next based on this result?',
+  },
+  {
+    label: 'Explain this result',
+    prompt: 'Explain this result in plain language, including what drives it and any caveats.',
+  },
+  {
+    label: 'Check the bases',
+    prompt: 'Check the bases for this result.',
+  },
+  {
+    label: 'Try another cut',
+    prompt: 'Show me another cut of this result.',
+  },
+];
 
 const LONG_RUN_MS = 8_000;
 
@@ -111,19 +133,16 @@ export function numberedNextStepsFromTurn(opts: {
       label: 'Summarise what changed',
       prompt: 'Summarise every data change from this turn.',
     });
+    candidates.push({
+      label: 'Check the bases',
+      prompt: 'Check the bases after these changes.',
+    });
   }
 
   if ((opts.steps || []).some(step => /table|banner|crosstab/i.test(step))) {
     candidates.push({
       label: 'Add to a banner book',
       prompt: 'Add this table to a banner book.',
-    });
-  }
-
-  if (candidates.length < 3) {
-    candidates.push({
-      label: 'What should I check next?',
-      prompt: 'What should I check next based on this result?',
     });
   }
 
@@ -134,6 +153,15 @@ export function numberedNextStepsFromTurn(opts: {
     seen.add(key);
     return true;
   });
+
+  // QA: always surface three chips so typing 1 / 2 / 3 works after every finished turn.
+  for (const filler of NEXT_STEP_FILLERS) {
+    if (unique.length >= 3) break;
+    const key = filler.label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(filler);
+  }
 
   return unique.slice(0, 3).map((item, index) => ({
     n: index + 1,
@@ -158,33 +186,64 @@ export function chatTurnChangesFromToolResults(
 ): ChatTurnChange[] {
   const out: ChatTurnChange[] = [];
   for (const entry of toolResults || []) {
-    if (entry.name !== 'data_edit') continue;
+    const entryRecord = entry as AgentLoopToolResult & Record<string, unknown>;
+    const name = String(entry.name || entryRecord.procedure || '').trim();
+    if (name !== 'data_edit') continue;
     const result = entry.result;
     if (!result || typeof result !== 'object') continue;
     if (result.ok === false || result.refused === true) continue;
+    // Slim stream payloads put ids on the entry; full results keep them nested.
     const nested =
       result.derived && typeof result.derived === 'object'
         ? (result.derived as Record<string, unknown>)
         : null;
+    const summary =
+      result.summary && typeof result.summary === 'object'
+        ? (result.summary as Record<string, unknown>)
+        : null;
     const currentDatasetId = String(
-      result.derived_dataset_id || nested?.dataset_id || result.dataset_id || ''
+      result.derived_dataset_id ||
+        nested?.dataset_id ||
+        result.dataset_id ||
+        entryRecord.derived_dataset_id ||
+        ''
     ).trim();
+    const parentIds = result.parent_dataset_ids;
+    const firstParentId = Array.isArray(parentIds) ? String(parentIds[0] || '').trim() : '';
     const previousDatasetId = String(
-      result.parent_dataset_id || nested?.parent_dataset_id || entry.args?.dataset_id || ''
+      result.parent_dataset_id ||
+        nested?.parent_dataset_id ||
+        firstParentId ||
+        entryRecord.parent_dataset_id ||
+        entry.args?.dataset_id ||
+        ''
     ).trim();
-    const operation = String(result.operation || entry.args?.operation || '').trim();
-    const fromMarkdown = stripMarkdownBold(String(result.answer_markdown || '').trim());
+    const operation = String(
+      result.operation || entry.args?.operation || entryRecord.producing_operation || ''
+    ).trim();
+    const fromMarkdown = stripMarkdownBold(
+      String(result.answer_markdown || summary?.line || entryRecord.answer_markdown || '').trim()
+    );
     const label =
       fromMarkdown || (operation ? humanOperationLabel(operation) : '') || 'Edited the data';
     if (!currentDatasetId && !previousDatasetId && !label) continue;
-    out.push({
+    const change: ChatTurnChange = {
       label: label.slice(0, 160),
       operation: operation || undefined,
       previousDatasetId: previousDatasetId || undefined,
       currentDatasetId: currentDatasetId || undefined,
-    });
+    };
+    if (changeOffersSeeDropped(change)) change.seeDropped = true;
+    out.push(change);
   }
   return out;
+}
+
+/** True when Paper 9e should offer "See them" beside Undo (row removals). */
+export function changeOffersSeeDropped(change: ChatTurnChange): boolean {
+  const operation = (change.operation || '').toLowerCase();
+  if (operation === 'filter_apply' || operation === 'filter') return true;
+  return /\b(removed|dropped|exclud(?:e|ed|ing)?)\b/i.test(change.label);
 }
 
 /** First previous → last current pair for a single undo of the turn. */
@@ -221,9 +280,43 @@ export function formatChatTurnChangesHeadline(
   return `${count} ${noun} · saved as a new version`;
 }
 
+/** True when a long run finished while the tab was hidden (away banner). */
+export function chatRunFinishedWhileAway(opts: {
+  /** Override for tests; defaults to document.hidden. */
+  hidden?: boolean;
+  startedAt?: number;
+  minElapsedMs?: number;
+  now?: number;
+}): boolean {
+  if (typeof window === 'undefined') return false;
+  const hidden = opts.hidden ?? (typeof document !== 'undefined' ? document.hidden : false);
+  if (!hidden) return false;
+  const minElapsed = opts.minElapsedMs ?? LONG_RUN_MS;
+  if (opts.startedAt != null) {
+    const now = opts.now ?? Date.now();
+    if (now - opts.startedAt < minElapsed) return false;
+  }
+  return true;
+}
+
+/**
+ * Ask for desktop notification permission while the tab is visible (before a
+ * long run finishes in the background).
+ */
+export function ensureChatNotificationPermission(): void {
+  if (typeof window === 'undefined') return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'default') return;
+  try {
+    void Notification.requestPermission();
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Browser notification when a long chat run finishes and the tab is in the
- * background. Returns true when a notification was shown.
+ * background. Returns true when a notification was shown (or a notify stub ran).
  */
 export function notifyChatRunFinished(opts: {
   title: string;
@@ -235,14 +328,7 @@ export function notifyChatRunFinished(opts: {
   now?: number;
   notify?: (title: string, options?: NotificationOptions) => void;
 }): boolean {
-  if (typeof window === 'undefined') return false;
-  const hidden = opts.hidden ?? (typeof document !== 'undefined' ? document.hidden : false);
-  if (!hidden) return false;
-  const minElapsed = opts.minElapsedMs ?? LONG_RUN_MS;
-  if (opts.startedAt != null) {
-    const now = opts.now ?? Date.now();
-    if (now - opts.startedAt < minElapsed) return false;
-  }
+  if (!chatRunFinishedWhileAway(opts)) return false;
 
   const show = (fire: (title: string, options?: NotificationOptions) => void) => {
     fire(opts.title, {
@@ -255,7 +341,7 @@ export function notifyChatRunFinished(opts: {
     show(opts.notify);
     return true;
   }
-  if (!('Notification' in window)) return false;
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
   if (Notification.permission === 'denied') return false;
   if (Notification.permission === 'granted') {
     show((title, options) => {
@@ -268,6 +354,7 @@ export function notifyChatRunFinished(opts: {
     return true;
   }
   if (Notification.permission === 'default') {
+    // Prefer asking while visible via ensureChatNotificationPermission; still try.
     void Notification.requestPermission().then(permission => {
       if (permission === 'granted') {
         try {
@@ -277,8 +364,7 @@ export function notifyChatRunFinished(opts: {
         }
       }
     });
-    // Permission prompt started; treat as handled for this finish.
-    return true;
+    return false;
   }
   return false;
 }
