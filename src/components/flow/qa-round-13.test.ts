@@ -6,6 +6,7 @@ import {
   shownDecimals,
   shownStatistics,
   tableFootStatus,
+  tableStatisticsForWeight,
 } from '@/components/flow/survey-screens';
 import { findingFromOverview } from '@/lib/flow-report';
 
@@ -29,6 +30,24 @@ describe('round 13', () => {
     expect(displayedCount(cell, false)).toBe('36');
     expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76 (70)');
     expect(displayedCount({ count: 76.2 }, true)).toBe('76');
+    expect(
+      displayedCount(
+        { count: 2678957, weighted_n: 2678957, unweighted_n: 2046, projected_thousands: 2678.957 },
+        true
+      )
+    ).toBe('2,679 (2,046)');
+    expect(displayedCount({ count: 2678957, unweighted_n: 2046 }, true)).toBe('2,678,957 (2,046)');
+  });
+
+  it('asks for projected thousands and index when a weight is on', () => {
+    expect(tableStatisticsForWeight(['column_proportion', 'count'], true)).toEqual([
+      'column_proportion',
+      'count',
+      'projected_thousands',
+      'index',
+      'unweighted_base',
+    ]);
+    expect(tableStatisticsForWeight(['column_proportion'], false)).toEqual(['column_proportion']);
   });
 
   it('does not call an edited table saved', () => {

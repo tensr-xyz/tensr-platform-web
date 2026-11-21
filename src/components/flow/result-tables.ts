@@ -1164,7 +1164,10 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
 function sampleWeightPhrase(sample: SampleBits): string {
   const named = (sample.weight || '').trim();
   if (named && !/^(none|unweighted|null)$/i.test(named)) {
-    return named.toLowerCase() === 'weighted' ? 'Weight: Weighted' : `Weight: ${named}`;
+    if (named.toLowerCase() === 'weighted') return 'Weight: Weighted';
+    // A snake_case column code is not a label a person should read.
+    if (/[a-z]_[a-z0-9]/i.test(named)) return 'Weight: Weighted';
+    return `Weight: ${named}`;
   }
   const weighted = sample.tableWeighted;
   if (sample.sawTableBase && weighted != null && weighted !== sample.tableUnweighted) {
@@ -1788,6 +1791,13 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   return `Weight: ${stripCodeBrackets(name)}`;
 }
 
+function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLabels[]): string {
+  if (!detail || !/weight:/i.test(detail) || !weight) return detail;
+  const named = weightNote(weight, columns);
+  if (!named || named === 'Unweighted') return detail;
+  return detail.replace(/Weight:\s*[^;]+/i, named);
+}
+
 export function resultFootnote(
   view: ResultView,
   base: string,
@@ -1795,7 +1805,7 @@ export function resultFootnote(
   columns: ColumnLabels[] = []
 ): string {
   const filter = labelFilter(view.filter, columns);
-  const detail = view.baseDetail || '';
+  const detail = detailWithWeightLabel(view.baseDetail || '', view.weight || '', columns);
   const namedWeight = view.weight ? weightNote(view.weight, columns) : 'Unweighted';
   const weight =
     detail && /weight:/i.test(detail)

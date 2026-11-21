@@ -87,6 +87,8 @@ export type OutlineQuestion = {
   label: string;
   kind: string;
   columns: string[];
+  /** Value for Tables stub/banner: set name when collapsed, else the column. */
+  stubValue?: string;
   /** First column used for measure override when the unit is a single question. */
   measureColumn?: string;
 };
@@ -127,6 +129,10 @@ export function questionnaireOutline(
   const setByColumn = new Map<string, { set: OutlineSetWithStructure; members: string[] }>();
 
   for (const set of sets) {
+    // Data Preparation is a folder for flag columns, not a questionnaire question.
+    const setId = String(set.id || '').toLowerCase();
+    const setLabel = String(set.label || set.name || '').toLowerCase();
+    if (setId === 'data_preparation' || setLabel === 'data preparation') continue;
     const members = (set.columns || []).map(name => String(name)).filter(name => byName.has(name));
     for (const text of set.text_columns || []) {
       const name = String(text.column || '');
@@ -154,16 +160,16 @@ export function questionnaireOutline(
         const name = String(text.column || '');
         if (name) covered.add(name);
       }
+      const setLabel = String(
+        found.set.label || found.set.name || byName.get(found.members[0])?.label || found.members[0]
+      );
+      const setName = String(found.set.name || found.set.label || found.members[0]);
       units.push({
         key: String(found.set.id || found.set.name || found.members[0]),
-        label: String(
-          found.set.label ||
-            found.set.name ||
-            byName.get(found.members[0])?.label ||
-            found.members[0]
-        ),
+        label: setLabel,
         kind: outlineSetKind(found.set, found.members, kinds),
         columns: found.members,
+        stubValue: setName,
       });
       continue;
     }
@@ -172,10 +178,28 @@ export function questionnaireOutline(
       label: String(column.label || column.name),
       kind: kinds[column.name] || questionKind(column, []),
       columns: [column.name],
+      stubValue: column.name,
       measureColumn: column.name,
     });
   }
   return units;
+}
+
+/** Stub / banner picker rows: one entry per question or set (labels only). */
+export function tableStubPickerOptions(
+  columns: FlowColumn[],
+  sets: OutlineSetWithStructure[] = [],
+  weights: string[] = []
+): { value: string; label: string }[] {
+  const weightName = weights.find(name => Boolean(name)) || '';
+  const outline = questionnaireOutline(columns, sets, { weightName });
+  return outline
+    .filter(item => item.kind !== 'open')
+    .map(item => ({
+      value: String(item.stubValue || item.columns[0] || item.key),
+      label: item.label,
+    }))
+    .filter(item => item.value);
 }
 
 /** Coded open ends for the Theme picker. The value is the stored codes column, the label its open end. */

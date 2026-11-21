@@ -510,7 +510,7 @@ function summaryLine(
     const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
     if (!line || !/[A-Za-z]/.test(line) || !/\d/.test(line)) continue;
     // The default summarize stub is the procedure name; it is not a lead.
-    if (/^(banner_table|rake|frequencies|funnel|nps)\b/i.test(line)) continue;
+    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square)\b/i.test(line)) continue;
     lines.push(line);
   }
   if (!lines.length) return '';

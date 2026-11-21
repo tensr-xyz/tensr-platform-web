@@ -547,8 +547,14 @@ export function SourcesScreen({
                 return;
               }
               void applyUploadPrep(proposal.id, bearer, kept)
-                .then(saved => moveDatasetToProject(projectId, saved.dataset_id))
-                .then(() => {
+                .then(saved =>
+                  moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
+                )
+                .then(async datasetId => {
+                  await flowJson(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ active_dataset_id: datasetId }),
+                  });
                   setProposal(null);
                   onChanged();
                 })

@@ -113,11 +113,23 @@ function bitsetFrom(cell: BannerCell): string {
   return '';
 }
 
+/** Whole or projected figures with thousands separators (en-GB). */
+export function formatGroupedNumber(value: number, places = 0): string {
+  if (!Number.isFinite(value)) return '';
+  const digits = Math.max(0, Math.trunc(places));
+  if (digits <= 0) return Math.round(value).toLocaleString('en-GB');
+  return value.toLocaleString('en-GB', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 /** Column %, projected thousands, and index in one cell when the book carried them. */
 export function mediaCellText(
   cell: BannerCell | undefined,
   figure: 'percent' | 'row_percent' | 'total_percent' = 'percent',
-  digits = 1
+  digits = 1,
+  options?: { includeProjected?: boolean }
 ): string {
   if (!cell) return '—';
   const value =
@@ -128,15 +140,16 @@ export function mediaCellText(
         : cell.percent;
   let shown = value != null ? `${value.toFixed(digits)}%` : '—';
   if (figure === 'percent') {
+    const includeProjected = options?.includeProjected !== false;
     const projected = cell.projected_thousands;
-    if (typeof projected === 'number' && Number.isFinite(projected)) {
-      const count = projected.toFixed(1).replace(/\.0$/, '');
+    if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
+      const count = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
       const labelled = `${count} (000s)`;
       shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
     }
     const index = cell.index;
     if (typeof index === 'number' && Number.isFinite(index)) {
-      const idx = Math.round(index).toString();
+      const idx = Math.round(index).toLocaleString('en-GB');
       shown = shown === '—' ? idx : `${shown} · ${idx}`;
     }
   }

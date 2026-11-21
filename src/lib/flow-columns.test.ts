@@ -1,4 +1,9 @@
-import { dependentColumns, openEndColumns, questionnaireOutline } from './flow-columns';
+import {
+  dependentColumns,
+  openEndColumns,
+  questionnaireOutline,
+  tableStubPickerOptions,
+} from './flow-columns';
 
 describe('ANOVA dependent columns', () => {
   it('keeps a numeric companion when the preview type is text and id is the only numeric type', () => {
@@ -91,6 +96,33 @@ describe('picker columns', () => {
     ]);
     expect(outline[0].kind).toBe('multi');
     expect(outline[0].columns).toEqual(['q_6_1', 'q_6_2', 'q_6_3']);
+    expect(outline[0].stubValue).toBe('Which types of media do you prefer?');
+  });
+
+  it('offers one stub choice per brand multi set, not each member column', () => {
+    const options = tableStubPickerOptions(
+      [
+        { name: 'r1', label: 'Read last month: Title A' },
+        { name: 'r2', label: 'Read last month: Title B' },
+        { name: 'r3', label: 'Read last month: Title C' },
+        { name: 'aud', label: 'Audience', value_labels: { '1': 'North', '2': 'South' } },
+        { name: 'w', label: 'Weight', role: 'weight' },
+      ],
+      [
+        {
+          id: 'read_last_month',
+          name: 'Read last month',
+          label: 'Read last month',
+          kind: 'multiple_response',
+          columns: ['r1', 'r2', 'r3'],
+        },
+      ],
+      ['w']
+    );
+    expect(options).toEqual([
+      { value: 'Read last month', label: 'Read last month' },
+      { value: 'aud', label: 'Audience' },
+    ]);
   });
 
   it('keeps questionnaire order and groups open-end boxes as one open question', () => {
@@ -203,6 +235,36 @@ describe('id columns', () => {
 });
 
 describe('outline linked other-choice and full stems', () => {
+  it('hides Data Preparation flag columns from the questionnaire outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'region', label: 'Region' },
+        {
+          name: 'prep_quality',
+          label: 'Share of quality checks failed',
+          role: 'helper',
+          folder: 'Data Preparation',
+        },
+        {
+          name: 'prep_decision',
+          label: 'Quality decision (keep, review, or remove)',
+          role: 'helper',
+          folder: 'Data Preparation',
+        },
+      ],
+      [
+        {
+          id: 'data_preparation',
+          name: 'Data Preparation',
+          label: 'Data Preparation',
+          kind: 'group',
+          columns: ['prep_quality', 'prep_decision'],
+        },
+      ]
+    );
+    expect(outline.map(item => item.label)).toEqual(['Region']);
+  });
+
   it('hides id columns and linked Other Choice text from the outline', () => {
     const outline = questionnaireOutline(
       [
