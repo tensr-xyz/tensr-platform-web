@@ -56,14 +56,20 @@ export function numberedNextStepsFromTurn(opts: {
   columnLabels?: string[];
   /** Report already has pinned findings — offer reshape follow-ups. */
   hasReportPins?: boolean;
+  /** Stored report / client deck already has pages — same reshape chips. */
+  hasReportDocument?: boolean;
 }): NumberedNextStep[] {
   const toolResults = opts.toolResults || [];
   const labels = (opts.columnLabels || []).map(label => label.trim()).filter(Boolean);
   const edits = chatTurnChangesFromToolResults(toolResults);
   const analysisTypes = analysisTypesFromToolResults(toolResults);
   const candidates: Array<{ label: string; prompt: string }> = [];
+  const reportReady =
+    Boolean(opts.hasReportPins) ||
+    Boolean(opts.hasReportDocument) ||
+    turnBuiltReportPages(toolResults);
 
-  if (opts.hasReportPins) {
+  if (reportReady) {
     candidates.push({
       label: 'Board version (5 slides)',
       prompt:
@@ -287,6 +293,23 @@ function analysisTypesFromToolResults(toolResults: AgentLoopToolResult[]): strin
     if (key && !out.includes(key)) out.push(key);
   }
   return out;
+}
+
+/** True when this turn already filled Report pages (client deck), so reshape chips apply. */
+function turnBuiltReportPages(toolResults: AgentLoopToolResult[]): boolean {
+  for (const entry of toolResults) {
+    const result = entry.result;
+    if (!result || typeof result !== 'object') continue;
+    const procedure = String(entry.name || result.procedure || '').trim();
+    const nested = String(result.procedure || '').trim();
+    if (procedure !== 'build_client_deck' && nested !== 'build_client_deck') continue;
+    if (result.ok === false) continue;
+    const pages = result.report_pages;
+    if (typeof pages === 'number' && pages > 0) return true;
+    if (result.document && typeof result.document === 'object') return true;
+    if (result.status === 'complete') return true;
+  }
+  return false;
 }
 
 function humanOperationLabel(operation: string): string {

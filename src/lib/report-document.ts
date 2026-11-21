@@ -2569,7 +2569,11 @@ export function reshapeReportDocument(
   const kept = doc.pages.filter(page => (page.section || '') !== section);
   const sources = kept.filter(isSourceFindingPage);
   const findingSlots = Math.max(1, slideCap - (wantRecs ? 1 : 0));
-  const chosen = sources.slice(0, findingSlots);
+  const withVisual = sources.filter(page =>
+    page.objects.some(obj => obj.kind === 'chart' || obj.kind === 'table' || obj.kind === 'image')
+  );
+  const rest = sources.filter(page => !withVisual.includes(page));
+  const chosen = [...withVisual, ...rest].slice(0, findingSlots);
   const titlePrefix =
     kind === 'audience' && String(options.audienceLabel || '').trim()
       ? String(options.audienceLabel).trim()
@@ -2626,8 +2630,10 @@ export function parseReportReshapeRequest(message: string): ReportReshapeRequest
     /\b(version|deck|slides?|report)\b.{0,40}\b(board|exec|executive|c[-\s]?suite)\b/.test(
       folded
     ) ||
-    /\b5\s*slides?\b.{0,30}\bboard\b/.test(folded) ||
-    /\bboard\b.{0,30}\b5\s*slides?\b/.test(folded);
+    /\b5\s*slides?\b.{0,40}\bboard\b/.test(folded) ||
+    /\bboard\b.{0,30}\b5\s*slides?\b/.test(folded) ||
+    /\bfindings?\b.{0,40}\bfor (?:the )?board\b/.test(folded) ||
+    /\bboard version\b/.test(folded);
 
   const shortHit =
     /\b(short|shorter|condensed|brief)\b.{0,30}\b(version|deck|slides?|report)\b/.test(folded) ||

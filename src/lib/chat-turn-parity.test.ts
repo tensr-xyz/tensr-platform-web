@@ -77,6 +77,23 @@ describe('numberedNextStepsFromTurn', () => {
     ]);
     expect(steps[0]?.prompt).toMatch(/5 slide/i);
   });
+
+  it('offers reshape after a client deck fills the report', () => {
+    const steps = numberedNextStepsFromTurn({
+      toolResults: [
+        {
+          name: 'build_client_deck',
+          args: {},
+          result: { ok: true, procedure: 'build_client_deck', report_pages: 12 },
+        },
+      ],
+    });
+    expect(steps.map(step => step.label)).toEqual([
+      'Board version (5 slides)',
+      'Short version',
+      'Refine for an audience',
+    ]);
+  });
 });
 
 describe('resolveNumberedNextStep', () => {

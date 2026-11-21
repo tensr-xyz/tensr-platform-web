@@ -180,6 +180,7 @@ function nextStepsForResult(
     hasOutput: outputCardReady(result, false),
     columnLabels: columnLabels.map(column => column.label || column.name).filter(Boolean),
     hasReportPins,
+    hasReportDocument: reportPagesFromResult(result) > 0,
   });
 }
 
@@ -524,18 +525,36 @@ export function useAgentThread({
       const reshapeFileId = datasetIdRef.current;
       const reshapePins = reportPinsRef.current;
       try {
-        if (reshapeAsk && reshapeFileId && reshapePins.length) {
+        // Always intercept reshape asks — never fall through to the agent
+        // (which would start a headline scan). The API prefers the stored report.
+        if (reshapeAsk) {
+          if (!reshapeFileId) {
+            const needFile =
+              'Open a survey file first, then ask for a board, short, or audience version of the report.';
+            shown(() => {
+              setAnswer(needFile);
+              setApproving(false);
+              setPlan(null);
+              setTurn(null);
+              setSteps([]);
+              setNextSteps([]);
+              setDownloads([]);
+              setAttachments([]);
+              setStatus(null);
+            });
+            publish({
+              running: false,
+              status: null,
+              answer: needFile,
+              steps: [],
+              sessionId: sessionRef.current,
+            });
+            return true;
+          }
           shown(() => setSteps(['Reshaping the report…']));
           publish({ steps: ['Reshaping the report…'], status: 'Thinking…' });
-          const reshaped = await flowJson<{
-            ok?: boolean;
-            note?: string;
-            variant_section?: string;
-            variant_page_ids?: string[];
-            document?: { pages?: unknown[] };
-          }>(`/datasets/${reshapeFileId}/report/reshape`, {
-            method: 'POST',
-            body: JSON.stringify({
+          try {
+            const reshapeBody: Record<string, unknown> = {
               message: text,
               kind: reshapeAsk.kind,
               max_slides: reshapeAsk.maxSlides,
@@ -543,44 +562,81 @@ export function useAgentThread({
               include_recommendations: reshapeAsk.includeRecommendations,
               recommendation_count: reshapeAsk.recommendationCount,
               placement: reshapeAsk.placement,
-              document: reportDocumentForApi(documentFromPins(reshapePins)),
               persist: true,
-            }),
-            signal: AbortSignal.timeout(60_000),
-          });
-          if (turnToken !== turnTokenRef.current) return true;
-          const section = reshaped.variant_section || 'Board';
-          const nVariant = (reshaped.variant_page_ids || []).length;
-          const nPages = Array.isArray(reshaped.document?.pages)
-            ? reshaped.document.pages.length
-            : nVariant;
-          const kept =
-            reshaped.note ||
-            `${section} version added at the front. Full report kept (${nPages} pages).`;
-          const suggestions = numberedNextStepsFromTurn({
-            hasReportPins: true,
-            hasOutput: false,
-          });
-          shown(() => {
-            setAnswer(kept);
-            setApproving(false);
-            setPlan(null);
-            setTurn(null);
-            setSteps(['Reshaped the report']);
-            setNextSteps(suggestions);
-            setDownloads([]);
-            setAttachments([]);
-            setStatus(null);
-          });
-          publish({
-            running: false,
-            status: null,
-            answer: kept,
-            steps: ['Reshaped the report'],
-            sessionId: sessionRef.current,
-          });
-          if (aliveRef.current) loadRail();
-          return true;
+            };
+            if (reshapePins.length) {
+              reshapeBody.document = reportDocumentForApi(documentFromPins(reshapePins));
+            }
+            const reshaped = await flowJson<{
+              ok?: boolean;
+              note?: string;
+              variant_section?: string;
+              variant_page_ids?: string[];
+              document?: { pages?: unknown[] };
+            }>(`/datasets/${reshapeFileId}/report/reshape`, {
+              method: 'POST',
+              body: JSON.stringify(reshapeBody),
+              signal: AbortSignal.timeout(60_000),
+            });
+            if (turnToken !== turnTokenRef.current) return true;
+            const section = reshaped.variant_section || 'Board';
+            const nVariant = (reshaped.variant_page_ids || []).length;
+            const nPages = Array.isArray(reshaped.document?.pages)
+              ? reshaped.document.pages.length
+              : nVariant;
+            const kept =
+              reshaped.note ||
+              `${section} version added at the front. Full report kept (${nPages} pages).`;
+            const suggestions = numberedNextStepsFromTurn({
+              hasReportPins: true,
+              hasOutput: false,
+            });
+            shown(() => {
+              setAnswer(kept);
+              setApproving(false);
+              setPlan(null);
+              setTurn(null);
+              setSteps(['Reshaped the report']);
+              setNextSteps(suggestions);
+              setDownloads([]);
+              setAttachments([]);
+              setStatus(null);
+            });
+            publish({
+              running: false,
+              status: null,
+              answer: kept,
+              steps: ['Reshaped the report'],
+              sessionId: sessionRef.current,
+            });
+            if (aliveRef.current) loadRail();
+            return true;
+          } catch (reshapeErr) {
+            if (turnToken !== turnTokenRef.current) return true;
+            const detail =
+              reshapeErr instanceof Error && reshapeErr.message.trim()
+                ? reshapeErr.message.trim()
+                : 'Add findings to the report before reshaping it.';
+            shown(() => {
+              setAnswer(detail);
+              setApproving(false);
+              setPlan(null);
+              setTurn(null);
+              setSteps([]);
+              setNextSteps([]);
+              setDownloads([]);
+              setAttachments([]);
+              setStatus(null);
+            });
+            publish({
+              running: false,
+              status: null,
+              answer: detail,
+              steps: [],
+              sessionId: sessionRef.current,
+            });
+            return true;
+          }
         }
 
         const result = await runAgentLoop({

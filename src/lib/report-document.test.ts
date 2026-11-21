@@ -507,6 +507,14 @@ describe('reshapeReportDocument', () => {
     expect(board?.includeRecommendations).toBe(true);
     expect(board?.recommendationCount).toBe(3);
 
+    const qa = parseReportReshapeRequest(
+      'Make a 5 slide version of the findings for the board, one headline per slide, a chart on each, and the final slide with 3 recommendations. Keep the full report as it is.'
+    );
+    expect(qa?.kind).toBe('board');
+    expect(qa?.maxSlides).toBe(5);
+    expect(qa?.includeRecommendations).toBe(true);
+    expect(qa?.recommendationCount).toBe(3);
+
     const short = parseReportReshapeRequest('Build a short version of the report');
     expect(short?.kind).toBe('short');
     expect(short?.includeRecommendations).toBe(false);
