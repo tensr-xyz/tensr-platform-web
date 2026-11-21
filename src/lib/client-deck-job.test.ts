@@ -58,6 +58,23 @@ describe('client-deck-job', () => {
     expect(found).toEqual({ datasetId: 'ds-run', jobId: 'job-run', entryIndex: 0 });
   });
 
+  it('uses the screen dataset when the saved tool result omits dataset_id', () => {
+    const found = pendingClientDeckFromToolResults(
+      [
+        {
+          name: 'build_client_deck',
+          result: {
+            status: 'running',
+            procedure: 'build_client_deck',
+            job_id: 'job-orphan',
+          },
+        },
+      ],
+      'ds-screen'
+    );
+    expect(found).toEqual({ datasetId: 'ds-screen', jobId: 'job-orphan', entryIndex: 0 });
+  });
+
   it('does not poll a finished deck job', () => {
     expect(
       pendingClientDeckFromToolResults([

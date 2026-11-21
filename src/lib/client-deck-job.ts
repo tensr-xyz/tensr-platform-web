@@ -36,9 +36,11 @@ export type ClientDeckJobSnapshot = {
 
 /** Pending/running build_client_deck result that still needs a background job poll. */
 export function pendingClientDeckFromToolResults(
-  results: AgentLoopToolResult[] | undefined
+  results: AgentLoopToolResult[] | undefined,
+  fallbackDatasetId?: string | null
 ): { datasetId: string; jobId: string; entryIndex: number } | null {
   if (!results?.length) return null;
+  const fallback = String(fallbackDatasetId || '').trim();
   for (let index = 0; index < results.length; index += 1) {
     const entry = results[index];
     const result = entry?.result;
@@ -49,10 +51,11 @@ export function pendingClientDeckFromToolResults(
     if (status === 'complete' || status === 'failed') continue;
     const jobId = String(result.job_id || '').trim();
     const datasetId = String(
-      result.dataset_id || entry.args?.dataset_id || entry.args?.input || ''
+      result.dataset_id || entry.args?.dataset_id || entry.args?.input || fallback || ''
     ).trim();
     // Match live cards even when status flipped to "running" without pending=true
     // (saved turns / mid-build reopen) — otherwise the watch exits and never polls.
+    // dataset_id may be missing on reopened turns; callers pass the screen dataset.
     const live =
       result.pending === true ||
       status === 'pending' ||
@@ -289,9 +292,10 @@ function answerFromClientDeckResult(result: Record<string, unknown>): string {
 /** Patch a pending build_client_deck tool result from a job snapshot. */
 export function applyClientDeckJobSnapshot(
   response: AgentLoopResponse,
-  job: ClientDeckJobSnapshot
+  job: ClientDeckJobSnapshot,
+  fallbackDatasetId?: string | null
 ): AgentLoopResponse {
-  const found = pendingClientDeckFromToolResults(response.tool_results);
+  const found = pendingClientDeckFromToolResults(response.tool_results, fallbackDatasetId);
   if (!found) return response;
   const results = [...(response.tool_results || [])];
   const entry = { ...(results[found.entryIndex] || { name: 'build_client_deck' }) };
@@ -423,7 +427,7 @@ export async function watchClientDeckJobInBackground(
     onReportPages?: (pages: number) => void;
   }
 ): Promise<AgentLoopResponse> {
-  const found = pendingClientDeckFromToolResults(response.tool_results);
+  const found = pendingClientDeckFromToolResults(response.tool_results, opts?.datasetId);
   if (!found) return response;
   const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
   if (!datasetId) return response;
@@ -460,14 +464,14 @@ export async function watchClientDeckJobInBackground(
       // Otherwise a silent 0/0 start never updates the turn until the poll ends.
       if (pagesGrew || progressKey !== lastProgressKey) {
         lastProgressKey = progressKey;
-        latest = applyClientDeckJobSnapshot(response, snapshot);
+        latest = applyClientDeckJobSnapshot(response, snapshot, datasetId);
         opts?.onUpdate?.(latest);
       }
     },
   });
   if (!job) return latest;
 
-  latest = applyClientDeckJobSnapshot(response, job);
+  latest = applyClientDeckJobSnapshot(response, job, datasetId);
   opts?.onUpdate?.(latest);
   const finalPages = Number(
     (latest.tool_results?.[found.entryIndex]?.result as { report_pages?: number } | undefined)
@@ -495,7 +499,7 @@ export async function resolvePendingClientDeckInResponse(
     waitForComplete?: boolean;
   }
 ): Promise<AgentLoopResponse> {
-  const found = pendingClientDeckFromToolResults(response.tool_results);
+  const found = pendingClientDeckFromToolResults(response.tool_results, opts?.datasetId);
   if (!found) return response;
   const datasetId = found.datasetId || String(opts?.datasetId || '').trim();
   if (!datasetId) return response;
@@ -513,5 +517,5 @@ export async function resolvePendingClientDeckInResponse(
         onProgress: message => opts?.onProgress?.('build_client_deck', message),
       });
   if (!job) return response;
-  return applyClientDeckJobSnapshot(response, job);
+  return applyClientDeckJobSnapshot(response, job, datasetId);
 }
