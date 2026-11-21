@@ -477,6 +477,30 @@ describe('chat output panel', () => {
     expect(lead.toLowerCase()).not.toContain('weighted base');
   });
 
+  it('does not use a chi_square procedure stub as the lead', () => {
+    const lead = resultLead('', [
+      {
+        summary: {
+          line: "chi_square Survey F(3.7, 2944.8) = 3.321, p = 0.012, Cramér's V = 0.150, unlikely to be chance.",
+        },
+      },
+    ]);
+    expect(lead).toBe('');
+  });
+
+  it('keeps a chi-square finding that says what differs', () => {
+    const lead = resultLead('', [
+      {
+        summary: {
+          line: 'East stands out at 80.0% Yes against 40.0% to 44.0% elsewhere (adjusted residual 4.0).',
+        },
+      },
+    ]);
+    expect(lead).toContain('East stands out');
+    expect(lead).toContain('80.0%');
+    expect(lead.toLowerCase()).not.toContain('chi_square');
+  });
+
   it('drops raw R from a footnote sentence', () => {
     const text = guardUserText(
       'Ledger is 50.0%. Attaching package: survey. Calls: svydesign.default. masked from package:graphics.'

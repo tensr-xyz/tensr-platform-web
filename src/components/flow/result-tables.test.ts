@@ -1370,14 +1370,41 @@ describe('answer tables', () => {
     expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
   });
 
-  it('falls through an empty weight object to resolved_weight', () => {
+  it('falls through an empty weight object without showing a column code in the base line', () => {
     const view = resultViewFromToolResults({
       weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },
       resolved_weight: 'design_weight',
     });
     expect(view.weight).toBe('design_weight');
-    expect(view.baseDetail).toContain('Weight: design_weight');
+    expect(view.baseDetail).toContain('Weight: Weighted');
+    expect(view.baseDetail).not.toContain('design_weight');
     expect(view.baseDetail).not.toContain('Weight: none');
+  });
+
+  it('names the weight by its label on a chi-square result', () => {
+    const columns = [{ name: 'design_weight', label: 'Design weight' }];
+    const view = resultViewFromToolResults({
+      weight: {
+        column: 'design_weight',
+        label: 'Design weight',
+        weight_aware: true,
+        unweighted_n: 500,
+        weighted_n: 482,
+      },
+      contingency_table: {
+        index: ['Yes', 'No'],
+        columns: ['East', 'West'],
+        data: [
+          [40, 20],
+          [10, 30],
+        ],
+      },
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(view.baseDetail).toContain('Weight: Design weight');
+    expect(view.baseDetail).not.toContain('design_weight');
+    expect(resultFootnote(view, '', 'Chi-square', columns)).toContain('Weight: Design weight');
+    expect(resultFootnote(view, '', 'Chi-square', columns)).not.toContain('design_weight');
   });
 
   it('shows a duplication table and names the audience on the footnote', () => {
