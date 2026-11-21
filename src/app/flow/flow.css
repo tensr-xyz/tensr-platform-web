@@ -1907,16 +1907,18 @@ select.flow-input {
 }
 
 .analysis-table .output-grid {
-  table-layout: fixed;
-  width: 100%;
+  /* Side-panel / chat result crosstabs: grow past the panel and scroll so trailing
+     banner headers (e.g. Scotland & Wales) stay readable. Fixed+100% clips them.
+     Tables sheet banner-grid keeps fixed layout for on-screen number columns. */
+  width: max-content;
   min-width: 100%;
+  table-layout: auto;
 }
 
 .analysis-table .output-grid th:first-child,
 .analysis-table .output-grid td:first-child {
-  width: 40%;
-  max-width: 45%;
-  min-width: 0;
+  min-width: 8rem;
+  max-width: 12rem;
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;

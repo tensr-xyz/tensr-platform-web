@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
 import { AnalysisResult, quoteColumnFit } from './analysis-result';
 
@@ -32,5 +33,32 @@ describe('theme table columns', () => {
     expect(
       screen.getByRole('cell', { name: 'Stood there until the order was ready' })
     ).toHaveAttribute('data-fit', 'quote');
+  });
+
+  it('wraps a wide banner crosstab so the side panel can scroll every header', () => {
+    render(
+      <AnalysisResult
+        tables={[
+          {
+            title: 'Region by brand',
+            columns: ['Brand', 'North', 'Midlands', 'South', 'London', 'Scotland & Wales'],
+            rows: [['Octavia', '12', '18', '21', '30', '9']],
+          },
+        ]}
+      />
+    );
+
+    const table = screen.getByRole('table');
+    const section = table.closest('section');
+    expect(section?.className).toBe('analysis-table');
+    expect(table.className).toContain('output-grid');
+    expect(screen.getByRole('columnheader', { name: 'Scotland & Wales' })).toBeTruthy();
+
+    const css = readFileSync('src/app/flow/flow.css', 'utf8');
+    const block = css.match(/\.analysis-table \.output-grid \{[\s\S]*?\n\}/)?.[0];
+    expect(block).toMatch(/width:\s*max-content/);
+    expect(block).toMatch(/table-layout:\s*auto/);
+    expect(block).not.toMatch(/table-layout:\s*fixed/);
+    expect(css).toMatch(/\.analysis-table \{[\s\S]*?overflow-x:\s*auto/);
   });
 });
