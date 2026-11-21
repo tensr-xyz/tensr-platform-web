@@ -5233,7 +5233,7 @@ button.chat-result-top {
 .variable-preview-eyebrow {
   color: var(--color-muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -5248,7 +5248,7 @@ button.chat-result-top {
 .variable-preview-title {
   color: var(--color-ink);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 18px;
 }
 
@@ -5316,7 +5316,7 @@ button.chat-result-top {
 .variable-lineage-eyebrow {
   color: var(--color-muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -5325,7 +5325,7 @@ button.chat-result-top {
   margin: 0;
   color: var(--color-ink);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 20px;
 }
 
@@ -5344,7 +5344,7 @@ button.chat-result-top {
 .variable-lineage-heading {
   color: var(--color-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .variable-lineage-card {
@@ -12009,7 +12009,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   margin: 0;
   color: var(--color-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .new-project-start-list {
@@ -12050,7 +12050,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .new-project-choice strong {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 18px;
 }
 
@@ -14981,7 +14981,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   color: var(--color-ink);
   font-family: Inter, system-ui, sans-serif;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 16px;
 }
 

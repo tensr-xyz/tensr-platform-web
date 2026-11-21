@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import {
@@ -110,7 +111,7 @@ export function TabSpecDialog({
         <DialogTitle className="tab-spec-eyebrow">Tables → Build from a spec</DialogTitle>
         <div className="tab-spec-title">Build tables from your spec</div>
 
-        <input
+        <Input
           ref={fileRef}
           type="file"
           accept=".xlsx,.xlsm,.xls,.csv,.tsv,.docx"

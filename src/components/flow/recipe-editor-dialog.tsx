@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -196,10 +197,10 @@ export function RecipeEditorDialog({
         </div>
 
         <label className="recipe-editor-house">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={houseStyle}
-            onChange={event => setHouseStyle(event.target.checked)}
+            onCheckedChange={value => setHouseStyle(value === true)}
+            aria-label="Apply as house style for every lead and report"
           />
           <span>Apply as house style for every lead and report</span>
         </label>

@@ -1102,14 +1102,14 @@ export function NewProjectDialog({
           {error ? <p className="flow-error">{error}</p> : null}
           <div className="new-project-foot">
             {step === 1 ? (
-              <button
+              <Button
                 type="button"
                 className="new-project-save-template"
                 disabled={busy || !canSaveSourceTemplate}
                 onClick={() => void saveSourceAsTemplate()}
               >
                 Save this project as a template
-              </button>
+              </Button>
             ) : step === 2 ? (
               <Button className="flow-btn" type="button" disabled={busy} onClick={() => setStep(1)}>
                 Back
