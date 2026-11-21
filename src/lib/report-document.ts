@@ -475,6 +475,119 @@ export function sampleSizeDescriptionText(source: unknown): string {
   return '';
 }
 
+/** Question label shown above a live table preview (never a variable code). */
+export function tablePreviewTitle(source: unknown): string {
+  if (!source || typeof source !== 'object') return '';
+  const book = source as Record<string, unknown>;
+  const raw = String(book.title || '').trim();
+  if (!raw) return '';
+  const stripped = raw.replace(/^Frequency Table:\s*/i, '').trim();
+  return stripped || raw;
+}
+
+/** Footer under a live table — base, weight, and letter tests when present. */
+export function tablePreviewFootnote(source: unknown): string {
+  if (!source || typeof source !== 'object') return '';
+  const book = source as Record<string, unknown>;
+  const parts: string[] = [];
+  const base = sampleSizeDescriptionText(book);
+  if (base) parts.push(base);
+  const weight =
+    book.weight && typeof book.weight === 'object'
+      ? (book.weight as Record<string, unknown>)
+      : null;
+  if (weight?.weight_aware) parts.push('Weighted');
+  const spec =
+    book.spec && typeof book.spec === 'object' ? (book.spec as Record<string, unknown>) : null;
+  const display = String(book.significance_display ?? spec?.significance_display ?? '')
+    .trim()
+    .toLowerCase();
+  const hasLetters =
+    display === 'column_letters' ||
+    (display !== 'none' &&
+      display !== 'off' &&
+      display !== 'cell_comparisons' &&
+      Array.isArray(book.letters) &&
+      book.letters.length > 0);
+  if (hasLetters) {
+    const alpha = Number(book.significance_alpha ?? spec?.significance_alpha ?? 0.05);
+    const pct = alpha === 0.01 ? '99%' : alpha === 0.1 ? '90%' : '95%';
+    parts.push(`Letters: ${pct} vs column`);
+  }
+  return parts.join(' · ');
+}
+
+/** CSS font stack so missing webfonts never fall back to the browser serif default. */
+export function cssFontStack(family: string | null | undefined): string {
+  const name =
+    String(family || DEFAULT_TEXT_STYLE.fontFamily).trim() || DEFAULT_TEXT_STYLE.fontFamily;
+  if (/^(serif|sans-serif|monospace|system-ui|cursive|fantasy)$/i.test(name)) return name;
+  if (/^inter$/i.test(name)) return 'Inter, system-ui, sans-serif';
+  if (/system\s*sans/i.test(name)) return 'system-ui, sans-serif';
+  if (/times/i.test(name)) return `"${name}", Times, serif`;
+  return `"${name}", Inter, system-ui, sans-serif`;
+}
+
+function estimateTextHeightFraction(obj: ReportObject): number {
+  const text = objectPlainTextForFit(obj);
+  if (!text) return obj.frame.h;
+  const sizePt = Math.max(8, Number(obj.textStyle.fontSizePt) || DEFAULT_TEXT_STYLE.fontSizePt);
+  const lineSpacing = Math.max(
+    1,
+    Number(obj.textStyle.lineSpacing) || DEFAULT_TEXT_STYLE.lineSpacing
+  );
+  const widthIn = Math.max(0.5, obj.frame.w * PAGE_WIDTH_IN);
+  // Conservative wrap: Inter at body sizes runs wider than 0.5em average.
+  const charsPerLine = Math.max(18, Math.floor((widthIn * 72) / (sizePt * 0.62)));
+  let lines = 0;
+  for (const paragraph of text.split(/\n/) || [text]) {
+    lines += Math.max(1, Math.ceil(Math.max(1, paragraph.length) / charsPerLine));
+  }
+  // Object padding + selection border so the last line is never clipped.
+  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.18;
+  return Math.min(0.85, Math.max(obj.frame.h, heightIn / PAGE_HEIGHT_IN));
+}
+
+function objectPlainTextForFit(obj: ReportObject): string {
+  if (obj.runs.length) return obj.runs.map(run => run.text).join('');
+  return obj.text;
+}
+
+/** Expand clipped text frames and push overlapping objects down (report editor load). */
+export function fitDocumentTextFrames(document: ReportDocument | unknown): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      const objects = page.objects.map(obj => ({
+        ...obj,
+        frame: { ...obj.frame },
+      }));
+      const ordered = [...objects].sort(
+        (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+      );
+      for (const obj of ordered) {
+        if (obj.kind !== 'text' || obj.hidden) continue;
+        const needed = estimateTextHeightFraction(obj);
+        if (needed <= obj.frame.h + 0.005) continue;
+        const oldBottom = obj.frame.y + obj.frame.h;
+        const delta = needed - obj.frame.h;
+        obj.frame.h = needed;
+        const newBottom = obj.frame.y + obj.frame.h;
+        for (const other of objects) {
+          if (other.id === obj.id) continue;
+          if (other.frame.y + 0.01 < oldBottom) continue;
+          other.frame.y = Math.min(0.95 - other.frame.h, other.frame.y + (newBottom - oldBottom));
+          if (other.frame.y + other.frame.h > 0.96) {
+            other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
+          }
+        }
+      }
+      return { ...page, objects };
+    }),
+  };
+}
+
 export function pageNumberText(
   pageIndex: number,
   pageCount: number,

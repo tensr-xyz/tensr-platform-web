@@ -14,9 +14,11 @@ import {
   deleteObject,
   deletePage,
   distributeObjects,
+  cssFontStack,
   documentFromPins,
   duplicateObject,
   duplicatePage,
+  fitDocumentTextFrames,
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
@@ -62,6 +64,8 @@ import {
   setTableStyle,
   snapFrameToGrid,
   sortPages,
+  tablePreviewFootnote,
+  tablePreviewTitle,
 } from './report-document';
 
 const pins = [
@@ -590,5 +594,59 @@ describe('reshapeReportDocument', () => {
     expect(
       liveValueFromLabel(cell2.binding, refreshed.pages[0]!.objects, { pageTitle: 'Awareness' })
     ).toMatch(/T\d+ · Awareness/);
+  });
+
+  it('expands clipped commentary and keeps Inter from falling back to serif', () => {
+    const long =
+      'Culture shapes food and nutrition advice for 77.1% of respondents, while 22.9% say it does not (n = 380). This makes cultural context a routine part of recommendations rather than an exception across markets and care settings.';
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'page-clip',
+          title: 'Finding',
+          layout_id: 'title_and_content',
+          objects: [
+            {
+              id: 'comment',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.2, w: 0.88, h: 0.12 },
+              text: long,
+              // Legacy decks used the 18pt default and clipped under a 0.12 frame.
+              text_style: { font_family: 'Inter', font_size_pt: 18 },
+              z_index: 1,
+            },
+            {
+              id: 'table',
+              kind: 'table',
+              table_spec_id: 'spec-1',
+              frame: { x: 0.06, y: 0.34, w: 0.88, h: 0.56 },
+              z_index: 2,
+            },
+          ],
+        },
+      ],
+    });
+    const fitted = fitDocumentTextFrames(doc);
+    const comment = fitted.pages[0]!.objects.find(obj => obj.id === 'comment')!;
+    const table = fitted.pages[0]!.objects.find(obj => obj.id === 'table')!;
+    expect(comment.frame.h).toBeGreaterThan(0.12);
+    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h - 0.001);
+    expect(cssFontStack('Inter')).toMatch(/^Inter, system-ui, sans-serif$/);
+    expect(cssFontStack('Inter')).not.toMatch(/(^|,\s*)serif\b/);
+  });
+
+  it('builds table preview title and footnote from the book, not house style', () => {
+    expect(tablePreviewTitle({ title: 'Frequency Table: Patient culture' })).toBe(
+      'Patient culture'
+    );
+    expect(
+      tablePreviewFootnote({
+        base_label: 'Base: all respondents (380)',
+        weight: { weight_aware: true, weighted_n: 380, unweighted_n: 380 },
+        significance_display: 'column_letters',
+        significance_alpha: 0.05,
+        letters: [{ row: 'Yes', col: 'Total', letters: 'a' }],
+      })
+    ).toBe('Base: all respondents (380) · Weighted · Letters: 95% vs column');
   });
 });

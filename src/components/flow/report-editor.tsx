@@ -18,8 +18,10 @@ import {
   addPage,
   applyDefaultLabels,
   copyStyles,
+  cssFontStack,
   deletePage,
   documentFromPins,
+  fitDocumentTextFrames,
   hideTableRow,
   insertDynamicText,
   insertPageNumber,
@@ -41,6 +43,8 @@ import {
   setObjectTextStyle,
   setTableRules,
   setTableStyle,
+  tablePreviewFootnote,
+  tablePreviewTitle,
   type DefaultLabels,
   type ListStyle,
   type PinLike,
@@ -251,6 +255,14 @@ function TableObjectPreview({
     if (!tableQuery.data) return [] as string[][];
     return previewGridFromBannerBook(tableQuery.data);
   }, [tableQuery.data]);
+  const questionTitle = useMemo(
+    () => (tableQuery.data ? tablePreviewTitle(tableQuery.data) : ''),
+    [tableQuery.data]
+  );
+  const footnote = useMemo(
+    () => (tableQuery.data ? tablePreviewFootnote(tableQuery.data) : ''),
+    [tableQuery.data]
+  );
   const phase: 'idle' | 'loading' | 'ready' | 'error' =
     !specId || !datasetId
       ? 'idle'
@@ -262,14 +274,17 @@ function TableObjectPreview({
             ? 'ready'
             : 'error';
 
-  const ruleCount = obj.tableRules.filter(rule => rule.enabled).length;
   const showGrid = phase === 'ready' && rows.length > 0;
+
   return (
     <div className="report-editor-table-preview" data-preset={style.preset} data-phase={phase}>
+      {questionTitle && (showGrid || phase === 'error') ? (
+        <p className="report-editor-table-title">{questionTitle}</p>
+      ) : null}
       {showGrid ? (
         <table
           style={{
-            fontFamily: style.fontFamily,
+            fontFamily: cssFontStack(style.fontFamily),
             fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
             color: style.bodyColor,
             borderColor: style.borderColor,
@@ -304,19 +319,21 @@ function TableObjectPreview({
             ))}
           </tbody>
         </table>
+      ) : phase === 'loading' ? (
+        <div className="report-editor-table-skeleton" aria-busy="true" aria-label="Loading table">
+          <div className="report-editor-table-skeleton-bar" />
+          <div className="report-editor-table-skeleton-bar" />
+          <div className="report-editor-table-skeleton-bar" />
+          <div className="report-editor-table-skeleton-bar" />
+        </div>
       ) : (
         <p className="report-editor-table-empty">
-          {phase === 'loading'
-            ? 'Loading table…'
-            : phase === 'error'
-              ? 'Could not load this table.'
-              : 'Link a saved table to preview numbers.'}
+          {phase === 'error'
+            ? 'Could not load this table.'
+            : 'Link a saved table to preview numbers.'}
         </p>
       )}
-      <span className="report-editor-table-meta">
-        {tableStylePresetLabel(style.preset)}
-        {ruleCount ? ` · ${ruleCount} rule${ruleCount === 1 ? '' : 's'}` : ''}
-      </span>
+      {footnote ? <span className="report-editor-table-meta">{footnote}</span> : null}
     </div>
   );
 }
@@ -362,7 +379,7 @@ function CanvasObjectView({
         width: `${obj.frame.w * 100}%`,
         height: `${obj.frame.h * 100}%`,
         zIndex: obj.zIndex,
-        fontFamily: isText ? style.fontFamily : undefined,
+        fontFamily: isText ? cssFontStack(style.fontFamily) : undefined,
         fontSize: isText ? `${style.fontSizePt}pt` : undefined,
         color: isText && !binding ? style.color : undefined,
         fontWeight: isText ? (style.bold ? 700 : 400) : undefined,
@@ -521,7 +538,9 @@ export function ReportEditor({
     }
 
     if (stored?.has_document && stored.document) {
-      next = ensurePages(normalizeReportDocument(stored.document));
+      next = ensurePages(fitDocumentTextFrames(normalizeReportDocument(stored.document)));
+    } else {
+      next = ensurePages(fitDocumentTextFrames(next));
     }
 
     setDocument(next);
