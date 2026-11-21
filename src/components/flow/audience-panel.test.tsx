@@ -130,7 +130,9 @@ describe('audience panel', () => {
       />
     );
     expect(await screen.findByText('Regulars')).toBeTruthy();
-    expect(screen.getByText('Which place is Often')).toBeTruthy();
+    expect(
+      screen.getByText('Regulars').closest('li')?.querySelector('.audience-definition')?.textContent
+    ).toBe('Which place is Often');
     expect(screen.queryByText('place', { exact: true })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '+ New audience' }));
@@ -284,5 +286,22 @@ describe('audience panel', () => {
       />
     );
     expect(await screen.findByText(/Low base/)).toBeTruthy();
+  });
+
+  it('flags audiences that did not carry to this file', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        audiences: [],
+        unmatched: ['Legacy segment'],
+      }),
+    });
+    render(
+      <AudiencePanel
+        datasetId="file-1"
+        columns={[{ name: 'role', label: 'Role', value_labels: { '1': 'Director' } }]}
+      />
+    );
+    expect(await screen.findByText(/Did not carry to this file: Legacy segment/)).toBeTruthy();
   });
 });
