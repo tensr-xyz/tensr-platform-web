@@ -50,6 +50,46 @@ describe('saved run document', () => {
     expect(document.tables.map(table => table.title)).toEqual(['Groups']);
   });
 
+  it('TEN-93: Groups codes become stamped value labels on the saved page', () => {
+    const document = runDocument({
+      ...run,
+      op: 'mann_whitney_u',
+      report: {
+        ...run.report,
+        answer_from_result: true,
+        answer:
+          'Overall liking for Male and Female: U = 12.000, p = 0.120, r = -0.033 (negligible), consistent with chance.',
+        assumption_checks: {
+          notes: [
+            'SPSS NPAR TESTS default: asymptotic Mann–Whitney with continuity correction.',
+            'Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.',
+          ],
+        },
+        tables: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['1.0', '10', '4'],
+              ['2.0', '10', '5'],
+            ],
+          },
+        ],
+      },
+      result: {
+        group_descriptives: [
+          { group: '1.0', label: 'Male', n: 10, median: 4 },
+          { group: '2.0', label: 'Female', n: 10, median: 5 },
+        ],
+        group_labels: ['Male', 'Female'],
+        group_names: ['1.0', '2.0'],
+      },
+    });
+    expect(document.tables[0].rows.map(row => row[0])).toEqual(['Male', 'Female']);
+    expect(document.summary).toContain('r = -0.033 (negligible)');
+    expect(document.checks.some(note => note.includes('Effect size'))).toBe(true);
+  });
+
   it('reads the stored summary, base, table, and script', () => {
     const document = runDocument(run);
     expect(document.title).toBe('score by region');

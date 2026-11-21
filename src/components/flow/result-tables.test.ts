@@ -1508,6 +1508,39 @@ describe('answer tables', () => {
     expect(resultFootnote(view, '', 'Mann-Whitney')).not.toContain('Weight: none');
   });
 
+  it('TEN-93: Groups and Pairwise codes become stamped value labels on the card', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'mann_whitney_u',
+      group_descriptives: [
+        { group: '1.0', label: 'Male', n: 10, median: 4 },
+        { group: '2.0', label: 'Female', n: 10, median: 5 },
+      ],
+      summary: {
+        table: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['1.0', '10', '4'],
+              ['2.0', '10', '5'],
+            ],
+          },
+          {
+            title: 'Pairwise',
+            columns: ['Group', 'Group', 'U', 'p', 'Adjusted p'],
+            rows: [['1.0', '2.0', '12', '0.12', '0.12']],
+          },
+        ],
+        notes: ['Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.'],
+      },
+    });
+    const groups = view.tables.find(table => table.title === 'Groups');
+    expect(groups?.rows.map(row => row[0])).toEqual(['Male', 'Female']);
+    const pairs = view.tables.find(table => table.title === 'Pairwise');
+    expect(pairs?.rows[0]?.slice(0, 2)).toEqual(['Male', 'Female']);
+    expect(view.checks.some(note => note.includes('Effect size'))).toBe(true);
+  });
+
   it('falls through an empty weight object without showing a column code in the base line', () => {
     const view = resultViewFromToolResults({
       weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },

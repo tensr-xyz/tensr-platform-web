@@ -817,9 +817,73 @@ function groupLabels(groups: unknown): Map<string, string> {
     const record = row as Record<string, unknown>;
     const code = cell(record.group);
     const label = cell(record.label);
-    if (code && label && label !== code) labels.set(code, label);
+    if (code && label && label !== code) {
+      labels.set(code, label);
+      const stripped = code.replace(/\.0$/, '');
+      if (stripped && stripped !== code) labels.set(stripped, label);
+    }
   }
   return labels;
+}
+
+/** Groups/Pairwise cells that still hold codes get the stamped value labels. */
+function relabelRankTables(tables: RunTable[], labels: Map<string, string>): RunTable[] {
+  if (!labels.size) return tables;
+  const shown = (raw: string) =>
+    labels.get(raw) || labels.get(raw.replace(/\.0$/, '')) || labels.get(`${raw}.0`) || raw;
+  return tables.map(table => {
+    const title = table.title.trim().toLowerCase();
+    if (title === 'groups') {
+      return {
+        ...table,
+        rows: table.rows.map(row => (row.length ? [shown(row[0] || ''), ...row.slice(1)] : row)),
+      };
+    }
+    if (title === 'pairwise') {
+      return {
+        ...table,
+        rows: table.rows.map(row => {
+          if (row.length < 2) return row;
+          return [shown(row[0] || ''), shown(row[1] || ''), ...row.slice(2)];
+        }),
+      };
+    }
+    return table;
+  });
+}
+
+function collectGroupLabels(
+  value: unknown,
+  depth = 0,
+  into = new Map<string, string>()
+): Map<string, string> {
+  if (!value || typeof value !== 'object' || depth > 6) return into;
+  if (Array.isArray(value)) {
+    for (const item of value) collectGroupLabels(item, depth + 1, into);
+    return into;
+  }
+  const record = value as Record<string, unknown>;
+  for (const [code, label] of groupLabels(record.group_descriptives)) {
+    into.set(code, label);
+  }
+  const prepared = record.group_labels;
+  const names = record.group_names;
+  if (Array.isArray(prepared) && Array.isArray(names)) {
+    for (let index = 0; index < names.length; index += 1) {
+      const code = cell(names[index]);
+      const label = cell(prepared[index]);
+      if (code && label && label !== code) {
+        into.set(code, label);
+        const stripped = code.replace(/\.0$/, '');
+        if (stripped && stripped !== code) into.set(stripped, label);
+      }
+    }
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key === 'rows' || key === 'columns' || key === 'preview') continue;
+    if (nested && typeof nested === 'object') collectGroupLabels(nested, depth + 1, into);
+  }
+  return into;
 }
 
 function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
@@ -1707,6 +1771,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (!lockTables && !view.tables.some(isGroupMeanTable)) {
     for (const table of spareGroupTables) add(table);
   }
+  view.tables = relabelRankTables(view.tables, collectGroupLabels(results));
   view.tables = withoutEngineCopies(view.tables).filter((table, index, all) => {
     const blank = table.columns.some(
       (_column, column) =>
