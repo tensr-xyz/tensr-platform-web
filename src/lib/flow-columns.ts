@@ -129,6 +129,10 @@ export function questionnaireOutline(
   const setByColumn = new Map<string, { set: OutlineSetWithStructure; members: string[] }>();
 
   for (const set of sets) {
+    // Data Preparation is a folder for flag columns, not a questionnaire question.
+    const setId = String(set.id || '').toLowerCase();
+    const setLabel = String(set.label || set.name || '').toLowerCase();
+    if (setId === 'data_preparation' || setLabel === 'data preparation') continue;
     const members = (set.columns || []).map(name => String(name)).filter(name => byName.has(name));
     for (const text of set.text_columns || []) {
       const name = String(text.column || '');

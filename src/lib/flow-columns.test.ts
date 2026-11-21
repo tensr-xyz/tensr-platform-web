@@ -235,6 +235,36 @@ describe('id columns', () => {
 });
 
 describe('outline linked other-choice and full stems', () => {
+  it('hides Data Preparation flag columns from the questionnaire outline', () => {
+    const outline = questionnaireOutline(
+      [
+        { name: 'region', label: 'Region' },
+        {
+          name: 'prep_quality',
+          label: 'Share of quality checks failed',
+          role: 'helper',
+          folder: 'Data Preparation',
+        },
+        {
+          name: 'prep_decision',
+          label: 'Quality decision (keep, review, or remove)',
+          role: 'helper',
+          folder: 'Data Preparation',
+        },
+      ],
+      [
+        {
+          id: 'data_preparation',
+          name: 'Data Preparation',
+          label: 'Data Preparation',
+          kind: 'group',
+          columns: ['prep_quality', 'prep_decision'],
+        },
+      ]
+    );
+    expect(outline.map(item => item.label)).toEqual(['Region']);
+  });
+
   it('hides id columns and linked Other Choice text from the outline', () => {
     const outline = questionnaireOutline(
       [

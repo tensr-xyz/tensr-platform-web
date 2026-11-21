@@ -32,7 +32,9 @@ export type PrepProposal = {
     bot_rows?: number;
     non_substantive_rows?: number;
     duplicate_rows?: number;
+    threshold?: number;
     would_remove?: number;
+    would_remove_share?: number;
     would_review?: number;
   };
 };
@@ -125,6 +127,37 @@ function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
   return bits.join(' · ');
 }
 
+/** Threshold line for the existing flags row. Rows stay until the user chooses. */
+function qualityAfter(quality: NonNullable<PrepProposal['quality']>): string {
+  const bits = ['→ Adds a Quality flag column you can filter on'];
+  const remove = quality.would_remove;
+  const respondents = quality.respondents;
+  const review = quality.would_review;
+  const threshold =
+    typeof quality.threshold === 'number' && quality.threshold > 0 && quality.threshold <= 1
+      ? Math.round(quality.threshold * 100)
+      : null;
+  if (
+    typeof remove === 'number' &&
+    typeof respondents === 'number' &&
+    respondents > 0 &&
+    threshold !== null
+  ) {
+    const share =
+      typeof quality.would_remove_share === 'number'
+        ? quality.would_remove_share
+        : remove / respondents;
+    const pct = (share * 100).toFixed(1).replace(/\.0$/, '');
+    bits.push(
+      `${remove.toLocaleString('en-GB')} of ${respondents.toLocaleString('en-GB')} (${pct}%) would be removed at the ${threshold}% bar`
+    );
+  }
+  if (typeof review === 'number' && review > 0) {
+    bits.push(`${review.toLocaleString('en-GB')} to review`);
+  }
+  return bits.join(' · ');
+}
+
 export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[] {
   if (!proposal) return [];
   const parts: PrepPart[] = [];
@@ -205,7 +238,7 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
         `Flag ${flagged} ${flagged === 1 ? 'respondent' : 'respondents'}`,
         'Flagged, never removed',
         qualityBefore(proposal.quality || {}),
-        '→ Adds a Quality flag column you can filter on'
+        qualityAfter(proposal.quality || {})
       )
     );
   } else {
