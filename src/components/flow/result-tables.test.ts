@@ -880,6 +880,43 @@ describe('result tables', () => {
     });
     expect(fromBook.tables[0].rows[0][0]).toBe('Global Ledger');
     expect(fromBook.tables[0].columns).toContain('People (000s)');
+
+    const fromMultiStub = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Awareness',
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'header',
+            label: 'Have you heard of North Roasters?',
+            cells: [],
+          },
+          {
+            kind: 'value',
+            label: 'Yes',
+            cells: [{ banner_id: 'total', percent: 50.0, projected_thousands: 12.5 }],
+          },
+          {
+            kind: 'header',
+            label: 'Have you heard of South Brew?',
+            cells: [],
+          },
+          {
+            kind: 'value',
+            label: 'Yes',
+            cells: [{ banner_id: 'total', percent: 40.0, projected_thousands: 10.0 }],
+          },
+        ],
+      },
+    });
+    expect(fromMultiStub.tables[0].rows.map(row => row[0])).toEqual([
+      'Have you heard of North Roasters?',
+      'Yes',
+      'Have you heard of South Brew?',
+      'Yes',
+    ]);
+    expect(fromMultiStub.tables[0].rows[0].slice(1)).toEqual(['', '']);
   });
 
   it('shows the new column and not a preview of the whole file', () => {

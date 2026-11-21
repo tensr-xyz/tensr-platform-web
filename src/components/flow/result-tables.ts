@@ -998,17 +998,19 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
           Boolean(column) && typeof column === 'object' && !Array.isArray(column)
       )
     : [];
+  // Keep stub-group header rows so multi-stub books stay labelled on the output page.
   const rows = Array.isArray(record.rows)
     ? record.rows.filter((row): row is Record<string, unknown> => {
         if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
         const kind = String((row as { kind?: unknown }).kind || 'value');
-        return !['mean', 'sd', 'base', 'header'].includes(kind);
+        return !['mean', 'sd', 'base'].includes(kind);
       })
     : [];
-  if (!columns.length || !rows.length) return null;
+  const valueRows = rows.filter(row => String(row.kind || 'value') !== 'header');
+  if (!columns.length || !valueRows.length) return null;
   let hasProjected = false;
   let hasIndex = false;
-  for (const row of rows) {
+  for (const row of valueRows) {
     for (const item of Array.isArray(row.cells) ? row.cells : []) {
       if (!item || typeof item !== 'object') continue;
       const cell = item as Record<string, unknown>;
@@ -1027,9 +1029,15 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
       headers.push(columns.length === 1 ? 'Index vs total' : `${heading} index`);
     }
   }
+  const blank = Array.from({ length: headers.length - 1 }, () => '');
   const matrix: string[][] = [];
   for (const row of rows.slice(0, 40)) {
+    const kind = String(row.kind || 'value');
     let label = cell(row.label);
+    if (kind === 'header') {
+      matrix.push([label, ...blank]);
+      continue;
+    }
     if (label.includes(': ')) label = label.split(': ').slice(-1)[0].trim() || label;
     const cells = Array.isArray(row.cells)
       ? row.cells.filter(
