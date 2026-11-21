@@ -55,6 +55,7 @@ import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import {
   AskerQuestionsScreen,
@@ -3115,9 +3116,21 @@ function ChatScreen({
                   </Button>
                 </div>
                 <div className="output-body output-table-body">
-                  <div>
-                    <h2>{title}</h2>
-                    {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  <div className="output-explain-head">
+                    <div>
+                      <h2>{title}</h2>
+                      {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                    </div>
+                    <ExplainThisPanel
+                      title={title}
+                      lead={takeaway || lead}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      checkItems={checks}
+                      baseNote={baseNote}
+                      projectId={chatProjectId || undefined}
+                      datasetId={datasetId || undefined}
+                    />
                   </div>
                   <div className="report-chips">
                     <span className="report-chip">

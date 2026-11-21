@@ -32,6 +32,8 @@ import {
   labelsImportApplyLabel,
   type LabelsImportPreview,
 } from '@/lib/label-workbook';
+import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
+import { isAiEnabled } from '@/lib/ai-controls';
 
 type DetailFile = {
   dataset_id?: string;
@@ -250,6 +252,7 @@ export function DetailsScreen({
   const [inviteNote, setInviteNote] = useState<string | null>(null);
   const [userId, setUserId] = useState('');
   const [turns, setTurns] = useState<AskerTurn[] | null>(null);
+  const [orgAiEnabled, setOrgAiEnabled] = useState(true);
 
   useEffect(() => {
     if (!projectId) return;
@@ -300,13 +303,23 @@ export function DetailsScreen({
         setOrgId(id || null);
         if (!id) {
           setWorkspace([]);
+          setOrgAiEnabled(true);
           return;
         }
-        return flowJson<{ members?: Record<string, unknown>[] }>(
-          `/api/organizations/${id}/members`
-        ).then(body => {
-          if (!cancelled) setWorkspace((body.members || []).map(workspacePerson));
-        });
+        return Promise.all([
+          flowJson<{ members?: Record<string, unknown>[] }>(
+            `/api/organizations/${id}/members`
+          ).then(body => {
+            if (!cancelled) setWorkspace((body.members || []).map(workspacePerson));
+          }),
+          flowJson<{ organization?: { ai_enabled?: boolean } }>(`/api/organizations/${id}`)
+            .then(body => {
+              if (!cancelled) setOrgAiEnabled(isAiEnabled(body.organization?.ai_enabled));
+            })
+            .catch(() => {
+              if (!cancelled) setOrgAiEnabled(true);
+            }),
+        ]);
       })
       .catch(() => {
         if (!cancelled) {
@@ -648,6 +661,11 @@ export function DetailsScreen({
         The agent reads this brief before every answer, so objectives, audience and notes shape what
         it runs and how it writes up results.
       </p>
+      {projectId ? (
+        <div className="details-ai-wrap">
+          <ProjectAiSettingsPanel projectId={projectId} lockedByWorkspace={!orgAiEnabled} />
+        </div>
+      ) : null}
       <div className="details-body">
         <div className="details-main">
           <div className="details-split">

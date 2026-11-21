@@ -43,13 +43,14 @@ import {
   type Person,
 } from './settings-data';
 import { useLoad } from './use-load';
+import { isAiEnabled } from '@/lib/ai-controls';
 
 const ROLES = [
   { value: 'member', label: 'Member' },
   { value: 'owner', label: 'Owner' },
 ];
 
-type OrgRecord = { id?: string; name?: string };
+type OrgRecord = { id?: string; name?: string; ai_enabled?: boolean };
 
 async function loadOrganisation(orgId: string) {
   const [me, org, members, invitations] = await Promise.all([
@@ -192,6 +193,44 @@ export function SettingsOrganisation({ orgId }: { orgId: string }) {
           </Button>
         ) : null}
       </section>
+
+      {isOwner ? (
+        <section className="st-card st-section">
+          <header className="st-section-head">
+            <h2 className="st-section-title">AI for this workspace</h2>
+            <p className="st-section-sub">
+              Turn AI off for every project. Project settings stay locked while this is off.
+            </p>
+          </header>
+          <div className="st-section-body st-ai-row">
+            <span>Allow AI in this workspace</span>
+            <Button
+              className="st-btn"
+              type="button"
+              disabled={busy === 'ai'}
+              onClick={() =>
+                void run('ai', async () => {
+                  const next = !isAiEnabled(org.ai_enabled);
+                  const page = await flowJson<{ organization?: OrgRecord }>(
+                    `/api/organizations/${orgId}`,
+                    {
+                      method: 'PUT',
+                      body: JSON.stringify({ ai_enabled: next }),
+                    }
+                  );
+                  setData(d => ({
+                    ...d,
+                    org: page.organization || { ...d.org, ai_enabled: next },
+                  }));
+                  return next ? 'AI is on for this workspace.' : 'AI is off for this workspace.';
+                })
+              }
+            >
+              {isAiEnabled(org.ai_enabled) ? 'On' : 'Off'}
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       {isOwner ? (
         <div className="st-invite">

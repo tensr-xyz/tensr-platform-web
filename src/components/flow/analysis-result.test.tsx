@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
 import { AnalysisResult, quoteColumnFit } from './analysis-result';
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 describe('theme table columns', () => {
   it('gives the count, the share, and the quote their own columns', () => {
     expect(quoteColumnFit('Count')).toBe('count');
