@@ -12597,14 +12597,252 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   flex: none;
 }
 
+.agent-thread-panel.is-asker,
+.chat-column.is-asker {
+  flex-direction: row;
+  max-width: none;
+  width: 100%;
+}
+
+.asker-thread-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .asker-rail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 240px;
-  padding: 16px;
+  gap: 20px;
+  width: 280px;
+  flex: none;
+  padding: 18px 16px;
   background: var(--color-well);
   border-right: 1px solid var(--color-line);
+  overflow: auto;
+}
+
+.asker-rail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asker-rail-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.asker-audience-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.asker-audience-card strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.asker-question-link {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.asker-rail-note {
+  margin-top: auto;
+  padding: 12px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.asker-rail-note > p:first-child {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.asker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.asker-chip {
+  display: inline-block;
+  padding: 4px 9px;
+  font-size: 12px;
+  line-height: 16px;
+  background: var(--color-well);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+
+.asker-not-in-data {
+  max-width: 880px;
+  margin: 8px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-warn);
+  border-radius: 10px;
+  background: var(--color-canvas);
+}
+
+.asker-not-in-data p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.asker-answer-actions {
+  margin: 8px 0 12px;
+}
+
+.asker-log-page {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  background: var(--color-canvas);
+}
+
+.asker-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 520px;
+  flex: none;
+  padding: 16px;
+  border-right: 1px solid var(--color-line);
+  overflow: auto;
+  background: var(--color-well);
+}
+
+.asker-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.asker-log-filter {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.asker-log-filter[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: var(--color-accent-soft);
+}
+
+.asker-log-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.asker-log-row.is-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.asker-log-row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.asker-log-status {
+  flex: none;
+  font-size: 12px;
+  color: var(--color-warn);
+}
+
+.asker-log-status.status-checked {
+  color: var(--color-accent);
+}
+
+.asker-log-status.status-not_in_data {
+  color: var(--color-muted);
+}
+
+.asker-log-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px;
+  overflow: auto;
+}
+
+.asker-log-detail h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.asker-answer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--color-well);
+  border-radius: 10px;
+}
+
+.asker-answer-card p {
+  margin: 0;
+}
+
+.asker-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asker-note textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  resize: vertical;
+  font: inherit;
+}
+
+.asker-log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.asker-flag {
+  color: var(--color-warn);
 }
 
 .deck-builder {

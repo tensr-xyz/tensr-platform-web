@@ -3,11 +3,12 @@ import {
   isProjectTabKey,
   markVisitedProjectTab,
   projectSectionPath,
+  tabsForRole,
   visibleProjectSection,
 } from './project-tabs';
 
 describe('project tabs', () => {
-  it('shows Chat, Sources, Responses, Tables and Report', () => {
+  it('shows Chat, Sources, Responses, Tables, Report and Asker questions', () => {
     expect(PROJECT_TABS.map(([, label]) => label)).toEqual([
       'Chat',
       'Sources',
@@ -15,6 +16,7 @@ describe('project tabs', () => {
       'Responses',
       'Tables',
       'Report',
+      'Asker questions',
     ]);
   });
 
@@ -24,8 +26,14 @@ describe('project tabs', () => {
     expect(projectSectionPath('study-1', 'tables')).toBe('/flow/p/study-1/tables');
   });
 
+  it('limits an Asker to Chat only', () => {
+    expect(tabsForRole('asker').map(([key]) => key)).toEqual(['chat']);
+    expect(tabsForRole('editor').map(([key]) => key)).toContain('asker-questions');
+  });
+
   it('tracks visited tabs without remounting on a repeat visit', () => {
     expect(isProjectTabKey('report')).toBe(true);
+    expect(isProjectTabKey('asker-questions')).toBe(true);
     expect(isProjectTabKey('interviews')).toBe(false);
     const first = markVisitedProjectTab(new Set(), 'chat');
     expect([...first]).toEqual(['chat']);

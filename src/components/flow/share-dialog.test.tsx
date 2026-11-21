@@ -28,12 +28,12 @@ describe('ShareDialog', () => {
     expect(screen.getByRole('button', { name: 'Choose' })).toBeInTheDocument();
   });
 
-  it('offers Can ask between Can edit and Can view', async () => {
+  it('offers Asker between Viewer and Editor', async () => {
     render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
     expect(await screen.findByText('Share Brand tracker')).toBeInTheDocument();
-    expect(screen.getByText(/Can edit · runs and edits/)).toBeInTheDocument();
-    expect(screen.getByText(/Can ask · asks questions/)).toBeInTheDocument();
-    expect(screen.getByText(/Can view · reads outputs/)).toBeInTheDocument();
+    expect(screen.getByText(/Viewer · reads outputs/)).toBeInTheDocument();
+    expect(screen.getByText(/Asker · asks questions/)).toBeInTheDocument();
+    expect(screen.getByText(/Editor · runs and edits/)).toBeInTheDocument();
   });
 
   it('shows published link settings when a project link exists', async () => {

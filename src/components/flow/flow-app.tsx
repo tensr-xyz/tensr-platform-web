@@ -51,6 +51,11 @@ import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { DetailsScreen } from '@/components/flow/details-screen';
+import {
+  AskerQuestionsScreen,
+  askerQuestionsTabLabel,
+  type AskerTurn,
+} from '@/components/flow/asker-questions-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
@@ -58,6 +63,7 @@ import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import {
   PROJECT_TABS,
   markVisitedProjectTab,
+  tabsForRole,
   visibleProjectSection,
 } from '@/components/flow/project-tabs';
 import {
@@ -558,6 +564,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const project = projects.find(item => item.id === projectId);
   const [projectReady, setProjectReady] = useState('');
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['chat']));
+  const [myRole, setMyRole] = useState<string | null>(null);
+  const [askerTurns, setAskerTurns] = useState<AskerTurn[] | null>(null);
   const prefetchTab = usePrefetchProjectTab();
   const projectFileKey = datasets
     .filter(row => row.project_id === projectId)
@@ -657,6 +665,52 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (!projectId) return;
     setVisitedTabs(current => markVisitedProjectTab(current, page));
   }, [projectId, page]);
+  useEffect(() => {
+    if (!projectId || myRole !== 'asker') return;
+    if (page === 'chat') return;
+    router.replace(`/flow/p/${projectId}/chat`);
+  }, [projectId, myRole, page, router]);
+
+  useEffect(() => {
+    if (!projectId || !isAuthenticated) {
+      setMyRole(null);
+      setAskerTurns(null);
+      return;
+    }
+    let live = true;
+    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
+      .then(me => {
+        const userId = me.user_id || me.user?.id || '';
+        return flowJson<{ members?: { user_id?: string; role?: string }[] }>(
+          `/api/projects/${projectId}/members`
+        ).then(page => {
+          if (!live) return;
+          const mine = (page.members || []).find(member => member.user_id === userId);
+          const role = mine?.role || (project?.created_by === userId ? 'owner' : null);
+          setMyRole(role);
+          if (role === 'asker') {
+            setAskerTurns(null);
+            return;
+          }
+          return flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
+            .then(log => {
+              if (live) setAskerTurns(log.turns || []);
+            })
+            .catch(() => {
+              if (live) setAskerTurns([]);
+            });
+        });
+      })
+      .catch(() => {
+        if (live) {
+          setMyRole(null);
+          setAskerTurns(null);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectId, isAuthenticated, project?.created_by]);
 
   useEffect(() => {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
@@ -773,7 +827,10 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 </Button>
                 <div className="proj-actions">
                   <ProjectPresenceAvatars view={presenceView} />
-                  {findReplaceAllowed ? (
+                  {myRole === 'asker' ? (
+                    <span className="output-badge">Asker · ask questions only</span>
+                  ) : null}
+                  {findReplaceAllowed && myRole !== 'asker' ? (
                     <Button
                       className="flow-btn"
                       type="button"
@@ -782,20 +839,24 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       Find &amp; replace
                     </Button>
                   ) : null}
-                  <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
-                    Share
-                  </Button>
-                  <Button
-                    className="flow-btn primary"
-                    type="button"
-                    onClick={() => setExportOpen(true)}
-                  >
-                    Export
-                  </Button>
+                  {myRole === 'asker' ? null : (
+                    <>
+                      <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
+                        Share
+                      </Button>
+                      <Button
+                        className="flow-btn primary"
+                        type="button"
+                        onClick={() => setExportOpen(true)}
+                      >
+                        Export
+                      </Button>
+                    </>
+                  )}
                 </div>
               </header>
               <nav className="proj-tabs">
-                {PROJECT_TABS.map(([key, label]) => (
+                {tabsForRole(myRole).map(([key, label]) => (
                   <Link
                     key={key}
                     href={`/flow/p/${projectId}/${key}`}
@@ -815,7 +876,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       })
                     }
                   >
-                    {label}
+                    {key === 'asker-questions' ? askerQuestionsTabLabel(askerTurns) : label}
                   </Link>
                 ))}
               </nav>
@@ -930,6 +991,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       ready={tabReady}
                       labelsRevision={findReplaceTick}
                     />
+                  </div>
+                ) : null}
+                {visitedTabs.has('asker-questions') && myRole !== 'asker' ? (
+                  <div hidden={page !== 'asker-questions'} data-project-tab="asker-questions">
+                    <AskerQuestionsScreen projectId={projectId} />
                   </div>
                 ) : null}
                 {section === 'interviews' ? <InterviewsScreen projectId={projectId} /> : null}
