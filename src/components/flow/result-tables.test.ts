@@ -1482,6 +1482,32 @@ describe('answer tables', () => {
     expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
   });
 
+  it('TEN-39: a stored Weight: none base note becomes Unweighted on the card', () => {
+    const view = resultViewFromToolResults({
+      resolved_weight: 'none',
+      n_used: 3000,
+      base_note: 'Weight: none; base = 3000; 95% confidence level.',
+      summary: {
+        base_note: 'Weight: none; base = 3000; 95% confidence level.',
+        table: [
+          {
+            title: 'Trust in brand by Gender',
+            note: 'Weight: none; base = 3000; 95% confidence level.',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['Male', '1500', '4'],
+              ['Female', '1500', '2.5'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(view.baseDetail).toContain('Weight: Unweighted');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(resultFootnote(view, '', 'Mann-Whitney')).toContain('Weight: Unweighted');
+    expect(resultFootnote(view, '', 'Mann-Whitney')).not.toContain('Weight: none');
+  });
+
   it('falls through an empty weight object without showing a column code in the base line', () => {
     const view = resultViewFromToolResults({
       weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },

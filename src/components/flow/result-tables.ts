@@ -1746,7 +1746,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     view.tables.find(table => table.note && /sample size|base =/i.test(table.note))?.note ||
     sample.note;
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
-  else if (detail) view.baseDetail = detail;
+  else if (detail) view.baseDetail = normalizeWeightDetail(detail);
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
   if (!view.weight && sample.weight) view.weight = sample.weight;
   if (
@@ -1902,11 +1902,17 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   return `Weight: ${stripCodeBrackets(name)}`;
 }
 
+/** A stored "Weight: none" is an unweighted run. Never show the sentinel to a person. */
+function normalizeWeightDetail(detail: string): string {
+  return detail.replace(/Weight:\s*(none|null)\b/gi, 'Weight: Unweighted');
+}
+
 function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLabels[]): string {
-  if (!detail || !/weight:/i.test(detail) || !weight) return detail;
+  const cleaned = normalizeWeightDetail(detail);
+  if (!cleaned || !/weight:/i.test(cleaned) || !weight) return cleaned;
   const named = weightNote(weight, columns);
-  if (!named || named === 'Unweighted') return detail;
-  return detail.replace(/Weight:\s*[^;]+/i, named);
+  if (!named || named === 'Unweighted') return cleaned;
+  return cleaned.replace(/Weight:\s*[^;]+/i, named);
 }
 
 export function resultFootnote(
