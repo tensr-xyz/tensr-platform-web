@@ -164,16 +164,32 @@ describe('the deck and refresh screens', () => {
           { name: 'gone', label: 'Old attitude' },
         ]}
         next={[{ name: 'rank', label: 'Seniority' }]}
+        fileName="wave_b.sav"
+        movers={[
+          {
+            label: 'Reach',
+            from_percent: 29.2,
+            to_percent: 34.0,
+            change: 4.8,
+            significant: true,
+            slide: 3,
+          },
+        ]}
         onClose={() => undefined}
       />
     );
     expect(screen.getByText('Refresh with a new wave')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
-    expect(screen.getByText('1 matched by label · check these')).toBeTruthy();
-    expect(screen.getByText('1 not found · slide affected')).toBeTruthy();
+    expect(screen.getByText('✓ Choose file · wave_b.sav')).toBeTruthy();
+    expect(screen.getByText('matched by label · check these')).toBeTruthy();
+    expect(screen.getByText('not found · slide affected')).toBeTruthy();
     expect(screen.getByText('Needs a look')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Change' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Drop slide' })).toBeTruthy();
+    expect(screen.getByText('+4.8 pts ▲')).toBeTruthy();
+    expect(screen.getByText(/significant at 95%/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Review what moved' }));
-    expect(screen.getByText('Biggest movers since the previous wave')).toBeTruthy();
+    expect(screen.getAllByText('Biggest movers since the previous wave').length).toBeGreaterThan(0);
     expect(screen.getByText(/added as the last slide/)).toBeTruthy();
   });
 

@@ -25,8 +25,14 @@ import {
   type MarketDeckRow,
   type OverviewBuildRequest,
   type OverviewSlide,
+  type WaveRefreshBuildRequest,
 } from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
+import { isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
+import { uploadDatasetFile } from '@/lib/upload-dataset';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
+import type { WaveColumn } from '@/lib/wave-match';
+import type { WaveMover } from '@/lib/wave-movers';
 import {
   liveOfTotalLabel,
   loadProjectTables,
@@ -4878,6 +4884,11 @@ function ReportScreen({
   const [templateSummary, setTemplateSummary] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [waveOpen, setWaveOpen] = useState(false);
+  const [wavePrevious, setWavePrevious] = useState<WaveColumn[]>([]);
+  const [waveNext, setWaveNext] = useState<WaveColumn[]>([]);
+  const [waveFileName, setWaveFileName] = useState('');
+  const [waveMovers, setWaveMovers] = useState<WaveMover[]>([]);
+  const [waveChoosing, setWaveChoosing] = useState(false);
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
   const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
   const [marketDecks, setMarketDecks] = useState<MarketDeckRow[]>([]);
@@ -5629,7 +5640,121 @@ function ReportScreen({
           />
         ) : null}
         {waveOpen ? (
-          <WaveRefresh previous={[]} next={[]} onClose={() => setWaveOpen(false)} />
+          <WaveRefresh
+            previous={wavePrevious}
+            next={waveNext}
+            fileName={waveFileName || undefined}
+            deckLabel={
+              marketDecks[0]?.name ||
+              (overviewSlides.length
+                ? `Audience overview (${overviewSlides.length} slides)`
+                : undefined)
+            }
+            audienceLabel={audienceNames[0] || undefined}
+            movers={waveMovers}
+            choosingFile={waveChoosing}
+            onPickFile={async file => {
+              if (!isAcceptedUploadExtension(file.name)) {
+                setError('That file type is not supported for a second wave.');
+                return;
+              }
+              const token = getStytchBearerForTensrApi();
+              if (!token) {
+                setError('Sign in again to upload a second wave.');
+                return;
+              }
+              setWaveChoosing(true);
+              setError('');
+              try {
+                const uploaded = await uploadDatasetFile(file, token, 'workspace');
+                const datasetId = uploaded.dataset_id;
+                const meta = await flowJson<{
+                  columns?: { name?: string; label?: string | null }[];
+                }>(`/datasets/${datasetId}/metadata`);
+                const columns: WaveColumn[] = (meta.columns || [])
+                  .map(column => ({
+                    name: String(column.name || '').trim(),
+                    label: String(column.label || column.name || '').trim(),
+                  }))
+                  .filter(column => column.name && !isInternalColumn(column.name));
+                setWaveNext(columns);
+                setWaveFileName(file.name);
+                setWaveMovers([]);
+              } catch (err) {
+                setError(
+                  err instanceof Error ? err.message : 'Could not read that second-wave file.'
+                );
+                throw err;
+              } finally {
+                setWaveChoosing(false);
+              }
+            }}
+            onBuild={async (request: WaveRefreshBuildRequest) => {
+              if (!exportFileId) {
+                throw new Error('Open a dataset on Report before refreshing a wave.');
+              }
+              // Recipe lives on the open file. Match mapping is validated against the
+              // second wave; refresh stamps a new export and keeps prior versions.
+              const variables = [
+                ...request.matchedByName.map(name => {
+                  const column = wavePrevious.find(item => item.name === name);
+                  return { name, label: column?.label || name };
+                }),
+                ...request.matchedByLabel
+                  .filter(item => request.kept[item.previous] !== false)
+                  .map(item => {
+                    const prior = wavePrevious.find(column => column.name === item.previous);
+                    return { name: item.previous, label: prior?.label || item.label };
+                  }),
+              ];
+              // Unmatched (dropped or still missing) stay out of the remapped list.
+              const droppedLabels = new Set(
+                Object.entries(request.dropped)
+                  .filter(([, value]) => value)
+                  .map(([label]) => label)
+              );
+              const wanted = variables.filter(item => !droppedLabels.has(item.label));
+              const deckId = marketDecks[0]?.id || '';
+              const specIds = selected.map(table => table.id).filter(Boolean);
+              if (!deckId && !specIds.length) {
+                throw new Error('Save a deck or tables before building a new wave version.');
+              }
+              const refreshed = await flowJson<{
+                movers?: WaveMover[];
+                movers_summary?: string;
+                unmatched?: string[];
+                export_id?: string;
+                n_versions?: number;
+              }>(`/datasets/${exportFileId}/export/deck/refresh`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  deck_spec_id: deckId || undefined,
+                  spec_ids: deckId ? undefined : specIds,
+                  variables: wanted,
+                }),
+              });
+              setWaveMovers(Array.isArray(refreshed.movers) ? refreshed.movers : []);
+              const unmatched = (refreshed.unmatched || []).filter(Boolean);
+              const summary = String(refreshed.movers_summary || '').trim();
+              setNote(
+                [
+                  'Built a new deck version. The original stays as it is.',
+                  waveFileName ? `Matched against ${waveFileName}.` : '',
+                  summary,
+                  unmatched.length
+                    ? `${unmatched.length} question${unmatched.length === 1 ? '' : 's'} still unmatched.`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              );
+              setDecksTick(value => value + 1);
+            }}
+            onClose={() => {
+              setWaveOpen(false);
+              setWaveChoosing(false);
+            }}
+          />
         ) : null}
         <div className="report-block">
           <div className="report-head">
@@ -5722,7 +5847,46 @@ function ReportScreen({
               >
                 Audience overview
               </Button>
-              <Button type="button" className="flow-btn" onClick={() => setWaveOpen(true)}>
+              <Button
+                type="button"
+                className="flow-btn"
+                onClick={() => {
+                  setWaveNext([]);
+                  setWaveFileName('');
+                  setWaveMovers([]);
+                  setWaveChoosing(false);
+                  if (exportFileId) {
+                    void flowJson<{
+                      columns?: { name?: string; label?: string | null }[];
+                    }>(`/datasets/${exportFileId}/metadata`)
+                      .then(meta =>
+                        setWavePrevious(
+                          (meta.columns || [])
+                            .map(column => ({
+                              name: String(column.name || '').trim(),
+                              label: String(column.label || column.name || '').trim(),
+                            }))
+                            .filter(column => column.name && !isInternalColumn(column.name))
+                        )
+                      )
+                      .catch(() => setWavePrevious([]));
+                    void flowJson<{ audiences?: { name?: string; label?: string }[] }>(
+                      `/datasets/${exportFileId}/audiences`
+                    )
+                      .then(page =>
+                        setAudienceNames(
+                          (page.audiences || [])
+                            .map(row => String(row.label || row.name || '').trim())
+                            .filter(Boolean)
+                        )
+                      )
+                      .catch(() => undefined);
+                  } else {
+                    setWavePrevious([]);
+                  }
+                  setWaveOpen(true);
+                }}
+              >
                 Refresh wave
               </Button>
             </Card>

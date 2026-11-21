@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/rest';
@@ -16,6 +16,8 @@ import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-l
 import { flowJson } from '@/lib/flow-api';
 import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
+import { formatMoverChange, formatMoverDetail, type WaveMover } from '@/lib/wave-movers';
+import { ACCEPTED_UPLOAD_ACCEPT } from '@/lib/accepted-upload-types';
 
 export type OverviewSlide = {
   id: string;
@@ -488,121 +490,327 @@ export function OverviewDeck({
   );
 }
 
+export type WaveRefreshBuildRequest = {
+  kept: Record<string, boolean>;
+  dropped: Record<string, boolean>;
+  fileName: string;
+  matchedByName: string[];
+  matchedByLabel: { previous: string; next: string; label: string }[];
+  missing: string[];
+};
+
 /** A new wave matched onto a saved deck. The original deck and file stay as they are. */
 export function WaveRefresh({
   previous,
   next,
   fileName,
-  onChooseFile,
+  deckLabel,
+  audienceLabel,
+  audienceCarryNote,
+  movers = [],
+  choosingFile,
+  onPickFile,
+  onBuild,
   onClose,
 }: {
   previous: WaveColumn[];
   next: WaveColumn[];
   fileName?: string;
-  onChooseFile?: () => void;
+  deckLabel?: string;
+  audienceLabel?: string;
+  audienceCarryNote?: string;
+  movers?: WaveMover[];
+  choosingFile?: boolean;
+  /** Opens a file picker; parent uploads and supplies `next` + `fileName`. */
+  onPickFile?: (file: File) => void | Promise<void>;
+  onBuild?: (request: WaveRefreshBuildRequest) => void | Promise<void>;
   onClose: () => void;
 }) {
   const matched = matchWave(previous, next);
-  const [step, setStep] = useState<'file' | 'matches' | 'moved'>(fileName ? 'matches' : 'file');
+  const hasNext = next.length > 0 || Boolean(fileName);
+  const [step, setStep] = useState<'file' | 'matches' | 'moved'>(hasNext ? 'matches' : 'file');
   const [kept, setKept] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(matched.byLabel.map(item => [item.previous, true]))
   );
   const [dropped, setDropped] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (hasNext && step === 'file') setStep('matches');
+  }, [hasNext, step]);
+
+  const labelMatchKey = matched.byLabel.map(item => item.previous).join('|');
+  useEffect(() => {
+    setKept(Object.fromEntries(matched.byLabel.map(item => [item.previous, true])));
+  }, [labelMatchKey]);
+
+  const previousByName = useMemo(
+    () => new Map(previous.map(column => [column.name, column])),
+    [previous]
+  );
+
+  const build = async () => {
+    if (!onBuild) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onBuild({
+        kept,
+        dropped,
+        fileName: fileName || '',
+        matchedByName: matched.byName,
+        matchedByLabel: matched.byLabel,
+        missing: matched.missing,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not build the new version.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stepFile = fileName ? `✓ Choose file · ${fileName}` : '1 · Choose file';
+  const reportLine = deckLabel ? `Report · ${deckLabel}` : 'Report · Refresh with a new wave';
+
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="share-dialog deck-builder">
+      <DialogContent className="share-dialog deck-builder wave-refresh">
         <DialogHeader>
-          <DialogDescription>Report</DialogDescription>
+          <DialogDescription>{reportLine}</DialogDescription>
           <DialogTitle>Refresh with a new wave</DialogTitle>
         </DialogHeader>
-        <p className="flow-muted">The current deck and data stay as they are</p>
-        <div className="flow-row">
-          <span>{fileName ? `Choose file · ${fileName}` : '1 · Choose file'}</span>
-          <span>2 · Check matches</span>
-          <span>3 · Review what moved</span>
+        <div className="wave-refresh-toolbar">
+          <p className="flow-muted">The current deck and data stay as they are</p>
+          <div className="flow-row">
+            <Button type="button" className="flow-btn" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="flow-btn primary"
+              disabled={busy || (!hasNext && step === 'file')}
+              onClick={() => void build()}
+            >
+              {busy ? 'Building…' : 'Build new version'}
+            </Button>
+          </div>
         </div>
+        <div className="wave-refresh-steps">
+          <span className={hasNext ? 'wave-refresh-step done' : undefined}>{stepFile}</span>
+          <span className={step === 'matches' ? 'wave-refresh-step active' : undefined}>
+            2 · Check matches
+          </span>
+          <span className={step === 'moved' ? 'wave-refresh-step active' : undefined}>
+            3 · Review what moved
+          </span>
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          accept={ACCEPTED_UPLOAD_ACCEPT}
+          className="sr-only"
+          aria-label="Second wave file"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file || !onPickFile) return;
+            void Promise.resolve(onPickFile(file)).then(() => setStep('matches'));
+          }}
+        />
         {step === 'file' ? (
-          <div>
+          <div className="wave-refresh-file">
             <p>Second wave</p>
+            <p className="flow-muted">
+              Choose the updated file. Questions are matched by name, then by label. The current
+              deck stays as it is.
+            </p>
             <Button
               type="button"
               className="flow-btn"
-              onClick={() => {
-                onChooseFile?.();
-                setStep('matches');
-              }}
+              disabled={choosingFile || !onPickFile}
+              onClick={() => fileInput.current?.click()}
             >
-              Choose file
+              {choosingFile ? 'Reading file…' : 'Choose file'}
             </Button>
           </div>
         ) : null}
         {step === 'matches' ? (
-          <div>
-            <p>{matched.byName.length} questions matched by name</p>
-            <p>{matched.byLabel.length} matched by label · check these</p>
-            <p>{matched.missing.length} not found · slide affected</p>
-            <p>Needs a look</p>
-            {matched.byLabel.map(item => (
-              <div key={item.previous} className="details-member">
-                <span>
-                  {item.previous} → {item.label}
-                  <span className="flow-muted">Matched by label</span>
-                </span>
-                <Button
-                  type="button"
-                  className="flow-btn"
-                  aria-pressed={kept[item.previous] !== false}
-                  onClick={() =>
-                    setKept(current => ({
-                      ...current,
-                      [item.previous]: current[item.previous] === false,
-                    }))
-                  }
-                >
-                  {kept[item.previous] === false ? 'Change' : 'Keep'}
-                </Button>
+          <div className="wave-refresh-body">
+            <div className="wave-refresh-matches">
+              <div className="wave-refresh-counts">
+                <div className="wave-refresh-count">
+                  <strong className="wave-refresh-count-ok">{matched.byName.length}</strong>
+                  <span>questions matched by name</span>
+                </div>
+                <div className="wave-refresh-count">
+                  <strong>{matched.byLabel.length}</strong>
+                  <span>matched by label · check these</span>
+                </div>
+                <div className="wave-refresh-count">
+                  <strong className="wave-refresh-count-warn">{matched.missing.length}</strong>
+                  <span>not found · slide affected</span>
+                </div>
               </div>
-            ))}
-            {matched.missing.map(label => (
-              <div key={label} className="details-member">
-                <span>
-                  {label}
-                  <span className="flow-muted">
-                    Not found. No question in the new file has this name or a close label.
+              {matched.byLabel.length || matched.missing.length ? (
+                <p className="wave-refresh-needs">Needs a look</p>
+              ) : (
+                <p className="flow-muted">Every question matched by name.</p>
+              )}
+              {matched.missing.map(label => (
+                <div key={label} className="wave-refresh-row wave-refresh-row-missing">
+                  <div className="wave-refresh-row-main">
+                    <div className="wave-refresh-row-title">
+                      <span>{label}</span>
+                      <span className="wave-refresh-pill warn">Not found</span>
+                    </div>
+                    <p className="flow-muted">
+                      No question in the new file has this name or a close label.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    className="flow-btn"
+                    aria-pressed={dropped[label] === true}
+                    onClick={() =>
+                      setDropped(current => ({ ...current, [label]: !current[label] }))
+                    }
+                  >
+                    {dropped[label] ? 'Slide dropped' : 'Drop slide'}
+                  </Button>
+                </div>
+              ))}
+              {matched.byLabel.map(item => {
+                const prior = previousByName.get(item.previous);
+                const priorLabel = prior?.label || item.previous;
+                const keep = kept[item.previous] !== false;
+                return (
+                  <div key={item.previous} className="wave-refresh-row">
+                    <div className="wave-refresh-row-main">
+                      <p>
+                        {priorLabel} → <strong>{item.label}</strong>
+                      </p>
+                      <p className="flow-muted">Matched by label</p>
+                    </div>
+                    <div className="wave-refresh-keep">
+                      <Button
+                        type="button"
+                        className={keep ? 'flow-btn wave-refresh-keep-on' : 'flow-btn'}
+                        aria-pressed={keep}
+                        onClick={() => setKept(current => ({ ...current, [item.previous]: true }))}
+                      >
+                        Keep
+                      </Button>
+                      <Button
+                        type="button"
+                        className={!keep ? 'flow-btn wave-refresh-keep-on' : 'flow-btn'}
+                        aria-pressed={!keep}
+                        onClick={() => setKept(current => ({ ...current, [item.previous]: false }))}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+              {audienceLabel ? (
+                <div className="wave-refresh-audience">
+                  <span>Audience &quot;{audienceLabel}&quot; carries over</span>
+                  <span className="wave-refresh-audience-ok">
+                    {audienceCarryNote || 'All conditions matched'}
                   </span>
-                </span>
-                <Button
-                  type="button"
-                  className="flow-btn"
-                  aria-pressed={dropped[label] === true}
-                  onClick={() => setDropped(current => ({ ...current, [label]: !current[label] }))}
-                >
-                  {dropped[label] ? 'Slide dropped' : 'Drop slide'}
-                </Button>
+                </div>
+              ) : null}
+            </div>
+            <aside className="wave-refresh-movers">
+              <div>
+                <p className="wave-refresh-movers-title">Biggest movers since the previous wave</p>
+                <p className="flow-muted">
+                  {audienceLabel
+                    ? `${audienceLabel} · preview from matched questions`
+                    : 'Preview from matched questions'}
+                </p>
               </div>
-            ))}
+              {movers.length ? (
+                movers.slice(0, 6).map(mover => (
+                  <div key={mover.label} className="wave-refresh-mover">
+                    <div className="wave-refresh-mover-head">
+                      <span>{mover.label}</span>
+                      <strong
+                        className={
+                          mover.significant
+                            ? mover.change > 0
+                              ? 'wave-refresh-count-ok'
+                              : 'wave-refresh-count-warn'
+                            : undefined
+                        }
+                      >
+                        {formatMoverChange(mover.change)}
+                      </strong>
+                    </div>
+                    <p className="flow-muted">{formatMoverDetail(mover)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="flow-muted">
+                  Movers appear once both waves have figures for the matched questions.
+                </p>
+              )}
+              <p className="flow-muted wave-refresh-movers-note">
+                The new deck keeps the slide order and template. This summary is added as the last
+                slide.
+              </p>
+            </aside>
           </div>
-        ) : (
-          <div>
-            <p>Biggest movers since the previous wave</p>
+        ) : null}
+        {step === 'moved' ? (
+          <div className="wave-refresh-review">
+            <p className="wave-refresh-movers-title">Biggest movers since the previous wave</p>
+            {movers.length ? (
+              <ul className="wave-refresh-review-list">
+                {movers.slice(0, 10).map(mover => (
+                  <li key={mover.label}>
+                    <strong>{mover.label}</strong> {formatMoverChange(mover.change)} ·{' '}
+                    {formatMoverDetail(mover)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="flow-muted">No figure moved yet, or bases are still loading.</p>
+            )}
             <p className="flow-muted">
               The new deck keeps the slide order and template. This summary is added as the last
-              slide.
+              slide. The original deck is unchanged.
             </p>
           </div>
-        )}
+        ) : null}
+        {error ? <p className="flow-error">{error}</p> : null}
         <div className="flow-row">
-          <Button type="button" className="flow-btn" onClick={onClose}>
-            Cancel
-          </Button>
           {step === 'matches' ? (
             <Button type="button" className="flow-btn" onClick={() => setStep('moved')}>
               Review what moved
             </Button>
           ) : null}
-          <Button type="button" className="flow-btn primary" onClick={onClose}>
-            Build new version
-          </Button>
+          {step === 'moved' ? (
+            <Button type="button" className="flow-btn" onClick={() => setStep('matches')}>
+              Back to matches
+            </Button>
+          ) : null}
+          {step === 'file' ? null : (
+            <Button
+              type="button"
+              className="flow-btn"
+              disabled={choosingFile}
+              onClick={() => fileInput.current?.click()}
+            >
+              {fileName ? 'Change file' : 'Choose file'}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
