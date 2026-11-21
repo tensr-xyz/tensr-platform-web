@@ -23,13 +23,16 @@ jest.mock('@/lib/flow-api', () => ({
           { name: 'region', label: 'Region', measure: 'nominal' },
           { name: 'weight', label: 'Weight', measure: 'numeric' },
         ],
+        active_weight_label: 'Projection weight (people)',
+        original_filename: 'audience_w2.sav',
       };
     }
     if (String(path).includes('/values')) {
       return {
-        values: ['North', 'South'],
-        value_labels: { North: 'North', South: 'South' },
-        counts: { North: 12, South: 8 },
+        values: ['North', 'South', 'Tiny'],
+        value_labels: { North: 'North', South: 'South', Tiny: 'Tiny' },
+        counts: { North: 120, South: 80, Tiny: 12 },
+        weighted_counts: { North: 240000, South: 90000, Tiny: 8000 },
       };
     }
     return {};
@@ -74,20 +77,24 @@ describe('the deck and refresh screens', () => {
     ).toBeTruthy();
   });
 
-  it('offers one copy per market and passes the chosen values to onBuild', async () => {
+  it('shows the market table and builds one deck per selected ready market', async () => {
     const onBuild = jest.fn(async () => undefined);
     render(
       <OverviewDeck
         audience="Total sample"
         datasetId="ds-1"
+        dataLabel="audience_w2.sav"
         onBuild={onBuild}
         onClose={() => undefined}
       />
     );
-    fireEvent.click(screen.getByLabelText('One copy per market'));
+    expect(await screen.findByText('New audience overview · one copy per market')).toBeTruthy();
     expect(await screen.findByTestId('overview-per-market')).toBeTruthy();
-    expect(await screen.findByText(/North/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: `Build ${OVERVIEW_SLIDES.length} slides` }));
+    expect(await screen.findByText('North')).toBeTruthy();
+    expect(screen.getByText('Base under 50 · skipped')).toBeTruthy();
+    expect(screen.getByText('Respondents')).toBeTruthy();
+    expect(screen.getByText('Audience (people)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Build 2 decks' }));
     await waitFor(() => expect(onBuild).toHaveBeenCalled());
     expect(onBuild.mock.calls[0][0].perMarket).toEqual({
       groupColumn: 'region',
@@ -113,6 +120,7 @@ describe('the deck and refresh screens', () => {
             family_id: 'fam',
             new_data: true,
             n_versions: 1,
+            wave_label: 'Q3',
           },
           {
             id: 'b',
@@ -121,14 +129,17 @@ describe('the deck and refresh screens', () => {
             group_column_label: 'Region',
             family_id: 'fam',
             new_data: true,
+            wave_label: 'Q3',
           },
         ]}
+        newWaveLabel="Q4"
         onRefresh={onRefresh}
       />
     );
-    expect(screen.getByText('Market decks')).toBeTruthy();
-    expect(screen.getAllByText('New data')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh 2 decks' }));
+    expect(screen.getByText(/Audience overview · one per Region/i)).toBeTruthy();
+    expect(screen.getByText(/New data: Q4 uploaded/)).toBeTruthy();
+    expect(screen.getByText('North')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh 2 decks with Q4' }));
     expect(onRefresh).toHaveBeenCalled();
   });
 

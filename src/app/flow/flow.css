@@ -12847,6 +12847,308 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .deck-builder {
   width: min(960px, 92vw);
+  max-width: min(1120px, 94vw) !important;
+  display: flex;
+  flex-direction: column;
+  max-height: min(860px, 92vh);
+  overflow: hidden;
+}
+
+.deck-builder.deck-builder-markets {
+  width: min(1120px, 94vw);
+  max-width: min(1120px, 94vw) !important;
+}
+
+.deck-builder-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.deck-builder-titles {
+  gap: 2px;
+  text-align: left;
+}
+
+.deck-builder-titles [class*='Description'],
+.deck-builder-titles p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.deck-builder-titles h2,
+.deck-builder-titles [class*='Title'] {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 22px;
+  color: var(--color-ink);
+}
+
+.deck-builder-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.deck-builder-error,
+.deck-builder-saved {
+  padding: 0 28px 16px;
+}
+
+.deck-columns-markets {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.deck-builder .deck-setup {
+  flex: 0 0 400px;
+  width: 400px;
+  gap: 20px;
+  padding: 22px 24px;
+  border-right: 1px solid var(--color-line);
+  overflow: auto;
+}
+
+.deck-setup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deck-setup-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--color-ink);
+}
+
+.deck-setup-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.deck-setup-data {
+  border-color: var(--color-line);
+}
+
+.deck-setup-template {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+
+.deck-template-thumb {
+  flex-shrink: 0;
+  width: 44px;
+  height: 28px;
+  border-radius: 3px;
+  background: var(--color-ink);
+  box-shadow: inset 0 -6px 0 0 var(--color-accent-soft);
+}
+
+.deck-setup-template-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.deck-setup-template-copy p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.flow-btn.linkish {
+  border: none !important;
+  background: transparent !important;
+  color: var(--color-accent) !important;
+  padding-inline: 4px !important;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.deck-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-ink);
+}
+
+.deck-recipe-note {
+  margin-top: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--color-well);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deck-recipe-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 145%;
+}
+
+.deck-recipe-note p:first-child {
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.deck-markets {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 28px;
+  background: var(--color-well);
+  overflow: auto;
+}
+
+.deck-markets-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.deck-markets-head h3 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.deck-markets-column {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.deck-markets-column .flow-input {
+  min-width: 140px;
+  background: var(--color-canvas);
+}
+
+.deck-markets-table {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.deck-markets-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.deck-markets-row:last-child {
+  border-bottom: none;
+}
+
+.deck-markets-row.head {
+  padding-block: 10px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 14px;
+}
+
+.deck-markets-row .check {
+  flex: 0 0 28px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.deck-markets-row > span:nth-child(2),
+.deck-markets-row > :nth-child(2) {
+  flex: 0 0 300px;
+  width: 300px;
+  min-width: 0;
+}
+
+.deck-markets-row .num {
+  flex: 0 0 150px;
+  width: 150px;
+  text-align: right;
+}
+
+.deck-markets-row .num + .num {
+  flex-basis: 190px;
+  width: 190px;
+}
+
+.deck-markets-row .status {
+  flex: 1 1 auto;
+  text-align: right;
+  font-size: 12px;
+}
+
+.deck-markets-row .status.ready {
+  color: var(--color-accent);
+}
+
+.deck-markets-row .status.warn {
+  color: var(--color-warn, #a15c12);
+}
+
+.deck-markets-row.skipped {
+  background: #fbfaf7;
+  color: var(--color-muted);
+}
+
+.deck-markets-empty {
+  padding: 16px;
+  margin: 0;
+}
+
+.deck-markets-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deck-markets-foot p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .wave-refresh {
@@ -13126,25 +13428,32 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .market-decks {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin: 0 0 16px;
-  padding: 14px 16px;
+  padding: 20px;
   border: 1px solid var(--color-line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--color-canvas);
 }
 
-.market-decks-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+.market-decks-eyebrow {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 14px;
+  text-transform: uppercase;
 }
 
-.market-decks-head h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: var(--weight-medium);
+.market-decks-banner {
+  padding: 10px 12px;
+  border: 1px solid #f3e6d8;
+  border-radius: 8px;
+  background: #fbf6f0;
+  color: var(--color-warn, #a15c12);
+  font-size: 13px;
+  line-height: 16px;
 }
 
 .market-decks ul {
@@ -13153,7 +13462,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .market-decks li {
@@ -13161,27 +13470,43 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-well);
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 13px;
+  line-height: 16px;
 }
 
-.market-deck-new {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--color-warn, #c47b2c);
-  color: #fff;
-  font-size: 11px;
-  line-height: 14px;
-  font-weight: var(--weight-medium);
+.market-decks-more {
+  color: var(--color-muted);
+}
+
+.market-decks-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.market-decks-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.flow-btn.accent {
+  background: var(--color-accent) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+.flow-btn.accent:hover:not(:disabled) {
+  filter: brightness(0.95);
 }
 
 .deck-columns {
   display: flex;
   gap: 24px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .deck-setup,
@@ -13194,6 +13519,15 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .deck-slides {
   flex: 1;
+  padding: 22px 28px 24px 0;
+  overflow: auto;
+}
+
+.deck-builder:not(.deck-builder-markets) .deck-setup {
+  padding: 22px 0 24px 28px;
+  border-right: none;
+  width: auto;
+  flex: 0 0 280px;
 }
 
 .deck-slides ol {

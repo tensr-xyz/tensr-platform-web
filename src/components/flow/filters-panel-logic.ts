@@ -10,6 +10,9 @@ export type ColumnValues = {
   missing: number;
   n: number;
   value_labels?: Record<string, string>;
+  /** Sum of the active weight per category, when the file is weighted. */
+  weighted_counts?: Record<string, number>;
+  weight_label?: string;
 };
 
 /** One clause for POST /datasets/{id}/chart-data `filters`. */

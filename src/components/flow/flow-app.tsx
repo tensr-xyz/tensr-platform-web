@@ -5717,6 +5717,11 @@ function ReportScreen({
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
             datasetId={exportFileId || undefined}
+            projectLabel={project?.name || undefined}
+            dataLabel={
+              datasets.find(row => datasetRowId(row) === exportFileId)?.original_filename ||
+              undefined
+            }
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
