@@ -9778,6 +9778,78 @@ button.chat-result-top {
   bottom: 26px;
 }
 
+.output-mentions-banner {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.output-mention-menu {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 6px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  box-shadow: 0 8px 24px rgba(27, 28, 26, 0.08);
+}
+
+.output-page .output-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: auto;
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.output-page .output-mention-option:hover,
+.output-page .output-mention-option:focus-visible {
+  background: var(--color-well);
+}
+
+.output-page .output-mention-option .share-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.output-page .output-mention-option .share-who strong {
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+}
+
+.output-page .output-mention-option .share-who span {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.output-mention-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  color: var(--color-accent);
+  font-weight: var(--weight-title);
+}
+
 /* 6d Add to report, from the Paper export. */
 .pin-dialog {
   width: min(600px, 94vw);
