@@ -133,18 +133,20 @@ export function AnalysisResult({
   const shownStatement =
     guardUserText(rawStatement || '') ||
     (shownCheck === 'mismatch' || shownCheck === 'not_verified' ? 'The check did not match.' : '');
+  // "unknown" means R did not stamp this table. Do not put "Check not run" on the
+  // footnote while a Checks fold may list explanatory notes (TEN-249).
   const checkLabel =
     shownCheck === 'pending'
       ? 'R check running'
       : shownCheck === 'mismatch' || shownCheck === 'not_verified'
         ? 'R mismatch'
         : shownCheck === 'unknown'
-          ? 'Check not run for this table'
+          ? ''
           : shownCheck
             ? 'Checked in R'
             : '';
   const checkDetail =
-    shownCheck === 'unknown'
+    shownCheck === 'unknown' || shownCheck === 'pending'
       ? ''
       : shownStatement && shownStatement !== 'R check unavailable.'
         ? ` · ${shownStatement}`

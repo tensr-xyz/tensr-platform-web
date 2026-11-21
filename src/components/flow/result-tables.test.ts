@@ -236,6 +236,46 @@ describe('result tables', () => {
     );
   });
 
+  it('TEN-249: frequencies skip Descriptives and keep multi-select notes off Checks', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'frequencies',
+      describe: {
+        mean: { topic_a: 1 },
+        std: { topic_a: 0 },
+        '50%': { topic_a: 1 },
+        min: { topic_a: 1 },
+        max: { topic_a: 1 },
+        count: { topic_a: 5 },
+      },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: What topics do you keep informed about?',
+          columns: ['Label', 'Count', '% of respondents'],
+          multiple_response: true,
+          mr_base: 'percent_of_respondents',
+          notes: [
+            'Percent of respondents who selected each option. People may select more than one, so percents need not sum to 100.',
+          ],
+          rows: [
+            ['General health', '5', '62.5'],
+            ['Base', '8', '100'],
+          ],
+        },
+      ],
+      report: {
+        r_syntax_verification: {
+          kind: 'unknown',
+          statement: 'Check not run for this table.',
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).not.toContain('Descriptives');
+    expect(view.tables.some(table => table.columns.includes('Mean'))).toBe(false);
+    expect(view.checks).toEqual([]);
+    expect(view.baseDetail || '').toContain('Percent of respondents who selected');
+    expect(view.rCheck).toBe('unknown');
+  });
+
   it('TEN-214: unweighted frequency bases say Unweighted, not Weighted (0 weighted)', () => {
     const view = resultViewFromToolResults({
       procedure: 'frequencies',

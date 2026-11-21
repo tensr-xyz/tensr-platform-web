@@ -1586,11 +1586,32 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   for (const table of preferred) add(table, 'summary');
   if (preferred.length) lockTables = true;
+  const appendFootnoteNote = (text: string) => {
+    if (!text) return;
+    if (view.baseDetail?.includes(text) || view.letterNote.includes(text)) return;
+    view.baseDetail = view.baseDetail ? `${view.baseDetail} · ${text}` : text;
+  };
+  const isExplanatoryTableNote = (text: string) => {
+    const folded = text.toLowerCase();
+    return (
+      folded.includes('percent of respondents who selected') ||
+      folded.includes('people may select more than one') ||
+      folded.includes('percents need not sum to 100') ||
+      (folded.startsWith('weighted by ') && folded.includes('counts, percents'))
+    );
+  };
   const notes = (value: unknown) => {
     if (!Array.isArray(value)) return;
     for (const note of value) {
       const text = cell(note);
-      if (text && !view.checks.includes(text)) view.checks.push(text);
+      if (!text) continue;
+      // Frequency multi-select copy belongs on the footnote, not the Checks fold
+      // (TEN-249: avoid "Check not run" vs "Checks (n)" for the same card).
+      if (isExplanatoryTableNote(text)) {
+        appendFootnoteNote(text);
+        continue;
+      }
+      if (!view.checks.includes(text)) view.checks.push(text);
     }
   };
   const visit = (value: unknown, depth: number, inDescriptives = false) => {
@@ -1638,7 +1659,13 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       view.script = record.r_syntax.trim();
     }
     for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
-    const means = describeTable(record.describe, record.variable_labels);
+    // Frequencies show the grid only. Means of multi-select 0/1 flags are noise.
+    const showDescribe =
+      descriptives ||
+      (!isFrequencyRecord(record) &&
+        record.procedure !== 'frequencies' &&
+        record.analysis_type !== 'frequencies');
+    const means = showDescribe ? describeTable(record.describe, record.variable_labels) : null;
     if (means && !view.tables.some(table => table.columns.includes('Mean'))) {
       add(means, descriptives ? 'summary' : 'grid');
     }

@@ -116,4 +116,26 @@ describe('flow result charts', () => {
     expect(charts[0].y_label).toBe('Percent of respondents');
     expect(charts[0].series?.[0]?.values).toEqual([62.5, 50]);
   });
+
+  it('omits Base from multi-select frequency charts', () => {
+    const charts = chartsFromToolPayloads({
+      result: {
+        frequency_tables: [
+          {
+            title: 'Frequency Table: Topics',
+            columns: ['Label', 'Count', '% of respondents'],
+            multiple_response: true,
+            mr_base: 'percent_of_respondents',
+            rows: [
+              ['General health', '5', '62.5'],
+              ['Nutrition', '4', '50'],
+              ['Base', '8', '100'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(charts[0].categories).toEqual(['General health', 'Nutrition']);
+    expect(charts[0].categories).not.toContain('Base');
+  });
 });
