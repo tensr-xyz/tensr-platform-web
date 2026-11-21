@@ -1,4 +1,9 @@
-import { dependentColumns, openEndColumns, questionnaireOutline } from './flow-columns';
+import {
+  dependentColumns,
+  openEndColumns,
+  questionnaireOutline,
+  tableStubPickerOptions,
+} from './flow-columns';
 
 describe('ANOVA dependent columns', () => {
   it('keeps a numeric companion when the preview type is text and id is the only numeric type', () => {
@@ -91,6 +96,33 @@ describe('picker columns', () => {
     ]);
     expect(outline[0].kind).toBe('multi');
     expect(outline[0].columns).toEqual(['q_6_1', 'q_6_2', 'q_6_3']);
+    expect(outline[0].stubValue).toBe('Which types of media do you prefer?');
+  });
+
+  it('offers one stub choice per brand multi set, not each member column', () => {
+    const options = tableStubPickerOptions(
+      [
+        { name: 'r1', label: 'Read last month: Title A' },
+        { name: 'r2', label: 'Read last month: Title B' },
+        { name: 'r3', label: 'Read last month: Title C' },
+        { name: 'aud', label: 'Audience', value_labels: { '1': 'North', '2': 'South' } },
+        { name: 'w', label: 'Weight', role: 'weight' },
+      ],
+      [
+        {
+          id: 'read_last_month',
+          name: 'Read last month',
+          label: 'Read last month',
+          kind: 'multiple_response',
+          columns: ['r1', 'r2', 'r3'],
+        },
+      ],
+      ['w']
+    );
+    expect(options).toEqual([
+      { value: 'Read last month', label: 'Read last month' },
+      { value: 'aud', label: 'Audience' },
+    ]);
   });
 
   it('keeps questionnaire order and groups open-end boxes as one open question', () => {

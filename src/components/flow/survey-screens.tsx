@@ -31,8 +31,10 @@ import {
   isInternalColumn,
   openEndColumns,
   pickerColumns,
+  tableStubPickerOptions,
   themeColumns,
   type FlowColumn,
+  type OutlineSetWithStructure,
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
@@ -1947,6 +1949,7 @@ export function TablesBuilder({
     if (!next.asProjectDefault && projectId) clearProjectSignificance(projectId);
   }
   const [columns, setColumns] = useState<TableColumn[]>([]);
+  const [variableSets, setVariableSets] = useState<OutlineSetWithStructure[]>([]);
   const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [weightNeedsRefresh, setWeightNeedsRefresh] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -2070,6 +2073,8 @@ export function TablesBuilder({
         n_unique?: number | null;
         n_rows?: number | null;
       }[];
+      variable_sets?: OutlineSetWithStructure[] | null;
+      multiple_response_sets?: OutlineSetWithStructure[] | null;
       active_weight_column?: string | null;
       weight_columns?: string[];
       weight_vector?: { needs_refresh?: boolean } | null;
@@ -2097,6 +2102,12 @@ export function TablesBuilder({
           return current || chosen;
         });
         setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
+        const sets = Array.isArray(meta.variable_sets)
+          ? meta.variable_sets
+          : Array.isArray(meta.multiple_response_sets)
+            ? meta.multiple_response_sets
+            : [];
+        setVariableSets(sets.filter(item => item && typeof item === 'object'));
         setColumns(
           (meta.columns || [])
             .map(column => ({
@@ -2111,7 +2122,10 @@ export function TablesBuilder({
             .filter(column => column.name)
         );
       })
-      .catch(() => setColumns([]));
+      .catch(() => {
+        setColumns([]);
+        setVariableSets([]);
+      });
     return () => {
       live = false;
     };
@@ -2119,11 +2133,33 @@ export function TablesBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
+  const stubOptions = tableStubPickerOptions(
+    columns.map(column => ({
+      name: column.name,
+      label: column.label,
+      type: column.type,
+      role: column.role,
+      value_labels: column.labels,
+    })),
+    variableSets,
+    weightColumns
+  );
   const labelFor = (name: string) => {
+    const fromSet = stubOptions.find(item => item.value === name);
+    if (fromSet) return fromSet.label;
+    const set = variableSets.find(
+      item =>
+        String(item.name || '') === name ||
+        String(item.label || '') === name ||
+        String(item.id || '') === name
+    );
+    if (set) return String(set.label || set.name || name);
     const column = columns.find(item => item.name === name);
     return column ? columnChoiceLabel(column) : name;
   };
   const questionText = (name: string) => {
+    const fromSet = stubOptions.find(item => item.value === name);
+    if (fromSet) return fromSet.label;
     const label = columns.find(column => column.name === name)?.label;
     return label && label !== name ? label : name;
   };
@@ -2716,10 +2752,9 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+ Drop variable' },
-                    ...tablePickerColumns(columns, weightColumns).map(column => ({
-                      value: column.name,
-                      label: columnChoiceLabel(column),
-                    })),
+                    ...stubOptions
+                      .filter(item => !banners.includes(item.value))
+                      .map(item => ({ value: item.value, label: item.label })),
                   ]}
                 />
               </div>
@@ -2745,9 +2780,9 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+' },
-                    ...tablePickerColumns(columns, weightColumns)
-                      .filter(column => column.name !== stub && !banners.includes(column.name))
-                      .map(column => ({ value: column.name, label: columnChoiceLabel(column) })),
+                    ...stubOptions
+                      .filter(item => item.value !== stub && !banners.includes(item.value))
+                      .map(item => ({ value: item.value, label: item.label })),
                   ]}
                 />
               </div>
