@@ -5719,6 +5719,7 @@ button.chat-result-top {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   padding: 10px 24px 0;
 }
 
@@ -12350,6 +12351,183 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* Paper 10h · Tables → Build from a spec */
+.tab-spec-dialog {
+  width: min(848px, calc(100vw - 32px));
+  max-width: 848px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tab-spec-eyebrow {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: 0.06em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.tab-spec-title {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: var(--weight-title);
+  line-height: 22px;
+}
+
+.tab-spec-file {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.tab-spec-file-meta {
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+.tab-spec-choose {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  line-height: 16px;
+}
+
+.tab-spec-choose:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.tab-spec-section-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: var(--weight-title);
+  line-height: 16px;
+}
+
+.tab-spec-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  overflow: hidden;
+}
+
+.tab-spec-row {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.tab-spec-row.head {
+  background: var(--color-well);
+  border-top: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.tab-spec-row > :nth-child(1) {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.tab-spec-row > :nth-child(2) {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.tab-spec-row > :nth-child(3) {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.tab-spec-row > :nth-child(4) {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.tab-spec-status.ok {
+  color: var(--color-accent);
+}
+
+.tab-spec-status.warn {
+  color: var(--color-warn);
+}
+
+.tab-spec-skeleton {
+  height: 33px;
+  border-radius: 0;
+}
+
+.tab-spec-skeleton.short {
+  height: 33px;
+}
+
+.tab-spec-summary,
+.tab-spec-reason {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.tab-spec-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tab-spec-secondary,
+.tab-spec-primary {
+  height: auto;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.tab-spec-secondary {
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.tab-spec-primary {
+  border: 0;
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.tab-spec-primary:hover:not(:disabled) {
+  background: var(--color-accent);
+  opacity: 0.92;
 }
 
 /* Paper 10h · Responses → Check data */

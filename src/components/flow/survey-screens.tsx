@@ -48,6 +48,7 @@ import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import { TableSignificancePanel } from '@/components/flow/table-significance-panel';
+import { TabSpecDialog } from '@/components/flow/tab-spec-dialog';
 import { TidyTablesDialog } from '@/components/flow/tidy-tables-dialog';
 import {
   DEFAULT_TABLE_SIGNIFICANCE,
@@ -1932,6 +1933,7 @@ export function TablesBuilder({
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightRerake, setWeightRerake] = useState(false);
   const [tidyOpen, setTidyOpen] = useState(false);
+  const [tabSpecOpen, setTabSpecOpen] = useState(false);
   const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
   const [netOpen, setNetOpen] = useState(false);
   const [netOptions, setNetOptions] = useState<string[]>([]);
@@ -2782,6 +2784,14 @@ export function TablesBuilder({
                 className="tables-tidy-trigger"
                 type="button"
                 disabled={!datasetId || !railReady}
+                onClick={() => setTabSpecOpen(true)}
+              >
+                Build from a spec…
+              </Button>
+              <Button
+                className="tables-tidy-trigger"
+                type="button"
+                disabled={!datasetId || !railReady}
                 onClick={() => setTidyOpen(true)}
               >
                 Tidy tables…
@@ -3368,6 +3378,16 @@ export function TablesBuilder({
         onOpenChange={setTidyOpen}
         onApplied={() => {
           setNote('Tables tidied.');
+          reloadSpecs();
+        }}
+      />
+      <TabSpecDialog
+        datasetId={datasetId}
+        open={tabSpecOpen}
+        onOpenChange={setTabSpecOpen}
+        onBuilt={result => {
+          const n = result.n_built ?? 0;
+          setNote(n === 1 ? 'Built 1 table from the spec.' : `Built ${n} tables from the spec.`);
           reloadSpecs();
         }}
       />
