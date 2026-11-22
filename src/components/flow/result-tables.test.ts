@@ -345,6 +345,30 @@ describe('result tables', () => {
     );
   });
 
+  it('names an audience used as a Total|Audience banner column', () => {
+    const view = resultViewFromToolResults({
+      audience_label: 'Institutional',
+      audience_description: 'Market is United States',
+      audience_columns: ['market'],
+      audience_filter: { column: 'market', op: '=', value: '1' },
+      row_filters: [],
+      banner: [
+        { id: 'total', label: 'Total' },
+        {
+          id: 'audience',
+          label: 'Institutional',
+          filter: { column: 'market', op: '=', value: '1' },
+        },
+      ],
+    });
+    expect(view.audience).toBe('Institutional');
+    expect(view.audienceDefinition).toBe('Market is United States');
+    expect(resultFootnote(view, '', 'Crosstab')).toContain(
+      'Audience: Institutional — Market is United States'
+    );
+    expect(resultFootnote(view, '', 'Crosstab')).not.toContain('Filter:');
+  });
+
   it('prefers a labelled filter over an earlier column code', () => {
     const view = resultViewFromToolResults({
       row_filters: [
