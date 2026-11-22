@@ -1,5 +1,6 @@
 import {
   normalizeRecipeReferenceFiles,
+  recipeStepLabels,
   standingInstructionsBlock,
 } from '@/lib/recipe-instructions';
 
@@ -33,5 +34,17 @@ describe('recipe standing instructions', () => {
         'Reference files: Brand voice.',
       ].join('\n\n')
     );
+  });
+
+  it('labels recipe steps for the editor without codes', () => {
+    expect(recipeStepLabels(null)).toEqual([]);
+    expect(
+      recipeStepLabels([
+        { op: 'import', role: 'survey' },
+        { op: 'weight', method: 'rake' },
+        { op: 'analysis', analysis_type: 'frequencies' },
+        { op: 'analysis', analysis_type: 'banner_table', title: 'Awareness funnel by region' },
+      ])
+    ).toEqual(['Weight to targets', 'Frequencies', 'Awareness funnel by region']);
   });
 });

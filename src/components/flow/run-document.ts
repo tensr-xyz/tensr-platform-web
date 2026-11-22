@@ -38,6 +38,38 @@ function tableFromReport(value: unknown): RunTable | null {
   return { title: text(record.title) || 'Table', columns, rows };
 }
 
+function groupLabelMap(result: Record<string, unknown>): Map<string, string> {
+  const labels = new Map<string, string>();
+  const rows = result.group_descriptives;
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const record = row as { group?: unknown; label?: unknown };
+      const code = text(record.group);
+      const label = text(record.label);
+      if (code && label && label !== code) {
+        labels.set(code, label);
+        const stripped = code.replace(/\.0$/, '');
+        if (stripped && stripped !== code) labels.set(stripped, label);
+      }
+    }
+  }
+  const prepared = result.group_labels;
+  const names = result.group_names;
+  if (Array.isArray(prepared) && Array.isArray(names)) {
+    for (let index = 0; index < names.length; index += 1) {
+      const code = text(names[index]);
+      const label = text(prepared[index]);
+      if (code && label && label !== code) {
+        labels.set(code, label);
+        const stripped = code.replace(/\.0$/, '');
+        if (stripped && stripped !== code) labels.set(stripped, label);
+      }
+    }
+  }
+  return labels;
+}
+
 function groupTable(result: Record<string, unknown>): RunTable | null {
   const groups = result.group_descriptives;
   if (!Array.isArray(groups) || !groups.length) return null;
@@ -101,6 +133,22 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
   const anova = anovaTable(result);
   if (groups && !tables.some(table => table.title === groups.title)) tables.unshift(groups);
   if (anova && !tables.some(table => table.title === anova.title)) tables.push(anova);
+  const labelledGroups = groupLabelMap(result);
+  if (labelledGroups.size) {
+    for (const table of tables) {
+      if (table.title.trim().toLowerCase() !== 'groups') continue;
+      table.rows = table.rows.map(row => {
+        if (!row.length) return row;
+        const code = row[0] || '';
+        const named =
+          labelledGroups.get(code) ||
+          labelledGroups.get(code.replace(/\.0$/, '')) ||
+          labelledGroups.get(`${code}.0`) ||
+          code;
+        return [named, ...row.slice(1)];
+      });
+    }
+  }
   const checks: string[] = [];
   const seen = new Set<string>();
   const addCheck = (note: unknown) => {

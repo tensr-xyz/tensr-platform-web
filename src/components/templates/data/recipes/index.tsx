@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Download, Play, Save } from 'lucide-react';
+import { Download, Pencil, Play, Save } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
 import {
@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/molecules/dialog';
+import { RecipeEditorDialog } from '@/components/flow/recipe-editor-dialog';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { apiClient, type SavedRecipe } from '@/lib/api-client';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
@@ -93,6 +94,7 @@ export function RecipeList() {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<SavedRecipe | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -174,7 +176,7 @@ export function RecipeList() {
             </EmptyMedia>
             <EmptyTitle className="text-sm">No saved recipes yet</EmptyTitle>
             <EmptyDescription className="text-xs">
-              Save a recipe to reuse this data preparation.
+              Save a recipe to reuse this data preparation. Edit it to add standing instructions.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -187,8 +189,16 @@ export function RecipeList() {
             >
               <p className="text-xs font-medium">
                 {recipe.name} <span className="text-muted-foreground">v{recipe.version}</span>
+                {recipe.applies_as_house_style ? (
+                  <span className="ml-2 text-muted-foreground">· House style</span>
+                ) : null}
               </p>
-              <div className="mt-1 flex gap-2">
+              {recipe.instructions?.trim() || recipe.when_to_use?.trim() ? (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {recipe.when_to_use?.trim() || recipe.instructions?.trim()}
+                </p>
+              ) : null}
+              <div className="mt-1 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -198,6 +208,16 @@ export function RecipeList() {
                 >
                   <Play className="mr-1 size-3.5" />
                   Run on this dataset
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setEditing(recipe)}
+                >
+                  <Pencil className="mr-1 size-3.5" />
+                  Edit
                 </Button>
                 <Button
                   type="button"
@@ -219,6 +239,27 @@ export function RecipeList() {
           {message}
         </p>
       ) : null}
+      <RecipeEditorDialog
+        recipe={editing}
+        open={Boolean(editing)}
+        onOpenChange={open => {
+          if (!open) setEditing(null);
+        }}
+        canRun={Boolean(datasetId)}
+        runBusy={busy}
+        onRun={() => {
+          if (editing) void run(editing);
+        }}
+        onSaved={saved => {
+          setEditing(null);
+          setMessage(
+            saved.applies_as_house_style
+              ? `Saved “${saved.name}” as house style.`
+              : `Saved “${saved.name}” with standing instructions.`
+          );
+          void refresh();
+        }}
+      />
     </div>
   );
 }
@@ -248,7 +289,8 @@ export function RecipesDialog({ children }: { children: ReactNode }) {
         <DialogHeader>
           <DialogTitle>Recipes</DialogTitle>
           <DialogDescription>
-            Run a saved recipe on the open dataset, or export its R script.
+            Run a saved recipe on the open dataset, edit its standing instructions, or export its R
+            script.
           </DialogDescription>
         </DialogHeader>
         <RecipeList />

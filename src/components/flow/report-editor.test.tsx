@@ -15,6 +15,12 @@ jest.mock('@/lib/flow-api', () => ({
     if (String(path).includes('/tables/spec-live')) {
       return {
         ok: true,
+        title: 'Frequency Table: Prompted awareness',
+        base_label: 'Base: all respondents (1,204)',
+        weight: { weight_aware: true, weighted_n: 1204, unweighted_n: 1204 },
+        significance_display: 'column_letters',
+        significance_alpha: 0.05,
+        letters: [{ row: 'aware', col: 'young', letters: 'c' }],
         banner_columns: [
           { id: 'total', label: 'Total' },
           { id: 'young', label: '18–34' },
@@ -109,11 +115,17 @@ describe('previewGridFromBannerBook', () => {
 describe('ReportEditor formatting', () => {
   it('loads live table numbers instead of placeholder rows', async () => {
     renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
-    expect(await screen.findByText('Prompted awareness')).toBeTruthy();
-    expect(screen.getByText('62%')).toBeTruthy();
+    expect(await screen.findByText('62%')).toBeTruthy();
     expect(screen.getByText('71%')).toBeTruthy();
     expect(screen.queryByText('Row one')).toBeNull();
     expect(screen.queryByText('Group A')).toBeNull();
+    // Question title + base caption on the canvas; house style stays in the inspector only.
+    expect(screen.getAllByText('Prompted awareness').length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByText(/Base: all respondents \(1,204\) · Weighted · Letters: 95% vs column/)
+    ).toBeTruthy();
+    const page = screen.getByLabelText('Finding');
+    expect(within(page).queryByText(/^House$/)).toBeNull();
   });
 
   it('formats selected text, paints styles, and renames default labels', async () => {
@@ -147,10 +159,11 @@ describe('ReportEditor formatting', () => {
     renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
 
     expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
-    fireEvent.click(screen.getByText('House'));
+    fireEvent.click(await screen.findByText('62%'));
 
     const inspector = screen.getByLabelText('Object inspector');
     expect(within(inspector).getByText('Table style')).toBeTruthy();
+    fireEvent.click(within(inspector).getByRole('button', { name: 'House' }));
 
     fireEvent.click(within(inspector).getByRole('button', { name: 'Banded' }));
     await waitFor(() =>

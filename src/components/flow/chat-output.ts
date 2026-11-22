@@ -133,7 +133,9 @@ export function outputStat(results: ToolResult[] | undefined, answer: string, sk
     const hit = sentences(line).find(
       sentence =>
         !skip.includes(sentence) &&
-        /\bp\s*[<=>]|p-value|F\s*\(|χ²|chi-square|η²|eta/i.test(sentence)
+        /\bp\s*[<=>]|p-value|F\s*\(|(?:Welch'?s\s+)?(?:Survey\s+F|U|H|t|z)\s*\(|χ²|chi-square|η²|eta|\br\s*=/i.test(
+          sentence
+        )
     );
     if (hit) return hit;
   }
@@ -433,9 +435,11 @@ export function resultLead(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[],
   tables?: RunTable[]
 ): string {
-  const prose = withoutOtherRuns(
+  let prose = withoutOtherRuns(
     answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
   ).trim();
+  // A finish stub is not a lead; use the structured result lines instead.
+  if (prose === EMPTY_TURN_ANSWER || prose === CONTINUING_TURN_ANSWER) prose = '';
   const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
   const deniesTheTable =
     /not returned|was not returned|can.?t give|cannot give|could not (?:give|return|show)|was not run/i.test(
@@ -501,22 +505,44 @@ function summaryLine(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
 ): string {
   const lines: string[] = [];
+  const seen = new Set<string>();
+  const push = (line: string) => {
+    const text = line.trim();
+    if (!text || !/[A-Za-z]/.test(text) || !/\d/.test(text)) return;
+    // The default summarize stub is the procedure name; it is not a lead.
+    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square)\b/i.test(text)) return;
+    if (seen.has(text)) return;
+    seen.add(text);
+    lines.push(text);
+  };
   for (const item of results || []) {
     const nested =
       item?.result && typeof item.result === 'object' && !Array.isArray(item.result)
-        ? (item.result.summary as Record<string, unknown> | undefined)
+        ? (item.result as Record<string, unknown>)
         : undefined;
-    const summary = item?.summary || nested;
-    const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
-    if (!line || !/[A-Za-z]/.test(line) || !/\d/.test(line)) continue;
-    // The default summarize stub is the procedure name; it is not a lead.
-    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square)\b/i.test(line)) continue;
-    lines.push(line);
+    const nestedSummary =
+      nested && nested.summary && typeof nested.summary === 'object'
+        ? (nested.summary as Record<string, unknown>)
+        : undefined;
+    const summary = item?.summary || nestedSummary;
+    if (typeof summary?.line === 'string') push(summary.line);
+    // Report answer is the same contract when the summary line was stripped.
+    for (const layer of [item?.result, nested]) {
+      if (!layer || typeof layer !== 'object') continue;
+      const report = (layer as { report?: unknown }).report;
+      if (!report || typeof report !== 'object') continue;
+      const block = report as { answer_from_result?: unknown; answer?: unknown };
+      if (block.answer_from_result === true && typeof block.answer === 'string') {
+        push(block.answer);
+      }
+    }
   }
   if (!lines.length) return '';
-  // Prefer a line that quotes a share or count over a weight-only sentence.
-  const withFigure = lines.find(line => /%|thousand|target|met|missed/i.test(line));
-  return withFigure || lines[0];
+  // A share or rake finding beats a weight-only companion. Comparison and
+  // correlation lines have no % — keep every structured contract in order.
+  const withFigure = lines.filter(line => /%|thousand|target|met|missed/i.test(line));
+  if (withFigure.length) return withFigure.join(' ');
+  return lines.join(' ');
 }
 
 /** Subject before the statistic on a structured lead, e.g. "Satisfaction by Brand". */
@@ -566,7 +592,17 @@ export function outputTitle(
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );
-  if (questions.length) return questions.join(', ');
+  if (questions.length === 1) return questions[0];
+  if (questions.length > 1) {
+    const stems = questions.map(question =>
+      question.includes(':') ? question.split(':', 1)[0].trim() : question
+    );
+    const shared =
+      stems.every(stem => stem.toLowerCase() === stems[0].toLowerCase()) && stems[0]
+        ? stems[0]
+        : questions[0];
+    return `${shared} and ${questions.length - 1} more`;
+  }
   const preferred = preferredProcedure(items);
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;

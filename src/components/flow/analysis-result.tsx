@@ -14,6 +14,7 @@ import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
 import { exportSvgElementAsPng } from '@/utils/chart-export';
+import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -133,18 +134,20 @@ export function AnalysisResult({
   const shownStatement =
     guardUserText(rawStatement || '') ||
     (shownCheck === 'mismatch' || shownCheck === 'not_verified' ? 'The check did not match.' : '');
+  // "unknown" means R did not stamp this table. Do not put "Check not run" on the
+  // footnote while a Checks fold may list explanatory notes (TEN-249).
   const checkLabel =
     shownCheck === 'pending'
       ? 'R check running'
       : shownCheck === 'mismatch' || shownCheck === 'not_verified'
         ? 'R mismatch'
         : shownCheck === 'unknown'
-          ? 'Check not run for this table'
+          ? ''
           : shownCheck
             ? 'Checked in R'
             : '';
   const checkDetail =
-    shownCheck === 'unknown'
+    shownCheck === 'unknown' || shownCheck === 'pending'
       ? ''
       : shownStatement && shownStatement !== 'R check unavailable.'
         ? ` · ${shownStatement}`
@@ -160,8 +163,20 @@ export function AnalysisResult({
       : lead;
   const foot = [footnote, checkNote].filter(Boolean).join(' · ');
   if (!leadText && !tables.length && !charts.length && !foot) return null;
+  const explainTitle =
+    tables.find(table => table.title)?.title ||
+    (charts[0] && 'title' in charts[0] ? String(charts[0].title || '') : '') ||
+    'This output';
   return (
     <div className="analysis-result" ref={card}>
+      <ExplainThisPanel
+        title={explainTitle}
+        lead={leadText}
+        footnote={footnote}
+        checks={checks}
+        projectId={projectId}
+        datasetId={datasetId}
+      />
       {tables.length || charts.length ? (
         <div className="analysis-export">
           <Button type="button" className="flow-btn" onClick={() => setExportOpen(open => !open)}>

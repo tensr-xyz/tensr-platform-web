@@ -71,6 +71,25 @@ function formatAxisValue(
   return formatNumberTick(value, sampleValues);
 }
 
+/** Prefer a stored value label over a bare code on scatter axes. */
+function labelledTick(value: number, labels?: Record<string, string>): string | null {
+  if (!labels) return null;
+  const keys = [
+    String(value),
+    String(Math.round(value)),
+    Number.isInteger(value) ? String(value) : value.toPrecision(12).replace(/\.?0+$/, ''),
+  ];
+  for (const key of keys) {
+    const found = labels[key];
+    if (found) return found;
+  }
+  for (const [key, label] of Object.entries(labels)) {
+    const numeric = Number(key);
+    if (Number.isFinite(numeric) && Math.abs(numeric - value) < 1e-6) return label;
+  }
+  return null;
+}
+
 function AxisFrame({
   layout,
   xTicks,
@@ -477,8 +496,14 @@ function ChartBody({
           layout={layout}
           xTicks={xTicks}
           yTicks={yTicks}
-          xFormatter={v => formatAxisValue(v, xScale, xs, xDates)}
-          yFormatter={v => formatAxisValue(v, yScale, ys, yDates)}
+          xFormatter={v =>
+            (chart.kind === 'scatter' ? labelledTick(v, chart.x_tick_labels) : null) ??
+            formatAxisValue(v, xScale, xs, xDates)
+          }
+          yFormatter={v =>
+            (chart.kind === 'scatter' ? labelledTick(v, chart.y_tick_labels) : null) ??
+            formatAxisValue(v, yScale, ys, yDates)
+          }
           xAxisLabel={chart.x_label}
           yAxisLabel={chart.y_label}
         />

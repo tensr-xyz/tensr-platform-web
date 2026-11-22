@@ -94,6 +94,9 @@ export type AnalysisReportChart =
       y_label: string;
       points: { x: number; y: number; row_index?: number; label?: string; weight?: number }[];
       point_size?: 'weight';
+      /** Value labels for coded/ordinal axes (codes → question labels). */
+      x_tick_labels?: Record<string, string>;
+      y_tick_labels?: Record<string, string>;
     } & ChartAxisHints)
   | ({
       kind: 'scatter_line';

@@ -27,22 +27,28 @@ import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
+  isAdminField,
   isIdColumn,
   isInternalColumn,
+  isOtherSpecifyField,
   openEndColumns,
   pickerColumns,
+  questionnaireOutline,
   tableStubPickerOptions,
   themeColumns,
   type FlowColumn,
+  type OutlineQuestion,
   type OutlineSetWithStructure,
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
 import { NumberTracePopover } from '@/components/flow/number-trace-popover';
+import { VariablePreviewTrigger } from '@/components/flow/variable-preview-trigger';
 import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import { TableSignificancePanel } from '@/components/flow/table-significance-panel';
+import { TabSpecDialog } from '@/components/flow/tab-spec-dialog';
 import { TidyTablesDialog } from '@/components/flow/tidy-tables-dialog';
 import {
   DEFAULT_TABLE_SIGNIFICANCE,
@@ -422,19 +428,32 @@ export function BannerGrid({
   const letters = (book.letters as SigLetter[]) || [];
   const lettersShown = String(book.significance_display || 'column_letters') === 'column_letters';
   const arrowsShown = String(book.significance_display || '') === 'cell_comparisons';
-  const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
-    ?.not_coded;
+  const stubMeta = ((book.stubs as {
+    not_coded?: { unweighted_n?: number };
+    source_text_column?: string | null;
+  }[]) || [])[0];
+  const notCoded = stubMeta?.not_coded;
   // Mean and SD stay with the scale for every cell measure, including Counts.
   // Nets hide only when the user has not asked for them on this table.
   const listed = ((book.rows as BannerRow[]) || []).filter(
     row => row.kind === 'mean' || row.kind === 'sd' || showNets || row.kind !== 'net'
   );
-  // A coded open end always ends on its "Not yet coded" row, in Themes and in Tables.
-  const rows = themeRows(listed, notCoded?.unweighted_n, showQuotes);
+  // "Not yet coded" is for open-end themes only (Themes, or a coded stub with source text).
+  // Multi-select dichotomies must not invent that row.
+  const codedOpenEnd = showQuotes || Boolean(String(stubMeta?.source_text_column || '').trim());
+  const rows = themeRows(listed, codedOpenEnd ? notCoded?.unweighted_n : null, showQuotes);
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
+  const cornerLabel = showQuotes
+    ? 'Theme'
+    : ((book.stubs as { label?: string; column?: string }[]) || []).length > 1
+      ? ''
+      : stubHeaderLabel(
+          ((book.stubs as { label?: string; column?: string }[]) || [])[0],
+          columnLabels
+        );
   const base = (
     <tr>
-      <th>Base</th>
+      <th title="Base">Base</th>
       {columns.map(column => {
         const sample = rows
           .flatMap(row => row.cells || [])
@@ -473,24 +492,18 @@ export function BannerGrid({
               </tr>
             ) : null}
             <tr>
-              <th>
-                {showQuotes
-                  ? 'Theme'
-                  : ((book.stubs as { label?: string; column?: string }[]) || []).length > 1
-                    ? ''
-                    : stubHeaderLabel(
-                        ((book.stubs as { label?: string; column?: string }[]) || [])[0],
-                        columnLabels
-                      )}
-              </th>
-              {columns.map(column => (
-                <th key={column.id}>
-                  {bannerHeading(column)}
-                  {column.letter_slot && lettersShown ? (
-                    <span className="grid-slot"> {column.letter_slot}</span>
-                  ) : null}
-                </th>
-              ))}
+              <th title={cornerLabel || undefined}>{cornerLabel}</th>
+              {columns.map(column => {
+                const heading = bannerHeading(column);
+                return (
+                  <th key={column.id} title={heading || undefined}>
+                    {heading}
+                    {column.letter_slot && lettersShown ? (
+                      <span className="grid-slot"> {column.letter_slot}</span>
+                    ) : null}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -502,13 +515,15 @@ export function BannerGrid({
               if (row.kind === 'header') {
                 return (
                   <tr key={row.id} className="grid-stub-header">
-                    <th colSpan={columns.length + 1}>{row.label}</th>
+                    <th colSpan={columns.length + 1} title={row.label}>
+                      {row.label}
+                    </th>
                   </tr>
                 );
               }
               return (
                 <tr key={row.id}>
-                  <th>
+                  <th title={row.label}>
                     {row.label}
                     {showQuotes && quotes != null ? (
                       <span className="flow-muted"> {quotes}</span>
@@ -1532,6 +1547,7 @@ type TableColumn = {
   labels: Record<string, string>;
   type?: string;
   role?: string;
+  linked_set?: string;
   n_unique?: number | null;
   n_rows?: number | null;
 };
@@ -1586,6 +1602,9 @@ export function tablePickerColumns(columns: TableColumn[], weights: string[] = [
   return columns.filter(column => {
     if (!column.name || isInternalColumn(column.name)) return false;
     if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
+    if (isAdminField(column.name, column.label)) return false;
+    if (isOtherSpecifyField(column.name, column.label)) return false;
+    if (column.linked_set) return false;
     if (isTableWeightColumn(column, weights)) return false;
     const labelled = Object.keys(column.labels || {}).length > 0;
     const type = String(column.type || '').toLowerCase();
@@ -1914,6 +1933,7 @@ export function TablesBuilder({
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightRerake, setWeightRerake] = useState(false);
   const [tidyOpen, setTidyOpen] = useState(false);
+  const [tabSpecOpen, setTabSpecOpen] = useState(false);
   const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
   const [netOpen, setNetOpen] = useState(false);
   const [netOptions, setNetOptions] = useState<string[]>([]);
@@ -2069,6 +2089,7 @@ export function TablesBuilder({
         label?: string;
         type?: string;
         role?: string | null;
+        linked_set?: string | null;
         value_labels?: Record<string, string>;
         n_unique?: number | null;
         n_rows?: number | null;
@@ -2116,6 +2137,7 @@ export function TablesBuilder({
               labels: column.value_labels || {},
               type: column.type,
               role: column.role || undefined,
+              linked_set: column.linked_set || undefined,
               n_unique: column.n_unique ?? null,
               n_rows: column.n_rows ?? null,
             }))
@@ -2133,17 +2155,20 @@ export function TablesBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
-  const stubOptions = tableStubPickerOptions(
-    columns.map(column => ({
-      name: column.name,
-      label: column.label,
-      type: column.type,
-      role: column.role,
-      value_labels: column.labels,
-    })),
+  const pickerColumnsMeta: FlowColumn[] = columns.map(column => ({
+    name: column.name,
+    label: column.label,
+    type: column.type,
+    role: column.role,
+    linked_set: column.linked_set,
+    value_labels: column.labels,
+  }));
+  const outlineQuestions: OutlineQuestion[] = questionnaireOutline(
+    pickerColumnsMeta,
     variableSets,
-    weightColumns
+    { weightName: weightColumns.find(name => Boolean(name)) || '' }
   );
+  const stubOptions = tableStubPickerOptions(pickerColumnsMeta, variableSets, weightColumns);
   const labelFor = (name: string) => {
     const fromSet = stubOptions.find(item => item.value === name);
     if (fromSet) return fromSet.label;
@@ -2156,6 +2181,26 @@ export function TablesBuilder({
     if (set) return String(set.label || set.name || name);
     const column = columns.find(item => item.name === name);
     return column ? columnChoiceLabel(column) : name;
+  };
+  /** Stub payload: set names the API knows, else expand multi members client-side. */
+  const stubsForRun = (column: string, nets: { label: string; values: string[] }[]) => {
+    const knownSet = variableSets.some(
+      item =>
+        String(item.name || '') === column ||
+        String(item.label || '') === column ||
+        String(item.id || '') === column
+    );
+    if (knownSet) return [{ ...codedStub(column), nets }];
+    const unit = outlineQuestions.find(
+      item => item.stubValue === column || item.key === column || item.columns[0] === column
+    );
+    if (unit && unit.columns.length > 1 && (unit.kind === 'multi' || unit.kind === 'grid')) {
+      return unit.columns.map((name, index) => ({
+        column: name,
+        ...(index === 0 && nets.length ? { nets } : {}),
+      }));
+    }
+    return [{ ...codedStub(column), nets }];
   };
   const questionText = (name: string) => {
     const fromSet = stubOptions.find(item => item.value === name);
@@ -2344,7 +2389,7 @@ export function TablesBuilder({
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
-        stubs: [{ ...codedStub(stub), nets }],
+        stubs: stubsForRun(stub, nets),
         banner: banners.map(columnName => ({ column: columnName })),
         statistics: selectedStats,
         ...significanceRequestFields(significance),
@@ -2529,6 +2574,41 @@ export function TablesBuilder({
     );
   }
 
+  async function rebuildSavedTable(id: string): Promise<boolean> {
+    if (!datasetId || !id) return false;
+    try {
+      const result = await flowJson<{
+        ok?: boolean;
+        blocked?: boolean;
+        detail?: string;
+        dataset_id?: string;
+        weight_note?: string;
+      }>(`/datasets/${datasetId}/tables/${id}/rebuild`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (result.blocked) {
+        setError(result.detail || 'This file has a scale problem.');
+        return false;
+      }
+      setSpecs(current =>
+        current.map(item =>
+          (item.spec_id || item.id) === id ? { ...item, stale: false, detail: '' } : item
+        )
+      );
+      if (result.weight_note) setError(result.weight_note);
+      else setError('');
+      const opened = await flowJson<Record<string, unknown>>(
+        `/datasets/${result.dataset_id || datasetId}/tables/${id}`
+      );
+      remember(opened);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not rebuild');
+      return false;
+    }
+  }
+
   function openSavedSpec(spec: SavedSpec) {
     const id = spec.spec_id || spec.id || '';
     if (dirty) {
@@ -2544,14 +2624,18 @@ export function TablesBuilder({
       onFile(spec.dataset_id);
       return;
     }
+    if (spec.stale) {
+      setOpening(true);
+      void rebuildSavedTable(id).finally(() => setOpening(false));
+      return;
+    }
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
       .then(remember)
       .catch(err => {
         if (isTableSourceChanged(err)) {
-          setBook(null);
-          setError(
-            'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
-          );
+          // Spec fingerprint drifted: rebuild on this file instead of asking the user.
+          setOpening(true);
+          void rebuildSavedTable(id).finally(() => setOpening(false));
           return;
         }
         setError(err instanceof Error ? err.message : 'Could not open that table');
@@ -2609,7 +2693,12 @@ export function TablesBuilder({
                 <span className="tables-saved-copy">
                   <span>{railLabel(spec)}</span>
                   {spec.stale ? (
-                    <span className="flow-muted">Rebuild</span>
+                    <span
+                      className="flow-muted"
+                      title="Built on an older file version; opens by rebuilding on this file."
+                    >
+                      Needs rebuild
+                    </span>
                   ) : spec.filename ? (
                     <span className="flow-muted">{spec.filename}</span>
                   ) : null}
@@ -2695,6 +2784,14 @@ export function TablesBuilder({
                 className="tables-tidy-trigger"
                 type="button"
                 disabled={!datasetId || !railReady}
+                onClick={() => setTabSpecOpen(true)}
+              >
+                Build from a spec…
+              </Button>
+              <Button
+                className="tables-tidy-trigger"
+                type="button"
+                disabled={!datasetId || !railReady}
                 onClick={() => setTidyOpen(true)}
               >
                 Tidy tables…
@@ -2739,13 +2836,33 @@ export function TablesBuilder({
               <div className="tables-line">
                 <span>Stub</span>
                 {stub ? (
-                  <Button className="tables-chip accent" type="button" onClick={() => setStub('')}>
-                    {labelFor(stub)} ×
-                  </Button>
+                  <span className="tables-chip-wrap accent">
+                    <VariablePreviewTrigger
+                      datasetId={datasetId}
+                      projectId={projectId}
+                      column={stub}
+                      label={labelFor(stub)}
+                      fileName={
+                        files.find(file => file.id === datasetId)?.name ||
+                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                          ?.original_filename ||
+                        ''
+                      }
+                    />
+                    <Button
+                      className="tables-chip-clear"
+                      type="button"
+                      aria-label={`Remove ${labelFor(stub)}`}
+                      onClick={() => setStub('')}
+                    >
+                      ×
+                    </Button>
+                  </span>
                 ) : null}
                 <ChoiceSelect
                   className="flow-input"
                   aria-label="Table stub"
+                  searchable
                   value=""
                   onValueChange={value => {
                     if (value) setStub(value);
@@ -2761,18 +2878,33 @@ export function TablesBuilder({
               <div className="tables-line">
                 <span>Banner</span>
                 {banners.map(name => (
-                  <Button
-                    key={name}
-                    className="tables-chip"
-                    type="button"
-                    onClick={() => setBanners(current => current.filter(item => item !== name))}
-                  >
-                    {labelFor(name)} ×
-                  </Button>
+                  <span key={name} className="tables-chip-wrap">
+                    <VariablePreviewTrigger
+                      datasetId={datasetId}
+                      projectId={projectId}
+                      column={name}
+                      label={labelFor(name)}
+                      fileName={
+                        files.find(file => file.id === datasetId)?.name ||
+                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                          ?.original_filename ||
+                        ''
+                      }
+                    />
+                    <Button
+                      className="tables-chip-clear"
+                      type="button"
+                      aria-label={`Remove ${labelFor(name)}`}
+                      onClick={() => setBanners(current => current.filter(item => item !== name))}
+                    >
+                      ×
+                    </Button>
+                  </span>
                 ))}
                 <ChoiceSelect
                   className="flow-input"
                   aria-label="Add banner"
+                  searchable
                   value=""
                   onValueChange={value => {
                     if (!value || value === stub || banners.includes(value)) return;
@@ -3073,47 +3205,18 @@ export function TablesBuilder({
                     {openSaved?.stale ? (
                       <div className="tables-stale">
                         <p>
-                          {openSaved.detail || 'This table is on an older version of the data.'}
+                          {openSaved.detail ||
+                            'Rebuild means re-run this saved table on the file in use. The stub, banners and options stay the same; the numbers update.'}
                         </p>
                         <Button
                           className="flow-btn"
                           type="button"
                           onClick={() => {
-                            if (!datasetId || !specId) return;
-                            void flowJson<{
-                              ok?: boolean;
-                              blocked?: boolean;
-                              detail?: string;
-                              dataset_id?: string;
-                              weight_note?: string;
-                            }>(`/datasets/${datasetId}/tables/${specId}/rebuild`, {
-                              method: 'POST',
-                              body: JSON.stringify({}),
-                            })
-                              .then(async result => {
-                                if (result.blocked) {
-                                  setError(result.detail || 'This file has a scale problem.');
-                                  return;
-                                }
-                                setSpecs(current =>
-                                  current.map(item =>
-                                    (item.spec_id || item.id) === specId
-                                      ? { ...item, stale: false, detail: '' }
-                                      : item
-                                  )
-                                );
-                                setError(result.weight_note || '');
-                                const opened = await flowJson<Record<string, unknown>>(
-                                  `/datasets/${result.dataset_id || datasetId}/tables/${specId}`
-                                );
-                                remember(opened);
-                              })
-                              .catch(err =>
-                                setError(err instanceof Error ? err.message : 'Could not rebuild')
-                              );
+                            if (!specId) return;
+                            void rebuildSavedTable(specId);
                           }}
                         >
-                          Rebuild
+                          Rebuild now
                         </Button>
                         <Button
                           className="flow-btn"
@@ -3275,6 +3378,16 @@ export function TablesBuilder({
         onOpenChange={setTidyOpen}
         onApplied={() => {
           setNote('Tables tidied.');
+          reloadSpecs();
+        }}
+      />
+      <TabSpecDialog
+        datasetId={datasetId}
+        open={tabSpecOpen}
+        onOpenChange={setTabSpecOpen}
+        onBuilt={result => {
+          const n = result.n_built ?? 0;
+          setNote(n === 1 ? 'Built 1 table from the spec.' : `Built ${n} tables from the spec.`);
           reloadSpecs();
         }}
       />

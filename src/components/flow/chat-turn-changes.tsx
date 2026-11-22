@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   chatTurnUndoTarget,
@@ -48,17 +49,21 @@ export function ChatTurnChangesPanel({
   projectId,
   changes,
   versionLabel,
+  responsesHref,
   disabled = false,
   onRestored,
 }: {
   projectId: string;
   changes: ChatTurnChange[];
   versionLabel?: string | number | null;
+  /** Responses sheet path for "See them" on row-removal edits. */
+  responsesHref?: string | null;
   disabled?: boolean;
   onRestored?: (datasetId: string) => void;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [undone, setUndone] = useState<Set<string>>(() => new Set());
+  const [seeKey, setSeeKey] = useState<string | null>(null);
   if (!changes.length) return null;
 
   const headline = formatChatTurnChangesHeadline(changes, { versionLabel });
@@ -125,29 +130,57 @@ export function ChatTurnChangesPanel({
         const key = changeKey(change, index);
         const isUndone = undone.has(key);
         const canUndo = Boolean(change.previousDatasetId) && !disabled && !isUndone;
+        const showSee = Boolean(change.seeDropped) && !isUndone;
+        const seeOpen = seeKey === key;
         return (
-          <div
-            key={key}
-            className="chat-turn-changes-row"
-            data-undone={isUndone ? 'true' : undefined}
-          >
-            <span className="chat-turn-changes-label">{change.label}</span>
-            {canUndo ? (
-              <Button
-                type="button"
-                className="chat-turn-changes-undo"
-                disabled={Boolean(busyKey)}
-                onClick={() =>
-                  runUndo(key, {
-                    previousDatasetId: change.previousDatasetId!,
-                    currentDatasetId: change.currentDatasetId,
-                  })
-                }
-              >
-                Undo
-              </Button>
-            ) : isUndone ? (
-              <span className="chat-turn-changes-undone">Undone</span>
+          <div key={key} className="chat-turn-changes-block">
+            <div className="chat-turn-changes-row" data-undone={isUndone ? 'true' : undefined}>
+              <span className="chat-turn-changes-label">{change.label}</span>
+              {canUndo || showSee || isUndone ? (
+                <span className="chat-turn-changes-actions">
+                  {canUndo ? (
+                    <Button
+                      type="button"
+                      className="chat-turn-changes-undo"
+                      disabled={Boolean(busyKey)}
+                      onClick={() =>
+                        runUndo(key, {
+                          previousDatasetId: change.previousDatasetId!,
+                          currentDatasetId: change.currentDatasetId,
+                        })
+                      }
+                    >
+                      Undo
+                    </Button>
+                  ) : null}
+                  {canUndo && showSee ? (
+                    <span className="chat-turn-changes-sep" aria-hidden="true">
+                      ·
+                    </span>
+                  ) : null}
+                  {showSee ? (
+                    <Button
+                      type="button"
+                      className="chat-turn-changes-see"
+                      aria-expanded={seeOpen}
+                      onClick={() => setSeeKey(current => (current === key ? null : key))}
+                    >
+                      See them
+                    </Button>
+                  ) : null}
+                  {isUndone ? <span className="chat-turn-changes-undone">Undone</span> : null}
+                </span>
+              ) : null}
+            </div>
+            {seeOpen ? (
+              <div className="chat-turn-changes-see-note" role="note">
+                <p>Those respondents are no longer in the working version. Undo restores them.</p>
+                {responsesHref ? (
+                  <Link className="chat-turn-changes-see-link" href={responsesHref}>
+                    Open Responses
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
           </div>
         );

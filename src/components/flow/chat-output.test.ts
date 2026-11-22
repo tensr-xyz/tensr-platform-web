@@ -19,6 +19,7 @@ import {
   titledWithQuestion,
   guardUserText,
   resultLead,
+  outputStat,
   outputOpenHref,
   outputRunIds,
   isClientDeckResult,
@@ -148,6 +149,22 @@ describe('chat output panel', () => {
       'How satisfied are you with Brew & Co?'
     );
     expect(titledWithQuestion('sat_brewco', columns)).toBe('How satisfied are you with Brew & Co?');
+  });
+
+  it('shortens several frequency questions to one stem and a count', () => {
+    const results = [
+      {
+        procedure: 'frequencies',
+        summary: {
+          table: [
+            { title: 'Frequency Table: Read or visited: Global Ledger', rows: [] },
+            { title: 'Frequency Table: Read or visited: Capital Daily', rows: [] },
+            { title: 'Frequency Table: Read or visited: Northwind Post', rows: [] },
+          ],
+        },
+      },
+    ];
+    expect(outputTitle(results, 'Chart ready.')).toBe('Read or visited and 2 more');
   });
 
   it('rewrites a subtitle of column codes into labels', () => {
@@ -486,6 +503,62 @@ describe('chat output panel', () => {
       },
     ]);
     expect(lead).toBe('');
+  });
+
+  it('leads with Mann-Whitney and correlation when the reply did not finish', () => {
+    const mw =
+      'Trust for Men and Women: U = 12.000, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
+    const corr =
+      'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance. n = 3000.';
+    const lead = resultLead(EMPTY_TURN_ANSWER, [
+      {
+        procedure: 'mann_whitney_u',
+        summary: {
+          line: mw,
+          statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+        },
+      },
+      {
+        procedure: 'correlation',
+        summary: {
+          line: corr,
+          statistic: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
+        },
+      },
+    ]);
+    expect(lead).toContain('U = 12.000');
+    expect(lead).toContain('Pearson r = 0.012');
+    expect(lead.toLowerCase()).not.toContain('did not finish');
+    expect(
+      outputStat(
+        [
+          {
+            procedure: 'mann_whitney_u',
+            summary: {
+              statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+            },
+          },
+        ],
+        EMPTY_TURN_ANSWER
+      )
+    ).toContain('r = -0.033');
+  });
+
+  it('reads a structured report answer when the summary line is missing', () => {
+    const lead = resultLead('', [
+      {
+        procedure: 'mann_whitney_u',
+        result: {
+          report: {
+            answer_from_result: true,
+            answer:
+              'Score for Men and Women: U = 18.000, p = 0.040, r = 0.76, unlikely to be chance.',
+          },
+        },
+      },
+    ]);
+    expect(lead).toContain('U = 18.000');
+    expect(lead).toContain('r = 0.76');
   });
 
   it('keeps a chi-square finding that says what differs', () => {

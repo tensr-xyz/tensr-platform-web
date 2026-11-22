@@ -33,8 +33,10 @@ describe('ChatTurnChangesPanel', () => {
             label: 'Removed 12 respondents',
             previousDatasetId: 'v1',
             currentDatasetId: 'v2',
+            seeDropped: true,
           },
         ]}
+        responsesHref="/flow/p/proj/responses"
         onRestored={onRestored}
       />
     );
@@ -44,6 +46,16 @@ describe('ChatTurnChangesPanel', () => {
     expect(screen.getByRole('button', { name: 'Undo all' })).toBeTruthy();
     const rowUndos = screen.getAllByRole('button', { name: 'Undo' });
     expect(rowUndos).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'See them' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'See them' }));
+    expect(
+      screen.getByText(/Those respondents are no longer in the working version/i)
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Open Responses' })).toHaveAttribute(
+      'href',
+      '/flow/p/proj/responses'
+    );
 
     fireEvent.click(rowUndos[0]!);
     await waitFor(() => expect(restore).toHaveBeenCalled());

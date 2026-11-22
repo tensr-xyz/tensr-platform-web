@@ -96,7 +96,7 @@ describe('output titles and states', () => {
 
 describe('run record fields', () => {
   it('reads base and In report from the run record, not the title', () => {
-    const { outputRuns } = jest.requireActual('./report-output-runs');
+    const { outputRuns, weightedBaseLabel } = jest.requireActual('./report-output-runs');
     const [run] = outputRuns([
       {
         id: 'r1',
@@ -114,5 +114,8 @@ describe('run record fields', () => {
     expect(run.title).toBe('aware_A × region');
     const [bare] = outputRuns([{ id: 'r2', op: 'descriptives', title: 'x — n = 12' }]);
     expect(bare.base).toBeNull();
+    expect(weightedBaseLabel(28.4)).toBe('Weighted base 28.4');
+    expect(weightedBaseLabel(260_662_973)).toMatch(/thousand/);
+    expect(weightedBaseLabel(260_662_973)).not.toContain('260,662,973');
   });
 });

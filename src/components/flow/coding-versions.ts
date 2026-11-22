@@ -23,6 +23,7 @@ export function isCodingVersion(row: {
     label.includes('coded') ||
     label.includes('sentiment') ||
     op.includes('open_end') ||
+    op.includes('code_open') ||
     op.includes('sentiment') ||
     op === 'coded'
   );

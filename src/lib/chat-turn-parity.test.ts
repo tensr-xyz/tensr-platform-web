@@ -1,4 +1,6 @@
 import {
+  changeOffersSeeDropped,
+  chatRunFinishedWhileAway,
   chatTurnChangesFromToolResults,
   chatTurnUndoTarget,
   formatChatTurnChangesHeadline,
@@ -63,7 +65,18 @@ describe('numberedNextStepsFromTurn', () => {
         },
       ],
     });
+    expect(steps).toHaveLength(3);
     expect(steps.some(step => step.label === 'Summarise what changed')).toBe(true);
+  });
+
+  it('pads to three next steps after a plain reply', () => {
+    const steps = numberedNextStepsFromTurn({
+      hasOutput: false,
+      steps: ['Reading the request'],
+    });
+    expect(steps).toHaveLength(3);
+    expect(steps.map(step => step.n)).toEqual([1, 2, 3]);
+    expect(steps[0]?.label).toBe('What should I check next?');
   });
 
   it('offers board / short / audience reshape when the report has pins', () => {
@@ -76,6 +89,23 @@ describe('numberedNextStepsFromTurn', () => {
       'Refine for an audience',
     ]);
     expect(steps[0]?.prompt).toMatch(/5 slide/i);
+  });
+
+  it('offers reshape after a client deck fills the report', () => {
+    const steps = numberedNextStepsFromTurn({
+      toolResults: [
+        {
+          name: 'build_client_deck',
+          args: {},
+          result: { ok: true, procedure: 'build_client_deck', report_pages: 12 },
+        },
+      ],
+    });
+    expect(steps.map(step => step.label)).toEqual([
+      'Board version (5 slides)',
+      'Short version',
+      'Refine for an audience',
+    ]);
   });
 });
 
@@ -130,6 +160,34 @@ describe('chatTurnChangesFromToolResults', () => {
       previousDatasetId: 'v0',
       currentDatasetId: 'v1',
     });
+  });
+
+  it('reads parent ids from slim stream payloads and marks row drops', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'data_edit',
+        parent_dataset_id: 'v0',
+        derived_dataset_id: 'v1',
+        result: {
+          ok: true,
+          executed: true,
+          operation: 'filter_apply',
+          answer_markdown: 'Removed 12 respondents (name contains "test").',
+          derived_dataset_id: 'v1',
+          derived: { dataset_id: 'v1', parent_dataset_id: 'v0' },
+        },
+      } as never,
+    ]);
+    expect(changes).toEqual([
+      {
+        label: 'Removed 12 respondents (name contains "test").',
+        operation: 'filter_apply',
+        previousDatasetId: 'v0',
+        currentDatasetId: 'v1',
+        seeDropped: true,
+      },
+    ]);
+    expect(changeOffersSeeDropped(changes[0]!)).toBe(true);
   });
 
   it('skips refused edits', () => {
@@ -191,6 +249,13 @@ describe('notifyChatRunFinished', () => {
       })
     ).toBe(true);
     expect(shown).toEqual(['Tensr finished a chat reply']);
+    expect(
+      chatRunFinishedWhileAway({
+        hidden: true,
+        startedAt,
+        now: startedAt + 9_000,
+      })
+    ).toBe(true);
 
     expect(
       notifyChatRunFinished({

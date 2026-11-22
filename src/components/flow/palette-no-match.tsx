@@ -8,7 +8,10 @@ export function paletteNoMatchCopy(query: string): { message: string; ask: strin
   if (!text) {
     return { message: 'Nothing in this section yet. Search for an analysis by name.', ask: null };
   }
-  return { message: `No analysis matches “${text}”.`, ask: text };
+  return {
+    message: `No analysis matches “${text}”. Press ⏎ to ask chat instead.`,
+    ask: text,
+  };
 }
 
 /**

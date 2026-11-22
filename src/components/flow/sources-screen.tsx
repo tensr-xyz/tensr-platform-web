@@ -168,15 +168,13 @@ export function versionWhen(value?: string | null): string {
   if (Number.isNaN(date.getTime())) return '';
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}`;
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}:${seconds}`;
 }
 
-/** Distinct working-copy names like "cars_EN + DE" or "cars_EN - weighted 5 Nov 15:42". */
-function looksLikeVersionName(name: string): boolean {
-  if (/ \+ /.test(name)) return true;
-  return / - (weighted|stacked|recoded|coded|computed|joined|fused|merged|filtered|scaled|calibrated|standardised|standardized)\b/i.test(
-    name
-  );
+/** Stack-style working-copy names like "cars_EN + DE + FR". */
+function looksLikeStackName(name: string): boolean {
+  return / \+ /.test(name);
 }
 
 export function sourceVersionTitle(file: SourceFile): string {
@@ -185,19 +183,23 @@ export function sourceVersionTitle(file: SourceFile): string {
   const label = String(file.lineage_label || '').trim();
   let base = '';
   let fromOperationLabel = false;
-  if (original && !looksLikeFileId(original) && looksLikeVersionName(original)) {
+  // Prefer the operation label ("Raked to region") so two same-day copies stay distinct
+  // by what was done. Keep stack-style file names ("cars_EN + DE + FR").
+  if (original && !looksLikeFileId(original) && looksLikeStackName(original)) {
     base = original;
   } else if (label && !looksLikeFileId(label)) {
     base = label;
     fromOperationLabel = true;
+  } else if (original && !looksLikeFileId(original)) {
+    base = original;
   } else {
     base = sourceFileName(file);
   }
   if (!base) base = 'Untitled file';
-  // Operation labels stay sentence case ("Weighted to region"); file-style names keep their case.
+  // Operation labels stay sentence case ("Raked to region"); file-style names keep their case.
   const titled = fromOperationLabel ? base.charAt(0).toUpperCase() + base.slice(1) : base;
   if (/\d{1,2}:\d{2}/.test(titled)) return titled;
-  const stamp = versionWhen(file.updated_at || file.created_at);
+  const stamp = versionWhen(file.created_at || file.updated_at);
   return stamp ? `${titled} · ${stamp}` : titled;
 }
 
@@ -450,8 +452,9 @@ export function SourcesScreen({
   const { tips: versionTips, older: olderVersions, tipIdFor } = workingVersionSections(versions);
   const versionNote = (file: SourceFile) => {
     const label = sourceFileNote(file);
-    // Strip a trailing " · 5 Nov 15:42" so the note does not repeat the title stamp.
-    const plain = label.replace(/\s·\s+\d{1,2}\s+\w{3}\s+\d{2}:\d{2}\s*$/, '').trim() || label;
+    // Strip a trailing " · 5 Nov 15:42:01" so the note does not repeat the title stamp.
+    const plain =
+      label.replace(/\s·\s+\d{1,2}\s+\w{3}\s+\d{2}:\d{2}(?::\d{2})?\s*$/, '').trim() || label;
     const made = plain.charAt(0).toUpperCase() + plain.slice(1);
     const sources = (file.source_filenames || []).map(name => name.trim()).filter(Boolean);
     if (sources.length) return `${made} from ${sources.join(', ')}`;

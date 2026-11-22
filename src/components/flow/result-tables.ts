@@ -31,21 +31,40 @@ export function withoutEngineCopies<
 >(tables: T[]): T[] {
   const titles = tables.map(table => (table.title || '').trim().toLowerCase());
   const has = (name: string) => titles.includes(name);
+  const hasAnova = tables.some(table => {
+    const title = (table.title || '').trim().toLowerCase();
+    const columns = (table.columns || []).map(column => column.trim().toLowerCase());
+    return (
+      title === 'anova' ||
+      title === 'welch anova' ||
+      (columns.includes('source') && columns.includes('f'))
+    );
+  });
   const labelledCoefficients = tables.some(
     table =>
       (table.title || '').trim().toLowerCase() === 'coefficients' &&
       (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
   );
+  const hasLabelledCorrelation = titles.some(title => {
+    if (title.includes('partial') || title.includes('canonical') || title.includes('matrix')) {
+      return false;
+    }
+    if (title === 'correlations') return true;
+    return /^(pearson|spearman|kendall) correlations?$/.test(title);
+  });
   return tables.filter(table => {
     if (table.superseded) return false;
     const title = (table.title || '').trim().toLowerCase();
     const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
-      has('correlations') &&
+      hasLabelledCorrelation &&
       (title.includes('correlation matrix') || title.includes('correlation p-value'))
     ) {
       return false;
     }
+    // Rank Groups/Test/Pairwise(U) must not sit under an ANOVA source table.
+    if (hasAnova && (title === 'groups' || title === 'test')) return false;
+    if (hasAnova && title === 'pairwise' && columns.includes('u')) return false;
     if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
     if (
       has('groups') &&
@@ -805,9 +824,73 @@ function groupLabels(groups: unknown): Map<string, string> {
     const record = row as Record<string, unknown>;
     const code = cell(record.group);
     const label = cell(record.label);
-    if (code && label && label !== code) labels.set(code, label);
+    if (code && label && label !== code) {
+      labels.set(code, label);
+      const stripped = code.replace(/\.0$/, '');
+      if (stripped && stripped !== code) labels.set(stripped, label);
+    }
   }
   return labels;
+}
+
+/** Groups/Pairwise cells that still hold codes get the stamped value labels. */
+function relabelRankTables(tables: RunTable[], labels: Map<string, string>): RunTable[] {
+  if (!labels.size) return tables;
+  const shown = (raw: string) =>
+    labels.get(raw) || labels.get(raw.replace(/\.0$/, '')) || labels.get(`${raw}.0`) || raw;
+  return tables.map(table => {
+    const title = table.title.trim().toLowerCase();
+    if (title === 'groups') {
+      return {
+        ...table,
+        rows: table.rows.map(row => (row.length ? [shown(row[0] || ''), ...row.slice(1)] : row)),
+      };
+    }
+    if (title === 'pairwise') {
+      return {
+        ...table,
+        rows: table.rows.map(row => {
+          if (row.length < 2) return row;
+          return [shown(row[0] || ''), shown(row[1] || ''), ...row.slice(2)];
+        }),
+      };
+    }
+    return table;
+  });
+}
+
+function collectGroupLabels(
+  value: unknown,
+  depth = 0,
+  into = new Map<string, string>()
+): Map<string, string> {
+  if (!value || typeof value !== 'object' || depth > 6) return into;
+  if (Array.isArray(value)) {
+    for (const item of value) collectGroupLabels(item, depth + 1, into);
+    return into;
+  }
+  const record = value as Record<string, unknown>;
+  for (const [code, label] of groupLabels(record.group_descriptives)) {
+    into.set(code, label);
+  }
+  const prepared = record.group_labels;
+  const names = record.group_names;
+  if (Array.isArray(prepared) && Array.isArray(names)) {
+    for (let index = 0; index < names.length; index += 1) {
+      const code = cell(names[index]);
+      const label = cell(prepared[index]);
+      if (code && label && label !== code) {
+        into.set(code, label);
+        const stripped = code.replace(/\.0$/, '');
+        if (stripped && stripped !== code) into.set(stripped, label);
+      }
+    }
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key === 'rows' || key === 'columns' || key === 'preview') continue;
+    if (nested && typeof nested === 'object') collectGroupLabels(nested, depth + 1, into);
+  }
+  return into;
 }
 
 function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
@@ -988,6 +1071,100 @@ function bannerRecord(record: Record<string, unknown>): boolean {
     record.banner_columns != null ||
     record.base_label != null
   );
+}
+
+/** Turn a banner book into the same column grid the chat summary.screen carries. */
+function bannerBookTable(record: Record<string, unknown>): RunTable | null {
+  const columns = Array.isArray(record.banner_columns)
+    ? record.banner_columns.filter(
+        (column): column is Record<string, unknown> =>
+          Boolean(column) && typeof column === 'object' && !Array.isArray(column)
+      )
+    : [];
+  // Keep stub-group header rows so multi-stub books stay labelled on the output page.
+  const rows = Array.isArray(record.rows)
+    ? record.rows.filter((row): row is Record<string, unknown> => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+        const kind = String((row as { kind?: unknown }).kind || 'value');
+        return !['mean', 'sd', 'base'].includes(kind);
+      })
+    : [];
+  const valueRows = rows.filter(row => String(row.kind || 'value') !== 'header');
+  if (!columns.length || !valueRows.length) return null;
+  let hasProjected = false;
+  let hasIndex = false;
+  for (const row of valueRows) {
+    for (const item of Array.isArray(row.cells) ? row.cells : []) {
+      if (!item || typeof item !== 'object') continue;
+      const cell = item as Record<string, unknown>;
+      if (typeof cell.projected_thousands === 'number') hasProjected = true;
+      if (typeof cell.index === 'number') hasIndex = true;
+    }
+  }
+  const headers = ['Item'];
+  for (const column of columns) {
+    const heading = cell(column.label) || 'Total';
+    headers.push(columns.length === 1 && heading.toLowerCase() === 'total' ? '%' : `${heading} %`);
+    if (hasProjected) {
+      headers.push(columns.length === 1 ? 'People (000s)' : `${heading} (000s)`);
+    }
+    if (hasIndex) {
+      headers.push(columns.length === 1 ? 'Index vs total' : `${heading} index`);
+    }
+  }
+  const blank = Array.from({ length: headers.length - 1 }, () => '');
+  const matrix: string[][] = [];
+  for (const row of rows.slice(0, 40)) {
+    const kind = String(row.kind || 'value');
+    let label = cell(row.label);
+    if (kind === 'header') {
+      matrix.push([label, ...blank]);
+      continue;
+    }
+    if (label.includes(': ')) label = label.split(': ').slice(-1)[0].trim() || label;
+    const cells = Array.isArray(row.cells)
+      ? row.cells.filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+        )
+      : [];
+    const byId = new Map(cells.map(item => [cell(item.banner_id), item]));
+    const line = [label];
+    columns.forEach((column, index) => {
+      const item = byId.get(cell(column.id)) || cells[index] || {};
+      const percent =
+        typeof item.percent === 'number' && Number.isFinite(item.percent)
+          ? `${item.percent.toFixed(1)}%`
+          : '—';
+      line.push(percent);
+      if (hasProjected) {
+        const projected = item.projected_thousands;
+        line.push(
+          typeof projected === 'number' && Number.isFinite(projected)
+            ? projected.toLocaleString('en-GB', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })
+            : '—'
+        );
+      }
+      if (hasIndex) {
+        const indexValue = item.index;
+        line.push(
+          typeof indexValue === 'number' && Number.isFinite(indexValue)
+            ? String(Math.round(indexValue))
+            : '—'
+        );
+      }
+    });
+    matrix.push(line);
+  }
+  if (!matrix.length) return null;
+  return {
+    title: cell(record.title) || 'Banner',
+    columns: headers,
+    rows: matrix,
+  };
 }
 
 function rememberTableBase(record: Record<string, unknown>, sample: SampleBits): void {
@@ -1281,7 +1458,10 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
   const found: RunTable[] = [];
   const summary = record.summary;
   if (summary && typeof summary === 'object') {
-    const block = summary as { table?: unknown; title?: unknown };
+    const block = summary as { table?: unknown; screen?: unknown; title?: unknown };
+    // Banner runs put the readable grid on screen; table may be markdown only.
+    const screen = asTable(block.screen);
+    if (screen) found.push(screen);
     found.push(...summaryTables(block.table, cell(block.title)));
     if (Array.isArray(block.table)) {
       for (const item of block.table) {
@@ -1406,11 +1586,32 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   for (const table of preferred) add(table, 'summary');
   if (preferred.length) lockTables = true;
+  const appendFootnoteNote = (text: string) => {
+    if (!text) return;
+    if (view.baseDetail?.includes(text) || view.letterNote.includes(text)) return;
+    view.baseDetail = view.baseDetail ? `${view.baseDetail} · ${text}` : text;
+  };
+  const isExplanatoryTableNote = (text: string) => {
+    const folded = text.toLowerCase();
+    return (
+      folded.includes('percent of respondents who selected') ||
+      folded.includes('people may select more than one') ||
+      folded.includes('percents need not sum to 100') ||
+      (folded.startsWith('weighted by ') && folded.includes('counts, percents'))
+    );
+  };
   const notes = (value: unknown) => {
     if (!Array.isArray(value)) return;
     for (const note of value) {
       const text = cell(note);
-      if (text && !view.checks.includes(text)) view.checks.push(text);
+      if (!text) continue;
+      // Frequency multi-select copy belongs on the footnote, not the Checks fold
+      // (TEN-249: avoid "Check not run" vs "Checks (n)" for the same card).
+      if (isExplanatoryTableNote(text)) {
+        appendFootnoteNote(text);
+        continue;
+      }
+      if (!view.checks.includes(text)) view.checks.push(text);
     }
   };
   const visit = (value: unknown, depth: number, inDescriptives = false) => {
@@ -1429,7 +1630,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const syntaxDump =
       record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
     if (!syntaxDump) {
-      const table = asTable(record);
+      const table = asTable(record) || (bannerRecord(record) ? bannerBookTable(record) : null);
       if (table && (record.id === 'group_statistics' || table.title === 'Group Statistics')) {
         spareGroupTables.push(table);
       } else {
@@ -1449,6 +1650,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       notes(block.notes);
       const letter = cell(block.letter_test);
       if (letter && !view.letterNote) view.letterNote = letter;
+      const screen = asTable((block as { screen?: unknown }).screen);
+      if (screen) add(screen, 'summary');
       for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
     }
     notes(record.notes);
@@ -1456,7 +1659,13 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       view.script = record.r_syntax.trim();
     }
     for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
-    const means = describeTable(record.describe, record.variable_labels);
+    // Frequencies show the grid only. Means of multi-select 0/1 flags are noise.
+    const showDescribe =
+      descriptives ||
+      (!isFrequencyRecord(record) &&
+        record.procedure !== 'frequencies' &&
+        record.analysis_type !== 'frequencies');
+    const means = showDescribe ? describeTable(record.describe, record.variable_labels) : null;
     if (means && !view.tables.some(table => table.columns.includes('Mean'))) {
       add(means, descriptives ? 'summary' : 'grid');
     }
@@ -1596,6 +1805,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (!lockTables && !view.tables.some(isGroupMeanTable)) {
     for (const table of spareGroupTables) add(table);
   }
+  view.tables = relabelRankTables(view.tables, collectGroupLabels(results));
   view.tables = withoutEngineCopies(view.tables).filter((table, index, all) => {
     const blank = table.columns.some(
       (_column, column) =>
@@ -1635,7 +1845,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     view.tables.find(table => table.note && /sample size|base =/i.test(table.note))?.note ||
     sample.note;
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
-  else if (detail) view.baseDetail = detail;
+  else if (detail) view.baseDetail = normalizeWeightDetail(detail);
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
   if (!view.weight && sample.weight) view.weight = sample.weight;
   if (
@@ -1791,11 +2001,17 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   return `Weight: ${stripCodeBrackets(name)}`;
 }
 
+/** A stored "Weight: none" is an unweighted run. Never show the sentinel to a person. */
+function normalizeWeightDetail(detail: string): string {
+  return detail.replace(/Weight:\s*(none|null)\b/gi, 'Weight: Unweighted');
+}
+
 function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLabels[]): string {
-  if (!detail || !/weight:/i.test(detail) || !weight) return detail;
+  const cleaned = normalizeWeightDetail(detail);
+  if (!cleaned || !/weight:/i.test(cleaned) || !weight) return cleaned;
   const named = weightNote(weight, columns);
-  if (!named || named === 'Unweighted') return detail;
-  return detail.replace(/Weight:\s*[^;]+/i, named);
+  if (!named || named === 'Unweighted') return cleaned;
+  return cleaned.replace(/Weight:\s*[^;]+/i, named);
 }
 
 export function resultFootnote(

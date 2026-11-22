@@ -4,7 +4,12 @@ export type ChatExchange = {
   user: string;
   note: string;
   answer: string;
-  toolResults?: { name: string; result?: Record<string, unknown>; run_id?: string | null }[];
+  toolResults?: {
+    name: string;
+    args?: Record<string, unknown>;
+    result?: Record<string, unknown>;
+    run_id?: string | null;
+  }[];
 };
 
 export function archiveChatTurn(

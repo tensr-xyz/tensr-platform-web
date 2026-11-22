@@ -43,6 +43,11 @@ import {
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import {
+  formatSheetCellDisplay,
+  sheetColumnHint,
+  variablePanelKind,
+} from '@/lib/sheet-cell-format';
 import { openSignedDownload } from '@/lib/excel-download';
 import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
@@ -50,6 +55,7 @@ import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import {
   AskerQuestionsScreen,
@@ -89,11 +95,13 @@ import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
 import { MergeSmallAnswersDialog } from '@/components/flow/merge-small-answers-dialog';
+import { DataChecksDialog } from '@/components/flow/data-checks-dialog';
 import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { FindReplaceDialog } from '@/components/flow/find-replace-dialog';
+import { RecipeEditorDialog } from '@/components/flow/recipe-editor-dialog';
 import { ProjectPresenceAvatars, useProjectPresence } from '@/components/flow/project-presence';
 import {
   documentApa,
@@ -163,10 +171,12 @@ import {
   recordRecentPaletteAction,
 } from '@/lib/palette-recent';
 import {
+  PALETTE_ASK_CHAT_HINT,
   RECENT_PALETTE_SECTION,
   SUGGESTED_PALETTE_SECTION,
   suggestPaletteActionsForKind,
   suggestedPaletteResultsLabel,
+  type PaletteSuggestion,
 } from '@/lib/palette-suggestions';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
@@ -233,6 +243,13 @@ import {
 } from '@/lib/flow-plugins';
 import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
+import { VariableLineagePanel } from '@/components/flow/variable-lineage-panel';
+import {
+  clearResponsesFocus,
+  readResponsesFocus,
+  type ColumnDependencies,
+  type RemovedCase,
+} from '@/components/flow/variable-lineage';
 import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
 import {
   datasetRowId,
@@ -252,6 +269,11 @@ type FlowRecipe = {
   version?: number;
   ops?: unknown[];
   created_from?: string;
+  description?: string;
+  when_to_use?: string;
+  instructions?: string;
+  reference_files?: { label: string; filename?: string; dataset_id?: string; note?: string }[];
+  applies_as_house_style?: boolean;
 };
 
 type DatasetRow = {
@@ -940,7 +962,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : projectId ? (
               <>
                 {visitedTabs.has('chat') ? (
-                  <div hidden={page !== 'chat'} data-project-tab="chat">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'chat'}
+                    data-project-tab="chat"
+                  >
                     <ChatScreen
                       project={project}
                       datasets={datasets}
@@ -953,12 +979,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('details') ? (
-                  <div hidden={page !== 'details'} data-project-tab="details">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'details'}
+                    data-project-tab="details"
+                  >
                     <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
                   </div>
                 ) : null}
                 {visitedTabs.has('sources') ? (
-                  <div hidden={page !== 'sources'} data-project-tab="sources">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'sources'}
+                    data-project-tab="sources"
+                  >
                     <SourcesScreen
                       project={project}
                       datasets={datasets}
@@ -968,7 +1002,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('responses') ? (
-                  <div hidden={page !== 'responses'} data-project-tab="responses">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'responses'}
+                    data-project-tab="responses"
+                  >
                     <ResponsesScreen
                       project={project}
                       datasets={datasets}
@@ -978,12 +1016,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('tables') ? (
-                  <div hidden={page !== 'tables'} data-project-tab="tables">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'tables'}
+                    data-project-tab="tables"
+                  >
                     <TablesScreen project={project} datasets={datasets} ready={tabReady} />
                   </div>
                 ) : null}
                 {visitedTabs.has('report') ? (
-                  <div hidden={page !== 'report'} data-project-tab="report">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'report'}
+                    data-project-tab="report"
+                  >
                     <ReportScreen
                       projectId={projectId}
                       project={project}
@@ -994,7 +1040,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </div>
                 ) : null}
                 {visitedTabs.has('asker-questions') && myRole !== 'asker' ? (
-                  <div hidden={page !== 'asker-questions'} data-project-tab="asker-questions">
+                  <div
+                    className="project-tab-pane"
+                    hidden={page !== 'asker-questions'}
+                    data-project-tab="asker-questions"
+                  >
                     <AskerQuestionsScreen projectId={projectId} />
                   </div>
                 ) : null}
@@ -2203,21 +2253,39 @@ function Palette({
     void recentTick;
     return recentPaletteItemsFromCatalog(readRecentPaletteActions(), items);
   }, [items, recentTick]);
-  const suggestedItems = useMemo(
-    () => (columnContext ? suggestPaletteActionsForKind(columnContext.kind, items) : []),
+  const suggestedRows = useMemo(
+    () =>
+      columnContext
+        ? suggestPaletteActionsForKind(columnContext.kind, items, columnContext.label)
+        : [],
     [columnContext, items]
   );
+  const forSectionLabel = columnContext
+    ? suggestedPaletteResultsLabel(columnContext.label)
+    : SUGGESTED_PALETTE_SECTION;
+  /** Paper 10d: idle ⌘K with a question selected → For + Recent only. */
+  const focusedIdle = Boolean(columnContext && !searching && tab !== PLUGINS_TAB_VALUE);
   const catalogSections =
-    searching || tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+    searching || tab === PLUGINS_TAB_VALUE || focusedIdle ? {} : getPaletteTabContent(grouped, tab);
+  const suggestedAsItems = suggestedRows
+    .map(row => row.item)
+    .filter((item): item is AnalysisItem => Boolean(item));
   const sections: Record<string, AnalysisItem[]> = searching
     ? { Matches: ranked }
     : tab === PLUGINS_TAB_VALUE
       ? {}
-      : {
-          ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
-          ...(suggestedItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedItems } : {}),
-          ...catalogSections,
-        };
+      : focusedIdle
+        ? {
+            ...(suggestedAsItems.length || suggestedRows.some(row => row.ask)
+              ? { [forSectionLabel]: suggestedAsItems }
+              : {}),
+            ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+          }
+        : {
+            ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+            ...(suggestedAsItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedAsItems } : {}),
+            ...catalogSections,
+          };
   const sectionNames = Object.keys(sections).filter(
     name => !searching || (sections[name]?.length ?? 0) > 0
   );
@@ -2226,8 +2294,17 @@ function Palette({
   const pluginRows = plugins.filter(plugin =>
     plugin.name.toLowerCase().includes(query.trim().toLowerCase())
   );
-  const rows =
-    tab === PLUGINS_TAB_VALUE
+  type PaletteRow =
+    | { kind: 'plugin'; name: string; id: string }
+    | { kind: 'analysis'; item: AnalysisItem; label?: string }
+    | { kind: 'suggest'; suggestion: PaletteSuggestion<AnalysisItem> }
+    | { kind: 'recent'; item: AnalysisItem };
+  const rows: PaletteRow[] = focusedIdle
+    ? [
+        ...suggestedRows.map(suggestion => ({ kind: 'suggest' as const, suggestion })),
+        ...recentItems.map(item => ({ kind: 'recent' as const, item })),
+      ]
+    : tab === PLUGINS_TAB_VALUE
       ? pluginRows.map(plugin => ({
           kind: 'plugin' as const,
           name: plugin.name,
@@ -2268,8 +2345,45 @@ function Palette({
     else store.openUnavailable(item.name);
   };
 
+  const launchSuggestion = (suggestion: PaletteSuggestion<AnalysisItem>) => {
+    if (suggestion.ask) {
+      onClose();
+      onAsk(suggestion.ask);
+      return;
+    }
+    if (suggestion.item) launchAnalysis(suggestion.item);
+  };
+
   const openChosen = (ask: boolean) => {
-    if (!chosen) return;
+    if (!chosen) {
+      const text = query.trim();
+      if (text) {
+        onClose();
+        onAsk(text);
+      }
+      return;
+    }
+    if (chosen.kind === 'suggest') {
+      if (ask && chosen.suggestion.ask) {
+        onClose();
+        onAsk(chosen.suggestion.ask);
+        return;
+      }
+      if (ask && chosen.suggestion.item) {
+        onAsk(chosen.suggestion.item.name);
+        return;
+      }
+      launchSuggestion(chosen.suggestion);
+      return;
+    }
+    if (chosen.kind === 'recent') {
+      if (ask) {
+        onAsk(chosen.item.name);
+        return;
+      }
+      launchAnalysis(chosen.item);
+      return;
+    }
     if (chosen.kind === 'plugin' || ask) {
       onAsk(chosen.kind === 'plugin' ? chosen.name : chosen.item.name);
       return;
@@ -2279,8 +2393,8 @@ function Palette({
 
   const resultsLabel = searching
     ? 'Best match'
-    : activeSection === SUGGESTED_PALETTE_SECTION
-      ? suggestedPaletteResultsLabel(columnContext?.label)
+    : activeSection === SUGGESTED_PALETTE_SECTION || activeSection === forSectionLabel
+      ? forSectionLabel
       : activeSection || '';
 
   const itemWhere = (item: AnalysisItem) => {
@@ -2288,20 +2402,22 @@ function Palette({
     return `${tabLabel} · ${item.section}`;
   };
 
+  const focusedRecentStart = suggestedRows.length;
+
   return (
     <div className="flow-palette" onClick={onClose}>
       <Command
         shouldFilter={false}
-        className="palette-card"
+        className={focusedIdle ? 'palette-card palette-card-focused' : 'palette-card'}
         onClick={event => event.stopPropagation()}
         onKeyDown={event => {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
-            setIndex(current => Math.min(current + 1, rows.length - 1));
+            setIndex(current => Math.min(current + 1, Math.max(rows.length - 1, 0)));
           } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             setIndex(current => Math.max(current - 1, 0));
-          } else if (event.key === 'Enter' && chosen) {
+          } else if (event.key === 'Enter') {
             event.preventDefault();
             openChosen(event.metaKey || event.ctrlKey);
           } else if (event.key === 'Escape') {
@@ -2313,7 +2429,7 @@ function Palette({
           <CommandInput
             autoFocus
             value={query}
-            placeholder="Search analyses"
+            placeholder="Search analyses…"
             onValueChange={value => {
               setQuery(value);
               setIndex(0);
@@ -2321,38 +2437,101 @@ function Palette({
           />
           <span className="palette-esc">esc</span>
         </div>
-        <div className="palette-tabs">
-          {PALETTE_TAB_ORDER.map(key => (
+        {focusedIdle ? null : (
+          <div className="palette-tabs">
+            {PALETTE_TAB_ORDER.map(key => (
+              <Button
+                key={key}
+                className="palette-tab"
+                type="button"
+                data-active={tab === key}
+                onClick={() => {
+                  setTab(key);
+                  setSection(null);
+                  setIndex(0);
+                }}
+              >
+                {PALETTE_TAB_LABELS[key] || key}
+              </Button>
+            ))}
             <Button
-              key={key}
-              className="palette-tab"
+              className="palette-tab palette-tab-plugins"
               type="button"
-              data-active={tab === key}
+              data-active={tab === PLUGINS_TAB_VALUE}
               onClick={() => {
-                setTab(key);
+                setTab(PLUGINS_TAB_VALUE);
                 setSection(null);
                 setIndex(0);
               }}
             >
-              {PALETTE_TAB_LABELS[key] || key}
+              Plugins
+              {plugins.length ? <span className="palette-count">{plugins.length}</span> : null}
             </Button>
-          ))}
-          <Button
-            className="palette-tab palette-tab-plugins"
-            type="button"
-            data-active={tab === PLUGINS_TAB_VALUE}
-            onClick={() => {
-              setTab(PLUGINS_TAB_VALUE);
-              setSection(null);
-              setIndex(0);
-            }}
-          >
-            Plugins
-            {plugins.length ? <span className="palette-count">{plugins.length}</span> : null}
-          </Button>
-        </div>
-        <div className={tab === PLUGINS_TAB_VALUE ? 'palette-body plugins' : 'palette-body'}>
-          {tab === PLUGINS_TAB_VALUE ? (
+          </div>
+        )}
+        <div
+          className={
+            focusedIdle
+              ? 'palette-body focused'
+              : tab === PLUGINS_TAB_VALUE
+                ? 'palette-body plugins'
+                : 'palette-body'
+          }
+        >
+          {focusedIdle ? (
+            <div className="palette-results palette-results-focused">
+              {suggestedRows.length === 0 && recentItems.length === 0 ? (
+                <PaletteNoMatch query={query} onAsk={onAsk} />
+              ) : (
+                <>
+                  {suggestedRows.length ? (
+                    <p className="palette-label palette-label-for">{forSectionLabel}</p>
+                  ) : null}
+                  {suggestedRows.map((suggestion, rowIndex) => (
+                    <Button
+                      key={`suggest-${suggestion.label}`}
+                      className="palette-hit palette-hit-plain"
+                      type="button"
+                      data-active={rowIndex === index}
+                      onClick={() => {
+                        setIndex(rowIndex);
+                        launchSuggestion(suggestion);
+                      }}
+                    >
+                      <span className="palette-copy">
+                        <strong>{suggestion.label}</strong>
+                      </span>
+                      {rowIndex === index ? <span className="palette-enter">↵</span> : null}
+                    </Button>
+                  ))}
+                  {recentItems.length ? (
+                    <p className="palette-label">{RECENT_PALETTE_SECTION}</p>
+                  ) : null}
+                  {recentItems.map((item, recentIndex) => {
+                    const rowIndex = focusedRecentStart + recentIndex;
+                    return (
+                      <Button
+                        key={`recent-${item.name}`}
+                        className="palette-hit palette-hit-plain"
+                        type="button"
+                        data-active={rowIndex === index}
+                        onClick={() => {
+                          setIndex(rowIndex);
+                          launchAnalysis(item);
+                        }}
+                      >
+                        <span className="palette-copy">
+                          <strong>{item.name}</strong>
+                        </span>
+                        {rowIndex === index ? <span className="palette-enter">↵</span> : null}
+                      </Button>
+                    );
+                  })}
+                  <p className="palette-ask-hint">{PALETTE_ASK_CHAT_HINT}</p>
+                </>
+              )}
+            </div>
+          ) : tab === PLUGINS_TAB_VALUE ? (
             <div className="palette-results">
               {pluginRows.length === 0 ? (
                 <p className="flow-muted">
@@ -2424,7 +2603,8 @@ function Palette({
                                 : itemWhere(item)
                               : item.hint ||
                                 (activeSection === SUGGESTED_PALETTE_SECTION ||
-                                activeSection === RECENT_PALETTE_SECTION
+                                activeSection === RECENT_PALETTE_SECTION ||
+                                activeSection === forSectionLabel
                                   ? itemWhere(item)
                                   : '');
                             return detail ? <span>{detail}</span> : null;
@@ -2439,19 +2619,21 @@ function Palette({
             </>
           )}
         </div>
-        <p className="palette-foot">
-          <span>↑↓ navigate</span>
-          <span>↵ open dialog</span>
-          <span>⌘↵ ask the agent to run it</span>
-          <span className="plugin-spacer" />
-          <span>
-            {dataset
-              ? `Runs on ${dataset.original_filename || 'this dataset'}${
-                  dataset.n_rows ? ` · ${dataset.n_rows.toLocaleString('en-GB')} rows` : ''
-                }`
-              : 'No dataset open'}
-          </span>
-        </p>
+        {focusedIdle ? null : (
+          <p className="palette-foot">
+            <span>↑↓ navigate</span>
+            <span>↵ open dialog</span>
+            <span>⌘↵ ask the agent to run it</span>
+            <span className="plugin-spacer" />
+            <span>
+              {dataset
+                ? `Runs on ${dataset.original_filename || 'this dataset'}${
+                    dataset.n_rows ? ` · ${dataset.n_rows.toLocaleString('en-GB')} rows` : ''
+                  }`
+                : 'No dataset open'}
+            </span>
+          </p>
+        )}
       </Command>
     </div>
   );
@@ -2789,6 +2971,7 @@ function ChatScreen({
     outputs?: boolean;
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
+  const [editingRecipe, setEditingRecipe] = useState<FlowRecipe | null>(null);
 
   const recipesAbort = useRef<AbortController | null>(null);
   const loadRecipes = useCallback(() => {
@@ -2955,26 +3138,42 @@ function ChatScreen({
                     .length
                 : 0;
               return (
-                <Button
-                  key={recipe.recipe_id}
-                  className="chat-recipe"
-                  type="button"
-                  disabled={Boolean(recipeBusy)}
-                  title={`Run on ${file?.original_filename || 'the open file'}`}
-                  onClick={() => void runRecipe(recipe)}
-                >
-                  <span>{recipe.name || 'Recipe'}</span>
-                  <span className="chat-recipe-steps">
-                    {recipeBusy === recipe.recipe_id
-                      ? 'Running…'
-                      : `${steps} step${steps === 1 ? '' : 's'} · Run`}
-                  </span>
-                </Button>
+                <div key={recipe.recipe_id}>
+                  <div className="chat-recipe-row">
+                    <Button
+                      className="chat-recipe"
+                      type="button"
+                      disabled={Boolean(recipeBusy)}
+                      title={`Run on ${file?.original_filename || 'the open file'}`}
+                      onClick={() => void runRecipe(recipe)}
+                    >
+                      <span>{recipe.name || 'Recipe'}</span>
+                      <span className="chat-recipe-steps">
+                        {recipeBusy === recipe.recipe_id
+                          ? 'Running…'
+                          : `${steps} step${steps === 1 ? '' : 's'} · Run`}
+                      </span>
+                    </Button>
+                    <Button
+                      className="chat-recipe-edit"
+                      type="button"
+                      disabled={Boolean(recipeBusy)}
+                      aria-label={`Edit ${recipe.name || 'recipe'}`}
+                      onClick={() => setEditingRecipe(recipe)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                  {recipe.applies_as_house_style ? (
+                    <span className="chat-recipe-house">House style</span>
+                  ) : null}
+                </div>
               );
             })}
             {recipes.length === 0 ? (
               <p className="flow-muted chat-recipe-hint">
-                Save any run as a recipe, then run it on another file.
+                Save any run as a recipe, then run it on another file. Edit a recipe to add standing
+                instructions.
               </p>
             ) : null}
           </>
@@ -2991,6 +3190,27 @@ function ChatScreen({
             ) : null}
           </p>
         ) : null}
+        <RecipeEditorDialog
+          recipe={editingRecipe}
+          open={Boolean(editingRecipe)}
+          onOpenChange={open => {
+            if (!open) setEditingRecipe(null);
+          }}
+          canRun={Boolean(datasetId)}
+          runBusy={Boolean(editingRecipe?.recipe_id && recipeBusy === editingRecipe.recipe_id)}
+          onRun={() => {
+            if (editingRecipe) void runRecipe(editingRecipe);
+          }}
+          onSaved={saved => {
+            setEditingRecipe(null);
+            setRecipeNote({
+              text: saved.applies_as_house_style
+                ? `Saved “${saved.name}” with instructions. It is the house style for leads and reports.`
+                : `Saved “${saved.name}” with standing instructions.`,
+            });
+            loadRecipes();
+          }}
+        />
       </aside>
       {showThread ? (
         <>
@@ -3030,9 +3250,21 @@ function ChatScreen({
                   </Button>
                 </div>
                 <div className="output-body output-table-body">
-                  <div>
-                    <h2>{title}</h2>
-                    {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  <div className="output-explain-head">
+                    <div>
+                      <h2>{title}</h2>
+                      {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                    </div>
+                    <ExplainThisPanel
+                      title={title}
+                      lead={takeaway || lead}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      checkItems={checks}
+                      baseNote={baseNote}
+                      projectId={chatProjectId || undefined}
+                      datasetId={datasetId || undefined}
+                    />
                   </div>
                   <div className="report-chips">
                     <span className="report-chip">
@@ -3410,6 +3642,7 @@ function ResponsesScreen({
     field: string;
     label: string;
   } | null>(null);
+  const [dataChecksOpen, setDataChecksOpen] = useState(false);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -3422,9 +3655,15 @@ function ResponsesScreen({
       }
     >
   >({});
+  const [columnDeps, setColumnDeps] = useState<ColumnDependencies | null>(null);
+  const [removedCases, setRemovedCases] = useState<RemovedCase[]>([]);
+  const [restoringCases, setRestoringCases] = useState(false);
+  const [showLineage, setShowLineage] = useState(false);
   const surveyCell = useSurveyCell();
   const evidenceSheet = useEvidenceSheet();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const focusApplied = useRef('');
+  const lineageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (surveyCell) setSide('evidence');
   }, [surveyCell]);
@@ -3757,6 +3996,92 @@ function ResponsesScreen({
     };
   }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
 
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready' || !variableName) {
+      setColumnDeps(null);
+      return;
+    }
+    let cancelled = false;
+    void flowJson<ColumnDependencies>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/dependencies`
+    )
+      .then(page => {
+        if (!cancelled) setColumnDeps(page);
+      })
+      .catch(() => {
+        if (!cancelled) setColumnDeps(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, sheetPhase, variableName, sheetKey]);
+
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready') {
+      setRemovedCases([]);
+      return;
+    }
+    let cancelled = false;
+    void flowJson<{ removed_cases?: RemovedCase[] }>(`/datasets/${datasetId}/removed-cases`)
+      .then(page => {
+        if (!cancelled) setRemovedCases(page.removed_cases || []);
+      })
+      .catch(() => {
+        if (!cancelled) setRemovedCases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, sheetPhase, sheetKey]);
+
+  useEffect(() => {
+    if (!project?.id || sheetPhase !== 'ready' || !names.length) return;
+    const token = `${project.id}:${datasetId}`;
+    if (focusApplied.current === token) return;
+    const focus = readResponsesFocus(project.id);
+    if (!focus) {
+      focusApplied.current = token;
+      return;
+    }
+    const index = names.findIndex(
+      (name, i) =>
+        name === focus.column ||
+        variableNames[i] === focus.column ||
+        columnMeta(name)?.name === focus.column
+    );
+    if (index < 0) return;
+    focusApplied.current = token;
+    clearResponsesFocus(project.id);
+    const shown = shownCols.findIndex(column => column.index === index);
+    if (shown >= 0) setSelectedCol(shown);
+    setSide('variable');
+    if (focus.showLineage) setShowLineage(true);
+  }, [project?.id, datasetId, sheetPhase, names, variableNames, shownCols]);
+
+  useEffect(() => {
+    if (!showLineage) return;
+    lineageRef.current?.scrollIntoView({ block: 'nearest' });
+    setShowLineage(false);
+  }, [showLineage, variableName]);
+
+  const restoreRemovedCases = (caseIds: string[]) => {
+    if (!datasetId || !caseIds.length) return;
+    const previousId = datasetId;
+    setRestoringCases(true);
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/restore-cases`, {
+      method: 'POST',
+      body: JSON.stringify({ case_ids: caseIds }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        adoptVersion(previousId, next, 'Respondents restored as a new version.');
+      })
+      .catch(err =>
+        setSheetNote(err instanceof Error ? err.message : 'Those respondents were not restored.')
+      )
+      .finally(() => setRestoringCases(false));
+  };
+
   const viewSwitch = (
     <Segmented
       className="home-segment"
@@ -3907,6 +4232,15 @@ function ResponsesScreen({
                   />
                 </svg>
                 Filters{needle || valueFilter != null ? ' 1' : ''}
+              </Button>
+              <Button
+                className={surveyCell ? 'flow-btn hidden' : 'flow-btn'}
+                type="button"
+                data-active={dataChecksOpen || undefined}
+                disabled={!datasetId}
+                onClick={() => setDataChecksOpen(true)}
+              >
+                Check data
               </Button>
               {surveyCell ? (
                 <>
@@ -4165,27 +4499,7 @@ function ResponsesScreen({
                             >
                               <span className="sheet-col-name">{column.name}</span>
                               <span className="sheet-col-label">
-                                {(() => {
-                                  const meta = columnMeta(column.name);
-                                  const measure = String(meta?.measure || '').toLowerCase();
-                                  if (
-                                    measure === 'nominal' ||
-                                    measure === 'ordinal' ||
-                                    measure === 'scale'
-                                  )
-                                    return measure;
-                                  const label =
-                                    meta?.label && meta.label !== column.name ? meta.label : '';
-                                  if (label) return label;
-                                  const type = String(meta?.type || '').toLowerCase();
-                                  if (
-                                    ['numeric', 'number', 'float', 'integer', 'double'].includes(
-                                      type
-                                    )
-                                  )
-                                    return '123';
-                                  return type ? 'abc' : '\u00a0';
-                                })()}
+                                {sheetColumnHint(columnMeta(column.name))}
                               </span>
                               {showStats ? (
                                 <ColumnSpark
@@ -4290,7 +4604,10 @@ function ResponsesScreen({
                                 ) : row[column.index] == null || row[column.index] === 'null' ? (
                                   ''
                                 ) : (
-                                  String(row[column.index])
+                                  formatSheetCellDisplay(
+                                    row[column.index],
+                                    fieldAt(column.index, column.name)
+                                  )
                                 )}
                               </td>
                             ))}
@@ -4655,12 +4972,7 @@ function ResponsesScreen({
             {side === 'variable' && !codedColumn ? (
               <div className="output-body variable-panel">
                 <div className="flow-muted">
-                  {[
-                    columnMeta(activeName)?.measure || columnMeta(activeName)?.type,
-                    `${counts.length} code${counts.length === 1 ? '' : 's'}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {variablePanelKind(columnMeta(activeName), counts.length)}
                 </div>
                 <h2>{columnMeta(activeName)?.name || activeName}</h2>
                 {columnMeta(activeName)?.label &&
@@ -4722,6 +5034,28 @@ function ResponsesScreen({
                     Use as banner column <span aria-hidden="true">+</span>
                   </Link>
                 ) : null}
+                <div ref={lineageRef}>
+                  <VariableLineagePanel
+                    label={activeLabel}
+                    builtFrom={columnDeps?.built_from || []}
+                    usedBy={columnDeps?.used_by || []}
+                    removedCases={removedCases}
+                    restoring={restoringCases}
+                    onRestore={restoreRemovedCases}
+                  />
+                </div>
+              </div>
+            ) : null}
+            {side === 'variable' && codedColumn ? (
+              <div className="output-body" ref={lineageRef}>
+                <VariableLineagePanel
+                  label={activeLabel}
+                  builtFrom={columnDeps?.built_from || []}
+                  usedBy={columnDeps?.used_by || []}
+                  removedCases={removedCases}
+                  restoring={restoringCases}
+                  onRestore={restoreRemovedCases}
+                />
               </div>
             ) : null}
           </ScrollArea>
@@ -4751,6 +5085,27 @@ function ResponsesScreen({
           }}
         />
       ) : null}
+      <DataChecksDialog
+        datasetId={datasetId || undefined}
+        open={dataChecksOpen}
+        onOpenChange={setDataChecksOpen}
+        onShow={card => {
+          const field = String(card.column || card.columns?.[0] || '').trim();
+          if (!field) return;
+          const index = names.findIndex(
+            (name, i) =>
+              name === field || variableNames[i] === field || columnMeta(name)?.name === field
+          );
+          if (index < 0) {
+            setSheetNote('That question is not on the sheet.');
+            return;
+          }
+          const shown = shownCols.findIndex(column => column.index === index);
+          if (shown >= 0) setSelectedCol(shown);
+          setSide('variable');
+          setSheetNote(card.detail || card.title);
+        }}
+      />
       {weightOpen ? (
         <WeightPanel
           datasetId={datasetId}

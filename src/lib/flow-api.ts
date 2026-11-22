@@ -9,6 +9,8 @@ export type FlowProject = {
   created_by?: string;
   updated_at?: string;
   active_dataset_id?: string | null;
+  ai_enabled?: boolean;
+  ai_settings?: Record<string, unknown>;
 };
 
 export async function flowFetch(path: string, init?: RequestInit): Promise<Response> {

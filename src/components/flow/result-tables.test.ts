@@ -236,6 +236,46 @@ describe('result tables', () => {
     );
   });
 
+  it('TEN-249: frequencies skip Descriptives and keep multi-select notes off Checks', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'frequencies',
+      describe: {
+        mean: { topic_a: 1 },
+        std: { topic_a: 0 },
+        '50%': { topic_a: 1 },
+        min: { topic_a: 1 },
+        max: { topic_a: 1 },
+        count: { topic_a: 5 },
+      },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: What topics do you keep informed about?',
+          columns: ['Label', 'Count', '% of respondents'],
+          multiple_response: true,
+          mr_base: 'percent_of_respondents',
+          notes: [
+            'Percent of respondents who selected each option. People may select more than one, so percents need not sum to 100.',
+          ],
+          rows: [
+            ['General health', '5', '62.5'],
+            ['Base', '8', '100'],
+          ],
+        },
+      ],
+      report: {
+        r_syntax_verification: {
+          kind: 'unknown',
+          statement: 'Check not run for this table.',
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).not.toContain('Descriptives');
+    expect(view.tables.some(table => table.columns.includes('Mean'))).toBe(false);
+    expect(view.checks).toEqual([]);
+    expect(view.baseDetail || '').toContain('Percent of respondents who selected');
+    expect(view.rCheck).toBe('unknown');
+  });
+
   it('TEN-214: unweighted frequency bases say Unweighted, not Weighted (0 weighted)', () => {
     const view = resultViewFromToolResults({
       procedure: 'frequencies',
@@ -850,6 +890,75 @@ describe('result tables', () => {
     expect(view.script).toContain('nrow(df)');
   });
 
+  it('reads the banner screen grid and builds a table from a stored book', () => {
+    const fromScreen = resultViewFromToolResults({
+      procedure: 'banner_table',
+      summary: {
+        line: 'The weighted base for this table is 12.5 thousand (unweighted 40).',
+        screen: {
+          title: 'Read or visited',
+          columns: ['Item', '%', 'People (000s)'],
+          rows: [['Global Ledger', '41.2%', '12.5']],
+        },
+      },
+    });
+    expect(fromScreen.tables[0].title).toBe('Read or visited');
+    expect(fromScreen.tables[0].rows[0]).toEqual(['Global Ledger', '41.2%', '12.5']);
+    const fromBook = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Read or visited',
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'value',
+            label: 'Read or visited: Global Ledger',
+            cells: [{ banner_id: 'total', percent: 41.2, projected_thousands: 12.5 }],
+          },
+        ],
+      },
+    });
+    expect(fromBook.tables[0].rows[0][0]).toBe('Global Ledger');
+    expect(fromBook.tables[0].columns).toContain('People (000s)');
+
+    const fromMultiStub = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Awareness',
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'header',
+            label: 'Have you heard of North Roasters?',
+            cells: [],
+          },
+          {
+            kind: 'value',
+            label: 'Yes',
+            cells: [{ banner_id: 'total', percent: 50.0, projected_thousands: 12.5 }],
+          },
+          {
+            kind: 'header',
+            label: 'Have you heard of South Brew?',
+            cells: [],
+          },
+          {
+            kind: 'value',
+            label: 'Yes',
+            cells: [{ banner_id: 'total', percent: 40.0, projected_thousands: 10.0 }],
+          },
+        ],
+      },
+    });
+    expect(fromMultiStub.tables[0].rows.map(row => row[0])).toEqual([
+      'Have you heard of North Roasters?',
+      'Yes',
+      'Have you heard of South Brew?',
+      'Yes',
+    ]);
+    expect(fromMultiStub.tables[0].rows[0].slice(1)).toEqual(['', '']);
+  });
+
   it('shows the new column and not a preview of the whole file', () => {
     const view = resultViewFromToolResults({
       derived: {
@@ -1003,6 +1112,49 @@ describe('rank comparison tables', () => {
     ]);
     expect(tables.map(table => table.title)).toEqual(['Groups', 'Test']);
   });
+
+  it('drops rank Groups/Test/Pairwise when an ANOVA source table is present', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Trust by market',
+        columns: ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'Status'],
+        rows: [['United States', '1500', '2400000', '4.2', 'included']],
+      },
+      {
+        title: 'ANOVA',
+        columns: ['Source', 'SS', 'df', 'MS', 'F', 'p', 'η²'],
+        rows: [['Between Groups', '12', '2', '6', '6.2', '0.004', '0.18']],
+      },
+      {
+        title: 'Groups',
+        columns: ['Group', 'n', 'Mean'],
+        rows: [['1.0', '2400000', '4.2']],
+      },
+      {
+        title: 'Test',
+        columns: ['Statistic', 'Value'],
+        rows: [
+          ['p', '0.004'],
+          ['Effect size', '0.18'],
+        ],
+      },
+      {
+        title: 'Pairwise',
+        columns: ['Group', 'Group', 'U', 'p', 'Adjusted p'],
+        rows: [['1.0', '2.0', '—', '—', '0.03']],
+      },
+      {
+        title: 'Post hoc (tukey)',
+        columns: ['Group', 'Compared with', 'Difference', 'p'],
+        rows: [['United States', 'United Kingdom', '1.1', '0.03']],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual([
+      'Trust by market',
+      'ANOVA',
+      'Post hoc (tukey)',
+    ]);
+  });
 });
 
 describe('mean comparison tables', () => {
@@ -1147,7 +1299,7 @@ describe('summary tables', () => {
       summary: {
         table: [
           {
-            title: 'Correlations',
+            title: 'Pearson correlations',
             columns: ['Variable', '1', '2'],
             rows: [
               ['1', '1.000', '0.768*** (n=500)'],
@@ -1189,9 +1341,36 @@ describe('summary tables', () => {
         },
       },
     });
-    expect(view.tables.map(table => table.title)).toEqual(['Correlations', 'Columns']);
+    expect(view.tables.map(table => table.title)).toEqual(['Pearson correlations', 'Columns']);
     expect(view.tables[0].columns).toEqual(['Variable', '1', '2']);
     expect(view.tables[1].rows[0][1]).toContain('satisfied');
+  });
+
+  it('drops engine copies when the builder table is a two-variable Pearson pair', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Pearson correlation',
+        columns: ['Variables', 'r', 'p', 'n'],
+        rows: [['Trust with Income', '0.012', '0.494', '3000']],
+      },
+      {
+        title: 'Pearson correlation matrix',
+        columns: ['', 'trust', 'income'],
+        rows: [
+          ['trust', '1', '0.012'],
+          ['income', '0.012', '1'],
+        ],
+      },
+      {
+        title: 'Pearson correlation p-values',
+        columns: ['', 'trust', 'income'],
+        rows: [
+          ['trust', '—', '0.494'],
+          ['income', '0.494', '—'],
+        ],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual(['Pearson correlation']);
   });
 
   it('keeps labelled factor loadings, fit, and segments from the summary', () => {
@@ -1368,6 +1547,65 @@ describe('answer tables', () => {
     expect(view.baseDetail).toContain('470');
     expect(view.baseDetail).not.toContain('Weight: none');
     expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
+  });
+
+  it('TEN-39: a stored Weight: none base note becomes Unweighted on the card', () => {
+    const view = resultViewFromToolResults({
+      resolved_weight: 'none',
+      n_used: 3000,
+      base_note: 'Weight: none; base = 3000; 95% confidence level.',
+      summary: {
+        base_note: 'Weight: none; base = 3000; 95% confidence level.',
+        table: [
+          {
+            title: 'Trust in brand by Gender',
+            note: 'Weight: none; base = 3000; 95% confidence level.',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['Male', '1500', '4'],
+              ['Female', '1500', '2.5'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(view.baseDetail).toContain('Weight: Unweighted');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(resultFootnote(view, '', 'Mann-Whitney')).toContain('Weight: Unweighted');
+    expect(resultFootnote(view, '', 'Mann-Whitney')).not.toContain('Weight: none');
+  });
+
+  it('TEN-93: Groups and Pairwise codes become stamped value labels on the card', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'mann_whitney_u',
+      group_descriptives: [
+        { group: '1.0', label: 'Male', n: 10, median: 4 },
+        { group: '2.0', label: 'Female', n: 10, median: 5 },
+      ],
+      summary: {
+        table: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['1.0', '10', '4'],
+              ['2.0', '10', '5'],
+            ],
+          },
+          {
+            title: 'Pairwise',
+            columns: ['Group', 'Group', 'U', 'p', 'Adjusted p'],
+            rows: [['1.0', '2.0', '12', '0.12', '0.12']],
+          },
+        ],
+        notes: ['Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.'],
+      },
+    });
+    const groups = view.tables.find(table => table.title === 'Groups');
+    expect(groups?.rows.map(row => row[0])).toEqual(['Male', 'Female']);
+    const pairs = view.tables.find(table => table.title === 'Pairwise');
+    expect(pairs?.rows[0]?.slice(0, 2)).toEqual(['Male', 'Female']);
+    expect(view.checks.some(note => note.includes('Effect size'))).toBe(true);
   });
 
   it('falls through an empty weight object without showing a column code in the base line', () => {
