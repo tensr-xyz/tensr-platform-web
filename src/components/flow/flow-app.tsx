@@ -98,6 +98,11 @@ import { MergeSmallAnswersDialog } from '@/components/flow/merge-small-answers-d
 import { DataChecksDialog } from '@/components/flow/data-checks-dialog';
 import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
+import {
+  initialReportView,
+  writeStoredReportView,
+  type ReportView,
+} from '@/components/flow/report-view';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { FindReplaceDialog } from '@/components/flow/find-replace-dialog';
@@ -5317,23 +5322,34 @@ function ReportScreen({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
-  const [pane, setPane] = useState<'report' | 'outputs'>('report');
+  const [pane, setPane] = useState<ReportView>(() =>
+    typeof window === 'undefined'
+      ? 'overview'
+      : initialReportView(projectId, new URLSearchParams(window.location.search).get('pane'))
+  );
   const [openRunId, setOpenRunId] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [staleErrors, setStaleErrors] = useState<Record<string, string>>({});
   const lastRun = useAnalysisSetupStore(s => s.lastRun);
   const seenRun = useRef(lastRun?.nonce || 0);
+  const setView = useCallback(
+    (view: ReportView) => {
+      setPane(view);
+      writeStoredReportView(projectId, view);
+    },
+    [projectId]
+  );
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pane') === 'outputs') setPane('outputs');
+    setPane(initialReportView(projectId, params.get('pane')));
     if (params.get('run')) setOpenRunId(params.get('run') || '');
-  }, []);
+  }, [projectId]);
   useEffect(() => {
     if (!lastRun || lastRun.nonce === seenRun.current) return;
     seenRun.current = lastRun.nonce;
-    setPane('outputs');
+    setView('outputs');
     setOpenRunId(lastRun.runId);
-  }, [lastRun]);
+  }, [lastRun, setView]);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);
@@ -5881,11 +5897,121 @@ function ReportScreen({
     setNote('Topline downloaded.');
   };
 
+  const filterSegmentActions = (
+    <>
+      {tables.some(table => valueRows(table).length) ? (
+        <Popover
+          onOpenChange={open => {
+            if (!open) return;
+            setFilterDraft(
+              rowCut ||
+                tables.flatMap(table =>
+                  valueRows(table).map(item => ({ tableId: table.id, number: item.number }))
+                )
+            );
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button className="flow-btn" type="button" data-active={rowCut != null}>
+              Filter{rowCut ? ` ${rowCut.length}` : ''}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="report-filter" align="end">
+            {tables.flatMap(table =>
+              valueRows(table).map(item => {
+                const checked = filterDraft.some(
+                  row => row.tableId === table.id && row.number === item.number
+                );
+                const name =
+                  tables.length > 1
+                    ? `T${table.index} ${item.row.label}`
+                    : item.row.label || `Row ${item.number}`;
+                return (
+                  <label key={`${table.id}-${item.number}`}>
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={value => {
+                        const next = { tableId: table.id, number: item.number };
+                        setFilterDraft(current => {
+                          const without = current.filter(
+                            row => !(row.tableId === next.tableId && row.number === next.number)
+                          );
+                          return value === true ? [...without, next] : without;
+                        });
+                      }}
+                    />
+                    {item.number}. {name}
+                  </label>
+                );
+              })
+            )}
+            <div className="report-filter-actions">
+              <Button
+                className="flow-btn"
+                type="button"
+                onClick={() => {
+                  setRowCut(null);
+                  writeFindings(tables, segmentId, null);
+                }}
+              >
+                All rows
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!filterDraft.length}
+                onClick={() => {
+                  setRowCut(filterDraft);
+                  writeFindings(tables, segmentId, filterDraft);
+                }}
+              >
+                Apply
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+      {segmentChoices(tables).length ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="flow-btn" type="button" data-active={segmentId != null}>
+              Segments
+              {segmentId
+                ? ` · ${bannerHeading(segmentChoices(tables).find(column => column.id === segmentId) || { id: segmentId })}`
+                : ''}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              onSelect={() => {
+                setSegmentId(null);
+                writeFindings(tables, null, rowCut);
+              }}
+            >
+              All segments
+            </DropdownMenuItem>
+            {segmentChoices(tables).map(column => (
+              <DropdownMenuItem
+                key={column.id}
+                onSelect={() => {
+                  setSegmentId(column.id);
+                  writeFindings(tables, column.id, rowCut);
+                }}
+              >
+                {bannerHeading(column)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </>
+  );
+
   if (pane === 'outputs') {
     return (
       <section className="report-page outputs-page">
         <ReportOutputs
-          lead={<ReportPaneSwitch pane={pane} onChange={setPane} />}
+          lead={<ReportPaneSwitch pane={pane} onChange={setView} />}
           projectId={projectId}
           openRunId={openRunId}
           refreshKey={lastRun?.nonce || 0}
@@ -5903,9 +6029,38 @@ function ReportScreen({
     );
   }
 
+  if (pane === 'slides') {
+    return (
+      <section className="report-page report-slides-page">
+        <div className="report-toolbar">
+          <ReportPaneSwitch pane={pane} onChange={setView} />
+          <div className="report-toolbar-actions">
+            {filterSegmentActions}
+            <Button
+              className="flow-btn primary"
+              type="button"
+              disabled={busy !== ''}
+              onClick={() => run('deck', deck)}
+            >
+              Download PPTX
+            </Button>
+          </div>
+        </div>
+        <ReportEditor
+          datasetId={exportFileId || null}
+          pins={reportPins}
+          labelsRevision={labelsRevision}
+        />
+      </section>
+    );
+  }
+
   if (phase === 'loading') {
     return (
       <section className="report-page" aria-busy="true" aria-label="Report">
+        <div className="report-toolbar">
+          <ReportPaneSwitch pane={pane} onChange={setView} />
+        </div>
         <div className="report-loading">
           <Skeleton className="h-6 w-72" />
           <Skeleton className="h-10 w-96" />
@@ -5923,6 +6078,9 @@ function ReportScreen({
   if (phase === 'error') {
     return (
       <section className="report-page">
+        <div className="report-toolbar">
+          <ReportPaneSwitch pane={pane} onChange={setView} />
+        </div>
         <p className="flow-error">{error || 'Could not load this report.'}</p>
         <Button
           className="flow-btn"
@@ -5942,120 +6100,9 @@ function ReportScreen({
   return (
     <section className="report-page">
       <div className="report-toolbar">
-        <ReportPaneSwitch pane={pane} onChange={setPane} />
-        <div className="report-toolbar-actions">
-          {tables.some(table => valueRows(table).length) ? (
-            <Popover
-              onOpenChange={open => {
-                if (!open) return;
-                setFilterDraft(
-                  rowCut ||
-                    tables.flatMap(table =>
-                      valueRows(table).map(item => ({ tableId: table.id, number: item.number }))
-                    )
-                );
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button className="flow-btn" type="button" data-active={rowCut != null}>
-                  Filter{rowCut ? ` ${rowCut.length}` : ''}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="report-filter" align="end">
-                {tables.flatMap(table =>
-                  valueRows(table).map(item => {
-                    const checked = filterDraft.some(
-                      row => row.tableId === table.id && row.number === item.number
-                    );
-                    const name =
-                      tables.length > 1
-                        ? `T${table.index} ${item.row.label}`
-                        : item.row.label || `Row ${item.number}`;
-                    return (
-                      <label key={`${table.id}-${item.number}`}>
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={value => {
-                            const next = { tableId: table.id, number: item.number };
-                            setFilterDraft(current => {
-                              const without = current.filter(
-                                row => !(row.tableId === next.tableId && row.number === next.number)
-                              );
-                              return value === true ? [...without, next] : without;
-                            });
-                          }}
-                        />
-                        {item.number}. {name}
-                      </label>
-                    );
-                  })
-                )}
-                <div className="report-filter-actions">
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => {
-                      setRowCut(null);
-                      writeFindings(tables, segmentId, null);
-                    }}
-                  >
-                    All rows
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    disabled={!filterDraft.length}
-                    onClick={() => {
-                      setRowCut(filterDraft);
-                      writeFindings(tables, segmentId, filterDraft);
-                    }}
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : null}
-          {segmentChoices(tables).length ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="flow-btn" type="button" data-active={segmentId != null}>
-                  Segments
-                  {segmentId
-                    ? ` · ${bannerHeading(segmentChoices(tables).find(column => column.id === segmentId) || { id: segmentId })}`
-                    : ''}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setSegmentId(null);
-                    writeFindings(tables, null, rowCut);
-                  }}
-                >
-                  All segments
-                </DropdownMenuItem>
-                {segmentChoices(tables).map(column => (
-                  <DropdownMenuItem
-                    key={column.id}
-                    onSelect={() => {
-                      setSegmentId(column.id);
-                      writeFindings(tables, column.id, rowCut);
-                    }}
-                  >
-                    {bannerHeading(column)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
+        <ReportPaneSwitch pane={pane} onChange={setView} />
+        <div className="report-toolbar-actions">{filterSegmentActions}</div>
       </div>
-      <ReportEditor
-        datasetId={exportFileId || null}
-        pins={reportPins}
-        labelsRevision={labelsRevision}
-      />
       <div className="report-sheet">
         <div className="report-lead">
           <h1>{project?.name || 'Report'}</h1>
@@ -6253,7 +6300,14 @@ function ReportScreen({
                 </p>
                 {templateSummary ? <p className="flow-muted">{templateSummary}</p> : null}
               </div>
-              <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
+              <Button
+                type="button"
+                disabled={busy !== ''}
+                onClick={() => {
+                  setView('slides');
+                  run('deck', deck);
+                }}
+              >
                 Download
               </Button>
               <Button
