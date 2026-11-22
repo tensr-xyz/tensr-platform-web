@@ -87,7 +87,7 @@ export function TablesFirstRun({
           />
           <div className="tables-first-questions">
             {shown.map(item => (
-              <button
+              <Button
                 key={item.value}
                 type="button"
                 className="tables-first-question"
@@ -95,7 +95,7 @@ export function TablesFirstRun({
               >
                 <span>{item.label}</span>
                 <span className="flow-muted">{item.typeLabel}</span>
-              </button>
+              </Button>
             ))}
             {shown.length === 0 ? (
               <p className="flow-muted">No questions match that search.</p>
