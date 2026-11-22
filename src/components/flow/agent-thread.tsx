@@ -1248,6 +1248,7 @@ export function AgentThreadColumn({
   panel = false,
   emptyTitle = 'Ask about the open file',
   emptyDescription = 'Questions here stay in the same chat as Chat and Tables.',
+  emptySuggestions = [],
 }: {
   thread: AgentThreadState;
   placeholder: string;
@@ -1255,6 +1256,7 @@ export function AgentThreadColumn({
   panel?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptySuggestions?: string[];
 }) {
   const [stepsOpen, setStepsOpen] = useState(true);
   const [asker, setAsker] = useState(false);
@@ -1385,15 +1387,34 @@ export function AgentThreadColumn({
     <>
       <div className="chat-scroll">
         {!thread.showThread && panel ? (
-          <Empty className="min-h-[280px] border-0 bg-transparent">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageSquare />
-              </EmptyMedia>
-              <EmptyTitle className="text-sm">{emptyTitle}</EmptyTitle>
-              <EmptyDescription>{emptyDescription}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          emptySuggestions.length ? (
+            <div className="tables-agent-empty" data-testid="tables-agent-empty">
+              <p className="tables-agent-empty-title">{emptyTitle}</p>
+              <p className="tables-agent-empty-copy">{emptyDescription}</p>
+              <div className="tables-agent-empty-suggestions">
+                {emptySuggestions.map(prompt => (
+                  <Button
+                    key={prompt}
+                    className="tables-agent-empty-chip"
+                    type="button"
+                    onClick={() => thread.send(prompt)}
+                  >
+                    {prompt}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Empty className="min-h-[280px] border-0 bg-transparent">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <MessageSquare />
+                </EmptyMedia>
+                <EmptyTitle className="text-sm">{emptyTitle}</EmptyTitle>
+                <EmptyDescription>{emptyDescription}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )
         ) : null}
         {thread.past.map((item, index) => {
           const pastChanges = chatTurnChangesFromToolResults(
@@ -1834,6 +1855,7 @@ export function AgentThread({
   panel = true,
   emptyTitle,
   emptyDescription,
+  emptySuggestions,
   ...options
 }: AgentThreadOptions & {
   placeholder: string;
@@ -1841,6 +1863,7 @@ export function AgentThread({
   panel?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptySuggestions?: string[];
 }) {
   const thread = useAgentThread(options);
   return (
@@ -1851,6 +1874,7 @@ export function AgentThread({
       panel={panel}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
+      emptySuggestions={emptySuggestions}
     />
   );
 }
