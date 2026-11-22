@@ -104,6 +104,28 @@ describe('shared agent thread', () => {
     expect(screen.getByPlaceholderText('Ask about this table…')).toBeTruthy();
   });
 
+  it('shows first-run suggestion chips and sends one on click', async () => {
+    send.mockResolvedValue({ status: 'ok', answer_markdown: 'Done', session_id: 's1' });
+    renderThread(
+      <AgentThread
+        projectId="project"
+        datasetId="file"
+        columnNames={['region']}
+        columnLabels={[{ name: 'region', label: 'Region' }]}
+        placeholder="Ask, or describe a table to build…"
+        projectHref="/flow/p/project"
+        emptyTitle="Not sure where to start?"
+        emptyDescription="Tell the agent what you want to know and it builds the table for you."
+        emptySuggestions={['Region by age', 'What should I look at first?']}
+      />
+    );
+    expect(await screen.findByText('Not sure where to start?')).toBeTruthy();
+    expect(screen.getByTestId('tables-agent-empty')).toBeTruthy();
+    screen.getByRole('button', { name: 'Region by age' }).click();
+    await waitFor(() => expect(send).toHaveBeenCalled());
+    expect(send.mock.calls[0][0].message).toBe('Region by age');
+  });
+
   it('sends a queued question once, even after the chat list reloads', async () => {
     send.mockResolvedValue({ status: 'ok', answer_markdown: 'Done', session_id: 's1' });
     renderThread(

@@ -41,6 +41,7 @@ import {
   weightedBaseLabel,
   type OutputRun,
 } from '@/components/flow/report-output-runs';
+import { REPORT_VIEW_OPTIONS, type ReportView } from '@/components/flow/report-view';
 
 function downloadText(filename: string, contents: string, type: string) {
   const url = URL.createObjectURL(new Blob([contents], { type }));
@@ -55,19 +56,16 @@ export function ReportPaneSwitch({
   pane,
   onChange,
 }: {
-  pane: 'report' | 'outputs';
-  onChange: (pane: 'report' | 'outputs') => void;
+  pane: ReportView;
+  onChange: (pane: ReportView) => void;
 }) {
   return (
     <Segmented
       className="home-segment report-pane"
-      aria-label="Report or outputs"
+      aria-label="Report view"
       value={pane}
       onValueChange={onChange}
-      options={[
-        { value: 'report', label: 'Report' },
-        { value: 'outputs', label: 'Outputs' },
-      ]}
+      options={REPORT_VIEW_OPTIONS}
     />
   );
 }

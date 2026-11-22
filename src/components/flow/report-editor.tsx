@@ -22,6 +22,7 @@ import {
   deletePage,
   documentFromPins,
   fitDocumentTextFrames,
+  fitPageTextFrames,
   hideTableRow,
   insertDynamicText,
   insertPageNumber,
@@ -89,8 +90,19 @@ function emptyDocument(): ReportDocument {
   return addPage(normalizeReportDocument({}), { title: 'Page 1', layoutId: 'title_and_content' });
 }
 
+/** No saved pages and no pins — keep the Slides chrome, do not invent a blank page. */
+function emptyShell(): ReportDocument {
+  return normalizeReportDocument({});
+}
+
 function ensurePages(document: ReportDocument): ReportDocument {
   return document.pages.length ? document : emptyDocument();
+}
+
+function materializeForFirstPaint(document: ReportDocument): ReportDocument {
+  const firstId = document.pages[0]?.id;
+  if (!firstId) return document;
+  return fitPageTextFrames(document, firstId);
 }
 
 function objectPlainText(obj: ReportObject): string {
@@ -465,6 +477,7 @@ export function ReportEditor({
   );
   const [saveNote, setSaveNote] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fitRestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipSave = useRef(true);
   const bootedFor = useRef('');
 
@@ -520,10 +533,13 @@ export function ReportEditor({
   useEffect(() => {
     skipSave.current = true;
     const bootKey = `${datasetId || ''}:${labelsRevision}:${pinKey}`;
-    const fromPins = pins.length ? documentFromPins(pins) : emptyDocument();
-    let next = ensurePages(fromPins);
     const stored = storedDocument.data;
     const waiting = Boolean(datasetId) && storedDocument.isPending && !stored;
+    const settledEmpty =
+      Boolean(datasetId) &&
+      !waiting &&
+      (storedDocument.isError ||
+        (storedDocument.isFetched && !(stored?.has_document && stored.document)));
 
     if (waiting) {
       // Warm cache: keep showing the last document. Cold start: stay on the skeleton.
@@ -534,13 +550,19 @@ export function ReportEditor({
       }
       return () => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
+        if (fitRestTimer.current) clearTimeout(fitRestTimer.current);
       };
     }
 
+    let next: ReportDocument;
     if (stored?.has_document && stored.document) {
-      next = ensurePages(fitDocumentTextFrames(normalizeReportDocument(stored.document)));
+      next = materializeForFirstPaint(normalizeReportDocument(stored.document));
+    } else if (pins.length) {
+      next = materializeForFirstPaint(documentFromPins(pins));
+    } else if (settledEmpty || !datasetId) {
+      next = emptyShell();
     } else {
-      next = ensurePages(fitDocumentTextFrames(next));
+      next = materializeForFirstPaint(emptyDocument());
     }
 
     setDocument(next);
@@ -553,13 +575,35 @@ export function ReportEditor({
       bootedFor.current = bootKey;
     }
     setPhase('ready');
-    skipSave.current = false;
+    // An empty shell must not PUT — the API requires pages or pins.
+    skipSave.current = next.pages.length === 0;
+
+    // Fit the remaining pages off the first paint so a 90-slide deck opens on page 1.
+    if (fitRestTimer.current) clearTimeout(fitRestTimer.current);
+    if (next.pages.length > 1) {
+      fitRestTimer.current = setTimeout(() => {
+        setDocument(current => {
+          if (bootedFor.current !== bootKey) return current;
+          return fitDocumentTextFrames(current);
+        });
+      }, 0);
+    }
+
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (fitRestTimer.current) clearTimeout(fitRestTimer.current);
     };
     // pins content is covered by pinKey; avoid re-booting on a new [] each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, pinKey, labelsRevision, storedDocument.data, storedDocument.isPending]);
+  }, [
+    datasetId,
+    pinKey,
+    labelsRevision,
+    storedDocument.data,
+    storedDocument.isPending,
+    storedDocument.isError,
+    storedDocument.isFetched,
+  ]);
 
   useEffect(() => {
     if (!selected) {
@@ -858,6 +902,8 @@ export function ReportEditor({
     );
   }
 
+  const isEmpty = document.pages.length === 0;
+
   return (
     <div className="report-editor">
       <div className="report-editor-toolbar" role="toolbar" aria-label="Report formatting">
@@ -1121,23 +1167,49 @@ export function ReportEditor({
             if (paintSourceId) setPaintSourceId(null);
           }}
         >
-          <div className="report-editor-page" aria-label={page?.title || 'Page'}>
-            {(page?.objects || [])
-              .filter(obj => !obj.hidden)
-              .slice()
-              .sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id))
-              .map(obj => (
-                <CanvasObjectView
-                  key={obj.id}
-                  obj={obj}
-                  selected={obj.id === selectedId}
-                  paintArmed={Boolean(paintSourceId)}
-                  datasetId={datasetId}
-                  pageId={page?.id || ''}
-                  onSelect={() => selectObject(obj.id)}
-                />
-              ))}
-          </div>
+          {isEmpty ? (
+            <div className="report-editor-empty" data-testid="report-editor-empty">
+              <p className="report-editor-empty-title">No pages yet</p>
+              <p className="flow-muted">
+                Add a page to start the slide deck, or ask the agent to build one from your tables.
+              </p>
+              <Button
+                type="button"
+                className="flow-btn primary"
+                onClick={event => {
+                  event.stopPropagation();
+                  const next = addPage(document, {
+                    title: 'Page 1',
+                    layoutId: 'title_and_content',
+                  });
+                  const created = next.pages[0];
+                  commit(next);
+                  if (created) setPageId(created.id);
+                  setSelectedId(null);
+                }}
+              >
+                Add page
+              </Button>
+            </div>
+          ) : (
+            <div className="report-editor-page" aria-label={page?.title || 'Page'}>
+              {(page?.objects || [])
+                .filter(obj => !obj.hidden)
+                .slice()
+                .sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id))
+                .map(obj => (
+                  <CanvasObjectView
+                    key={obj.id}
+                    obj={obj}
+                    selected={obj.id === selectedId}
+                    paintArmed={Boolean(paintSourceId)}
+                    datasetId={datasetId}
+                    pageId={page?.id || ''}
+                    onSelect={() => selectObject(obj.id)}
+                  />
+                ))}
+            </div>
+          )}
         </div>
 
         <aside className="report-editor-inspector" aria-label="Object inspector">

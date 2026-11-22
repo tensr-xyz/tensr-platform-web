@@ -1,7 +1,92 @@
 import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { flowJson } from '@/lib/flow-api';
 import { previewGridFromBannerBook, ReportEditor } from './report-editor';
+
+jest.mock('@/lib/flow-api', () => ({
+  flowJson: jest.fn(),
+}));
+
+const mockedFlowJson = flowJson as jest.MockedFunction<typeof flowJson>;
+
+const defaultDocument = {
+  ok: true,
+  has_document: true,
+  document: {
+    pages: [
+      {
+        id: 'page-a',
+        title: 'Finding',
+        layout_id: 'title_and_content',
+        objects: [
+          {
+            id: 'text-a',
+            kind: 'text',
+            frame: { x: 0.1, y: 0.1, w: 0.6, h: 0.2 },
+            text: 'Awareness is up',
+            text_style: { font_size_pt: 22, bold: true },
+            z_index: 1,
+          },
+          {
+            id: 'text-b',
+            kind: 'text',
+            frame: { x: 0.1, y: 0.4, w: 0.6, h: 0.2 },
+            text: 'Second box',
+            text_style: { font_size_pt: 14, bold: false },
+            z_index: 2,
+          },
+          {
+            id: 'table-a',
+            kind: 'table',
+            table_spec_id: 'spec-live',
+            frame: { x: 0.08, y: 0.55, w: 0.84, h: 0.35 },
+            table_style: { preset: 'default' },
+            table_rules: [],
+            table_edits: {},
+            z_index: 3,
+          },
+        ],
+      },
+    ],
+    default_labels: { net: 'NET', total: 'Total' },
+  },
+};
+
+async function defaultFlowJson(path: string, init?: { method?: string; body?: string }) {
+  if (String(path).includes('/tables/spec-live')) {
+    return {
+      ok: true,
+      title: 'Frequency Table: Prompted awareness',
+      base_label: 'Base: all respondents (1,204)',
+      weight: { weight_aware: true, weighted_n: 1204, unweighted_n: 1204 },
+      significance_display: 'column_letters',
+      significance_alpha: 0.05,
+      letters: [{ row: 'aware', col: 'young', letters: 'c' }],
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'young', label: '18–34' },
+      ],
+      rows: [
+        {
+          id: 'aware',
+          label: 'Prompted awareness',
+          cells: [
+            { banner_id: 'total', percent: 62 },
+            { banner_id: 'young', percent: 71 },
+          ],
+        },
+      ],
+    };
+  }
+  if (String(path).includes('/report/document') && (!init?.method || init.method === 'GET')) {
+    return defaultDocument;
+  }
+  if (init?.method === 'PUT') {
+    return { ok: true, document: JSON.parse(String(init.body || '{}')).document, n_pages: 1 };
+  }
+  return { ok: true };
+}
 
 function renderEditor(ui: ReactElement) {
   const client = new QueryClient({
@@ -10,83 +95,9 @@ function renderEditor(ui: ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-jest.mock('@/lib/flow-api', () => ({
-  flowJson: jest.fn(async (path: string, init?: { method?: string; body?: string }) => {
-    if (String(path).includes('/tables/spec-live')) {
-      return {
-        ok: true,
-        title: 'Frequency Table: Prompted awareness',
-        base_label: 'Base: all respondents (1,204)',
-        weight: { weight_aware: true, weighted_n: 1204, unweighted_n: 1204 },
-        significance_display: 'column_letters',
-        significance_alpha: 0.05,
-        letters: [{ row: 'aware', col: 'young', letters: 'c' }],
-        banner_columns: [
-          { id: 'total', label: 'Total' },
-          { id: 'young', label: '18–34' },
-        ],
-        rows: [
-          {
-            id: 'aware',
-            label: 'Prompted awareness',
-            cells: [
-              { banner_id: 'total', percent: 62 },
-              { banner_id: 'young', percent: 71 },
-            ],
-          },
-        ],
-      };
-    }
-    if (String(path).includes('/report/document') && (!init || init.method === 'GET')) {
-      return {
-        ok: true,
-        has_document: true,
-        document: {
-          pages: [
-            {
-              id: 'page-a',
-              title: 'Finding',
-              layout_id: 'title_and_content',
-              objects: [
-                {
-                  id: 'text-a',
-                  kind: 'text',
-                  frame: { x: 0.1, y: 0.1, w: 0.6, h: 0.2 },
-                  text: 'Awareness is up',
-                  text_style: { font_size_pt: 22, bold: true },
-                  z_index: 1,
-                },
-                {
-                  id: 'text-b',
-                  kind: 'text',
-                  frame: { x: 0.1, y: 0.4, w: 0.6, h: 0.2 },
-                  text: 'Second box',
-                  text_style: { font_size_pt: 14, bold: false },
-                  z_index: 2,
-                },
-                {
-                  id: 'table-a',
-                  kind: 'table',
-                  table_spec_id: 'spec-live',
-                  frame: { x: 0.08, y: 0.55, w: 0.84, h: 0.35 },
-                  table_style: { preset: 'default' },
-                  table_rules: [],
-                  table_edits: {},
-                  z_index: 3,
-                },
-              ],
-            },
-          ],
-          default_labels: { net: 'NET', total: 'Total' },
-        },
-      };
-    }
-    if (init?.method === 'PUT') {
-      return { ok: true, document: JSON.parse(String(init.body || '{}')).document, n_pages: 1 };
-    }
-    return { ok: true };
-  }),
-}));
+beforeEach(() => {
+  mockedFlowJson.mockImplementation(defaultFlowJson as typeof flowJson);
+});
 
 describe('previewGridFromBannerBook', () => {
   it('builds percent rows from a banner book and never invents placeholder labels', () => {
@@ -218,5 +229,18 @@ describe('ReportEditor formatting', () => {
       ).toBe('true')
     );
     expect(within(inspector).getByText('Sample size')).toBeTruthy();
+  });
+
+  it('shows an empty state instead of Loading pages… when no document is stored', async () => {
+    mockedFlowJson.mockImplementation(async (path: string) => {
+      if (String(path).includes('/report/document')) {
+        return { ok: true, has_document: false, document: null };
+      }
+      return { ok: true };
+    });
+    renderEditor(<ReportEditor datasetId="ds-empty" pins={[]} />);
+    expect(await screen.findByTestId('report-editor-empty')).toBeTruthy();
+    expect(screen.getByText('No pages yet')).toBeTruthy();
+    expect(screen.queryByText('Loading pages…')).toBeNull();
   });
 });

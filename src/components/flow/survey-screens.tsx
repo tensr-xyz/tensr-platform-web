@@ -50,6 +50,8 @@ export { WeightPanel } from '@/components/flow/weight-modal';
 import { TableSignificancePanel } from '@/components/flow/table-significance-panel';
 import { TabSpecDialog } from '@/components/flow/tab-spec-dialog';
 import { TidyTablesDialog } from '@/components/flow/tidy-tables-dialog';
+import { TablesFirstRun } from '@/components/flow/tables-first-run';
+import { firstRunAgentPrompts, isTablesFirstRun } from '@/lib/tables-first-run';
 import {
   DEFAULT_TABLE_SIGNIFICANCE,
   arrowForCell,
@@ -1997,6 +1999,7 @@ export function TablesBuilder({
   const [railReady, setRailReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
+  const [summaryBusy, setSummaryBusy] = useState(false);
   const loadingSaved = useRef(false);
   const weightFromTable = useRef(false);
   const bookRef = useRef<Record<string, unknown> | null>(null);
@@ -2552,6 +2555,12 @@ export function TablesBuilder({
     );
   const activeSpecs = specs.filter(spec => !spec.parked);
   const parkedSpecs = specs.filter(spec => spec.parked);
+  const firstRun = isTablesFirstRun({
+    railReady,
+    savedCount: activeSpecs.length,
+    stub,
+  });
+  const agentPrompts = firstRun ? firstRunAgentPrompts(outlineQuestions, 3) : [];
 
   function reloadSpecs() {
     if (!datasetId) return;
@@ -2706,6 +2715,8 @@ export function TablesBuilder({
               </Button>
             );
           })
+        ) : firstRun ? (
+          <p className="tables-rail-hint">Tables you save show up here, one per question.</p>
         ) : (
           <p className="flow-muted">No saved tables yet</p>
         )}
@@ -2755,7 +2766,7 @@ export function TablesBuilder({
             </p>
           ))
         ) : (
-          <p className="flow-muted">No banner books yet</p>
+          <p className="flow-muted">{firstRun ? 'None yet' : 'No banner books yet'}</p>
         )}
       </aside>
       {view === 'chart' && !chartSeriesFromBook(book).length ? (
@@ -2779,549 +2790,618 @@ export function TablesBuilder({
       ) : (
         <>
           <section className="tables-main">
-            <div className="tables-tidy-bar">
-              <Button
-                className="tables-tidy-trigger"
-                type="button"
-                disabled={!datasetId || !railReady}
-                onClick={() => setTabSpecOpen(true)}
-              >
-                Build from a spec…
-              </Button>
-              <Button
-                className="tables-tidy-trigger"
-                type="button"
-                disabled={!datasetId || !railReady}
-                onClick={() => setTidyOpen(true)}
-              >
-                Tidy tables…
-              </Button>
-            </div>
-            <div className="tables-tools">
-              {tableFilter?.filters.length ? (
-                <div className="tables-line">
-                  <span>Filter</span>
-                  <Button
-                    className="tables-chip accent"
-                    type="button"
-                    onClick={() => setTableFilter(null)}
-                  >
-                    {tableFilter.filters
-                      .map(
-                        item =>
-                          `${item.column} ${item.op === 'in' ? 'is' : 'is not'} ${
-                            Array.isArray(item.value) ? item.value.join(', ') : item.value
-                          }`
+            {firstRun ? (
+              <TablesFirstRun
+                outline={outlineQuestions}
+                columns={columns}
+                questionCount={stubOptions.length}
+                onPickQuestion={value => {
+                  if (!value) return;
+                  setStub(value);
+                  setBanners(current => current.filter(item => item !== value));
+                }}
+                selectedGroups={banners}
+                onPickGroup={value => {
+                  if (!value || value === stub) return;
+                  setBanners(current =>
+                    current.includes(value)
+                      ? current.filter(item => item !== value)
+                      : [...current, value]
+                  );
+                }}
+                onAskAgent={() => {
+                  const root = document.querySelector(
+                    '.tables-agent textarea, .tables-agent [contenteditable="true"]'
+                  );
+                  if (root instanceof HTMLElement) root.focus();
+                }}
+                onTabSpec={() => setTabSpecOpen(true)}
+                onSummaryTables={() => {
+                  if (!datasetId || summaryBusy) return;
+                  setSummaryBusy(true);
+                  setError('');
+                  void flowJson<{ n_tables?: number }>(
+                    `/datasets/${datasetId}/data-checks/summary-tables`,
+                    { method: 'POST', body: JSON.stringify({}) }
+                  )
+                    .then(result => {
+                      const n = result.n_tables ?? 0;
+                      setNote(
+                        n === 1
+                          ? 'Built 1 summary table.'
+                          : `Built ${n.toLocaleString('en-GB')} summary tables.`
+                      );
+                      reloadSpecs();
+                    })
+                    .catch(err =>
+                      setError(
+                        err instanceof Error ? err.message : 'Could not build summary tables'
                       )
-                      .join(' and ')}{' '}
-                    ×
-                  </Button>
-                </div>
-              ) : null}
-              {files.length ? (
+                    )
+                    .finally(() => setSummaryBusy(false));
+                }}
+                summaryBusy={summaryBusy}
+              />
+            ) : null}
+            {!firstRun ? (
+              <div className="tables-tidy-bar">
+                <Button
+                  className="tables-tidy-trigger"
+                  type="button"
+                  disabled={!datasetId || !railReady}
+                  onClick={() => setTabSpecOpen(true)}
+                >
+                  Build from a spec…
+                </Button>
+                <Button
+                  className="tables-tidy-trigger"
+                  type="button"
+                  disabled={!datasetId || !railReady}
+                  onClick={() => setTidyOpen(true)}
+                >
+                  Tidy tables…
+                </Button>
+              </div>
+            ) : null}
+            {!firstRun ? (
+              <div className="tables-tools">
+                {tableFilter?.filters.length ? (
+                  <div className="tables-line">
+                    <span>Filter</span>
+                    <Button
+                      className="tables-chip accent"
+                      type="button"
+                      onClick={() => setTableFilter(null)}
+                    >
+                      {tableFilter.filters
+                        .map(
+                          item =>
+                            `${item.column} ${item.op === 'in' ? 'is' : 'is not'} ${
+                              Array.isArray(item.value) ? item.value.join(', ') : item.value
+                            }`
+                        )
+                        .join(' and ')}{' '}
+                      ×
+                    </Button>
+                  </div>
+                ) : null}
+                {files.length ? (
+                  <div className="tables-line">
+                    <span>File</span>
+                    <ChoiceSelect
+                      className="flow-input tables-file"
+                      aria-label="Table file"
+                      value={datasetId || ''}
+                      onValueChange={value => onFile?.(value)}
+                      options={files.map(file => ({
+                        value: file.id,
+                        label: `${file.name}${file.inUse ? ' · in use' : ''}`,
+                      }))}
+                    />
+                  </div>
+                ) : null}
                 <div className="tables-line">
-                  <span>File</span>
+                  <span>Stub</span>
+                  {stub ? (
+                    <span className="tables-chip-wrap accent">
+                      <VariablePreviewTrigger
+                        datasetId={datasetId}
+                        projectId={projectId}
+                        column={stub}
+                        label={labelFor(stub)}
+                        fileName={
+                          files.find(file => file.id === datasetId)?.name ||
+                          datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                            ?.original_filename ||
+                          ''
+                        }
+                      />
+                      <Button
+                        className="tables-chip-clear"
+                        type="button"
+                        aria-label={`Remove ${labelFor(stub)}`}
+                        onClick={() => setStub('')}
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  ) : null}
                   <ChoiceSelect
-                    className="flow-input tables-file"
-                    aria-label="Table file"
-                    value={datasetId || ''}
-                    onValueChange={value => onFile?.(value)}
-                    options={files.map(file => ({
-                      value: file.id,
-                      label: `${file.name}${file.inUse ? ' · in use' : ''}`,
-                    }))}
+                    className="flow-input"
+                    aria-label="Table stub"
+                    searchable
+                    value=""
+                    onValueChange={value => {
+                      if (value) setStub(value);
+                    }}
+                    options={[
+                      { value: '', label: '+ Drop variable' },
+                      ...stubOptions
+                        .filter(item => !banners.includes(item.value))
+                        .map(item => ({ value: item.value, label: item.label })),
+                    ]}
                   />
                 </div>
-              ) : null}
-              <div className="tables-line">
-                <span>Stub</span>
-                {stub ? (
-                  <span className="tables-chip-wrap accent">
-                    <VariablePreviewTrigger
-                      datasetId={datasetId}
-                      projectId={projectId}
-                      column={stub}
-                      label={labelFor(stub)}
-                      fileName={
-                        files.find(file => file.id === datasetId)?.name ||
-                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
-                          ?.original_filename ||
-                        ''
-                      }
-                    />
+                <div className="tables-line">
+                  <span>Banner</span>
+                  {banners.map(name => (
+                    <span key={name} className="tables-chip-wrap">
+                      <VariablePreviewTrigger
+                        datasetId={datasetId}
+                        projectId={projectId}
+                        column={name}
+                        label={labelFor(name)}
+                        fileName={
+                          files.find(file => file.id === datasetId)?.name ||
+                          datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                            ?.original_filename ||
+                          ''
+                        }
+                      />
+                      <Button
+                        className="tables-chip-clear"
+                        type="button"
+                        aria-label={`Remove ${labelFor(name)}`}
+                        onClick={() => setBanners(current => current.filter(item => item !== name))}
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  ))}
+                  <ChoiceSelect
+                    className="flow-input"
+                    aria-label="Add banner"
+                    searchable
+                    value=""
+                    onValueChange={value => {
+                      if (!value || value === stub || banners.includes(value)) return;
+                      setBanners(current => [...current, value]);
+                    }}
+                    options={[
+                      { value: '', label: '+' },
+                      ...stubOptions
+                        .filter(item => item.value !== stub && !banners.includes(item.value))
+                        .map(item => ({ value: item.value, label: item.label })),
+                    ]}
+                  />
+                </div>
+                <div className="tables-line wrap">
+                  <span>Show</span>
+                  <div className="tables-segment">
+                    {(
+                      [
+                        ['count', 'Counts'],
+                        ['column_proportion', 'Column %'],
+                        ['row_proportion', 'Row %'],
+                        ['total_proportion', 'Total %'],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <Button
+                        key={value}
+                        className="flow-btn"
+                        type="button"
+                        data-active={statistics.includes(value)}
+                        onClick={() => toggleStatistic(value)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() =>
+                      setDigits(current => {
+                        const next = (current + 1) % 7;
+                        saveOutputPreferences({ ...loadOutputPreferences(), decimalPlaces: next });
+                        return next;
+                      })
+                    }
+                  >
+                    {digits} dp
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={sigPanelOpen || significance.showAs !== 'off'}
+                    aria-expanded={sigPanelOpen}
+                    onClick={() => setSigPanelOpen(current => !current)}
+                  >
+                    {significanceToolbarLabel(significance)} ▾
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
+                  >
+                    {view === 'chart' ? 'Table' : 'Chart'}
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={nest}
+                    onClick={() => setNest(current => !current)}
+                  >
+                    Nest banners
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={lowBase}
+                    onClick={() => setLowBase(current => !current)}
+                  >
+                    Low base &lt; 30 *
+                  </Button>
+                  <ChoiceSelect
+                    className="flow-input tables-weight"
+                    aria-label="Table weight"
+                    value={weight}
+                    onValueChange={setWeight}
+                    options={[
+                      { value: '', label: 'Unweighted' },
+                      ...weightColumns.map(name => {
+                        const label = labelFor(name);
+                        const shared = weightColumns.filter(other => labelFor(other) === label);
+                        return {
+                          value: name,
+                          label:
+                            shared.length > 1
+                              ? `${label} · ${name}`
+                              : weightOptionLabel(name, label),
+                        };
+                      }),
+                    ]}
+                  />
+                  <span className="flow-muted">Scale</span>
+                  <div className="tables-segment">
                     <Button
-                      className="tables-chip-clear"
-                      type="button"
-                      aria-label={`Remove ${labelFor(stub)}`}
-                      onClick={() => setStub('')}
-                    >
-                      ×
-                    </Button>
-                  </span>
-                ) : null}
-                <ChoiceSelect
-                  className="flow-input"
-                  aria-label="Table stub"
-                  searchable
-                  value=""
-                  onValueChange={value => {
-                    if (value) setStub(value);
-                  }}
-                  options={[
-                    { value: '', label: '+ Drop variable' },
-                    ...stubOptions
-                      .filter(item => !banners.includes(item.value))
-                      .map(item => ({ value: item.value, label: item.label })),
-                  ]}
-                />
-              </div>
-              <div className="tables-line">
-                <span>Banner</span>
-                {banners.map(name => (
-                  <span key={name} className="tables-chip-wrap">
-                    <VariablePreviewTrigger
-                      datasetId={datasetId}
-                      projectId={projectId}
-                      column={name}
-                      label={labelFor(name)}
-                      fileName={
-                        files.find(file => file.id === datasetId)?.name ||
-                        datasets.find(row => (row.dataset_id || row.id) === datasetId)
-                          ?.original_filename ||
-                        ''
-                      }
-                    />
-                    <Button
-                      className="tables-chip-clear"
-                      type="button"
-                      aria-label={`Remove ${labelFor(name)}`}
-                      onClick={() => setBanners(current => current.filter(item => item !== name))}
-                    >
-                      ×
-                    </Button>
-                  </span>
-                ))}
-                <ChoiceSelect
-                  className="flow-input"
-                  aria-label="Add banner"
-                  searchable
-                  value=""
-                  onValueChange={value => {
-                    if (!value || value === stub || banners.includes(value)) return;
-                    setBanners(current => [...current, value]);
-                  }}
-                  options={[
-                    { value: '', label: '+' },
-                    ...stubOptions
-                      .filter(item => item.value !== stub && !banners.includes(item.value))
-                      .map(item => ({ value: item.value, label: item.label })),
-                  ]}
-                />
-              </div>
-              <div className="tables-line wrap">
-                <span>Show</span>
-                <div className="tables-segment">
-                  {(
-                    [
-                      ['count', 'Counts'],
-                      ['column_proportion', 'Column %'],
-                      ['row_proportion', 'Row %'],
-                      ['total_proportion', 'Total %'],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <Button
-                      key={value}
                       className="flow-btn"
                       type="button"
-                      data-active={statistics.includes(value)}
-                      onClick={() => toggleStatistic(value)}
+                      data-active={top2}
+                      onClick={() => setTop2(current => !current)}
                     >
-                      {label}
+                      Top 2 box
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      data-active={bottom2}
+                      onClick={() => setBottom2(current => !current)}
+                    >
+                      Bottom 2 box
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      data-active={meanOn}
+                      onClick={() => setMeanOn(current => !current)}
+                    >
+                      Mean
+                    </Button>
+                  </div>
+                  {customNets.map(net => (
+                    <Button
+                      key={net.label}
+                      className="tables-chip accent"
+                      type="button"
+                      title={net.values.join(', ')}
+                      onClick={() =>
+                        setCustomNets(current => current.filter(item => item.label !== net.label))
+                      }
+                    >
+                      {net.label} ×
                     </Button>
                   ))}
-                </div>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() =>
-                    setDigits(current => {
-                      const next = (current + 1) % 7;
-                      saveOutputPreferences({ ...loadOutputPreferences(), decimalPlaces: next });
-                      return next;
-                    })
-                  }
-                >
-                  {digits} dp
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  data-active={sigPanelOpen || significance.showAs !== 'off'}
-                  aria-expanded={sigPanelOpen}
-                  onClick={() => setSigPanelOpen(current => !current)}
-                >
-                  {significanceToolbarLabel(significance)} ▾
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
-                >
-                  {view === 'chart' ? 'Table' : 'Chart'}
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  data-active={nest}
-                  onClick={() => setNest(current => !current)}
-                >
-                  Nest banners
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  data-active={lowBase}
-                  onClick={() => setLowBase(current => !current)}
-                >
-                  Low base &lt; 30 *
-                </Button>
-                <ChoiceSelect
-                  className="flow-input tables-weight"
-                  aria-label="Table weight"
-                  value={weight}
-                  onValueChange={setWeight}
-                  options={[
-                    { value: '', label: 'Unweighted' },
-                    ...weightColumns.map(name => {
-                      const label = labelFor(name);
-                      const shared = weightColumns.filter(other => labelFor(other) === label);
-                      return {
-                        value: name,
-                        label:
-                          shared.length > 1 ? `${label} · ${name}` : weightOptionLabel(name, label),
-                      };
-                    }),
-                  ]}
-                />
-                <span className="flow-muted">Scale</span>
-                <div className="tables-segment">
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    data-active={top2}
-                    onClick={() => setTop2(current => !current)}
+                  <Popover
+                    open={netOpen}
+                    onOpenChange={open => {
+                      setNetOpen(open);
+                      if (!open || !stub) return;
+                      setNetPicked([]);
+                      setNetLabel('');
+                      const labelled = Object.keys(
+                        columns.find(item => item.name === stub)?.labels || {}
+                      );
+                      if (labelled.length) {
+                        setNetOptions(labelled);
+                        return;
+                      }
+                      void flowJson<{ values?: string[] }>(
+                        `/datasets/${datasetId}/columns/${encodeURIComponent(stub)}/values`
+                      )
+                        .then(page => setNetOptions(page.values || []))
+                        .catch(() => setNetOptions([]));
+                    }}
                   >
-                    Top 2 box
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    data-active={bottom2}
-                    onClick={() => setBottom2(current => !current)}
-                  >
-                    Bottom 2 box
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    data-active={meanOn}
-                    onClick={() => setMeanOn(current => !current)}
-                  >
-                    Mean
+                    <PopoverTrigger asChild>
+                      <Button className="flow-btn" type="button" disabled={!stub}>
+                        + Net
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="tables-net">
+                      <p className="tables-net-head">Net codes of {labelFor(stub)}</p>
+                      <div className="tables-net-codes">
+                        {netOptions.map(code => {
+                          const label = columns.find(item => item.name === stub)?.labels?.[code];
+                          return (
+                            <label key={code} className="stack-file">
+                              <Checkbox
+                                checked={netPicked.includes(code)}
+                                onCheckedChange={checked =>
+                                  setNetPicked(current =>
+                                    checked === true
+                                      ? [...current, code]
+                                      : current.filter(item => item !== code)
+                                  )
+                                }
+                              />
+                              <span>{label ? `${label} (${code})` : code}</span>
+                            </label>
+                          );
+                        })}
+                        {netOptions.length === 0 ? (
+                          <p className="flow-muted">No codes found.</p>
+                        ) : null}
+                      </div>
+                      <Input
+                        aria-label="Net name"
+                        placeholder="Net name, e.g. Any agree"
+                        value={netLabel}
+                        onChange={event => setNetLabel(event.target.value)}
+                      />
+                      <Button
+                        className="flow-btn primary"
+                        type="button"
+                        disabled={netPicked.length < 2}
+                        onClick={() => {
+                          const label = netLabel.trim() || `Net ${netPicked.join('+')}`;
+                          setCustomNets(current => [
+                            ...current.filter(item => item.label !== label),
+                            { label, values: netPicked },
+                          ]);
+                          setNetOpen(false);
+                        }}
+                      >
+                        Add net
+                      </Button>
+                    </PopoverContent>
+                  </Popover>
+                  <span className="flow-muted">Nets kept on re-run</span>
+                  <Button className="flow-btn tables-run-book" type="button" onClick={runBook}>
+                    Run as banner book →
                   </Button>
                 </div>
-                {customNets.map(net => (
-                  <Button
-                    key={net.label}
-                    className="tables-chip accent"
-                    type="button"
-                    title={net.values.join(', ')}
-                    onClick={() =>
-                      setCustomNets(current => current.filter(item => item.label !== net.label))
-                    }
-                  >
-                    {net.label} ×
-                  </Button>
-                ))}
-                <Popover
-                  open={netOpen}
-                  onOpenChange={open => {
-                    setNetOpen(open);
-                    if (!open || !stub) return;
-                    setNetPicked([]);
-                    setNetLabel('');
-                    const labelled = Object.keys(
-                      columns.find(item => item.name === stub)?.labels || {}
-                    );
-                    if (labelled.length) {
-                      setNetOptions(labelled);
-                      return;
-                    }
-                    void flowJson<{ values?: string[] }>(
-                      `/datasets/${datasetId}/columns/${encodeURIComponent(stub)}/values`
-                    )
-                      .then(page => setNetOptions(page.values || []))
-                      .catch(() => setNetOptions([]));
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <Button className="flow-btn" type="button" disabled={!stub}>
-                      + Net
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="tables-net">
-                    <p className="tables-net-head">Net codes of {labelFor(stub)}</p>
-                    <div className="tables-net-codes">
-                      {netOptions.map(code => {
-                        const label = columns.find(item => item.name === stub)?.labels?.[code];
-                        return (
-                          <label key={code} className="stack-file">
-                            <Checkbox
-                              checked={netPicked.includes(code)}
-                              onCheckedChange={checked =>
-                                setNetPicked(current =>
-                                  checked === true
-                                    ? [...current, code]
-                                    : current.filter(item => item !== code)
-                                )
-                              }
-                            />
-                            <span>{label ? `${label} (${code})` : code}</span>
-                          </label>
-                        );
-                      })}
-                      {netOptions.length === 0 ? (
-                        <p className="flow-muted">No codes found.</p>
-                      ) : null}
-                    </div>
-                    <Input
-                      aria-label="Net name"
-                      placeholder="Net name, e.g. Any agree"
-                      value={netLabel}
-                      onChange={event => setNetLabel(event.target.value)}
-                    />
-                    <Button
-                      className="flow-btn primary"
-                      type="button"
-                      disabled={netPicked.length < 2}
-                      onClick={() => {
-                        const label = netLabel.trim() || `Net ${netPicked.join('+')}`;
-                        setCustomNets(current => [
-                          ...current.filter(item => item.label !== label),
-                          { label, values: netPicked },
-                        ]);
-                        setNetOpen(false);
-                      }}
-                    >
-                      Add net
-                    </Button>
-                  </PopoverContent>
-                </Popover>
-                <span className="flow-muted">Nets kept on re-run</span>
-                <Button className="flow-btn tables-run-book" type="button" onClick={runBook}>
-                  Run as banner book →
-                </Button>
               </div>
-            </div>
+            ) : null}
             {error ? <p className="flow-error">{error}</p> : null}
             {note ? <p className="flow-muted">{note}</p> : null}
-            {weightNeedsRefresh ? (
-              <p className="flow-banner warn" role="status">
-                Made before a weighting fix · re-run
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    setWeightRerake(true);
-                    setWeightOpen(true);
-                  }}
-                >
-                  Re-rake
-                </Button>
-              </p>
-            ) : null}
-            <div
-              className={
-                sigPanelOpen ? 'tables-main-body tables-main-with-sig' : 'tables-main-body'
-              }
-            >
-              <div className="tables-sheet">
-                <div className="tables-title">
-                  <div>
-                    <h2>{title}</h2>
-                    <p className="flow-muted">
-                      {[questionText(stub), baseLine].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <div className="tables-title-actions">
-                    {stub && (dirty || !matchesSaved()) ? (
-                      <Button className="flow-btn primary" type="button" onClick={saveTable}>
-                        Save table
-                      </Button>
-                    ) : null}
-                    {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
-                    <Button
-                      className="flow-btn"
-                      type="button"
-                      onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
-                    >
-                      {view === 'chart' ? 'Table' : 'Chart'}
-                    </Button>
-                    <Button className="flow-btn" type="button" onClick={addToBook}>
-                      Add to book
-                    </Button>
+            {!firstRun ? (
+              <>
+                {weightNeedsRefresh ? (
+                  <p className="flow-banner warn" role="status">
+                    Made before a weighting fix · re-run
                     <Button
                       className="flow-btn"
                       type="button"
                       onClick={() => {
-                        if (!datasetId || !specId) {
-                          setError('Save the table before exporting.');
-                          return;
-                        }
-                        const title = String(openSaved?.label || 'table');
-                        const filename = `${title.replace(/[^\w.-]+/g, ' ').trim() || 'table'}.docx`;
-                        void downloadExport(
-                          `/datasets/${datasetId}/tables/${specId}/export.docx`,
-                          filename
-                        ).catch(err =>
-                          setError(
-                            err instanceof Error ? err.message : 'Could not export the table'
-                          )
-                        );
+                        setWeightRerake(true);
+                        setWeightOpen(true);
                       }}
                     >
-                      Export
+                      Re-rake
                     </Button>
-                  </div>
-                </div>
-                {!railReady || (opening && !book) ? (
-                  <div aria-busy="true">
-                    <Skeleton className="mb-2 h-8 w-full" />
-                    <Skeleton className="mb-2 h-8 w-full" />
-                    <Skeleton className="h-48 w-full" />
-                  </div>
-                ) : book ? (
-                  <>
-                    {openSaved?.stale ? (
-                      <div className="tables-stale">
-                        <p>
-                          {openSaved.detail ||
-                            'Rebuild means re-run this saved table on the file in use. The stub, banners and options stay the same; the numbers update.'}
+                  </p>
+                ) : null}
+                <div
+                  className={
+                    sigPanelOpen ? 'tables-main-body tables-main-with-sig' : 'tables-main-body'
+                  }
+                >
+                  <div className="tables-sheet">
+                    <div className="tables-title">
+                      <div>
+                        <h2>{title}</h2>
+                        <p className="flow-muted">
+                          {[questionText(stub), baseLine].filter(Boolean).join(' · ')}
                         </p>
+                      </div>
+                      <div className="tables-title-actions">
+                        {stub && (dirty || !matchesSaved()) ? (
+                          <Button className="flow-btn primary" type="button" onClick={saveTable}>
+                            Save table
+                          </Button>
+                        ) : null}
+                        {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
                         <Button
                           className="flow-btn"
                           type="button"
-                          onClick={() => {
-                            if (!specId) return;
-                            void rebuildSavedTable(specId);
-                          }}
+                          onClick={() =>
+                            setView(current => (current === 'chart' ? 'table' : 'chart'))
+                          }
                         >
-                          Rebuild now
+                          {view === 'chart' ? 'Table' : 'Chart'}
+                        </Button>
+                        <Button className="flow-btn" type="button" onClick={addToBook}>
+                          Add to book
                         </Button>
                         <Button
                           className="flow-btn"
                           type="button"
                           onClick={() => {
-                            if (openSaved?.dataset_id) onFile?.(openSaved.dataset_id);
+                            if (!datasetId || !specId) {
+                              setError('Save the table before exporting.');
+                              return;
+                            }
+                            const title = String(openSaved?.label || 'table');
+                            const filename = `${title.replace(/[^\w.-]+/g, ' ').trim() || 'table'}.docx`;
+                            void downloadExport(
+                              `/datasets/${datasetId}/tables/${specId}/export.docx`,
+                              filename
+                            ).catch(err =>
+                              setError(
+                                err instanceof Error ? err.message : 'Could not export the table'
+                              )
+                            );
                           }}
                         >
-                          Open original version
+                          Export
                         </Button>
                       </div>
-                    ) : null}
-                    {view === 'chart' && chartSeriesFromBook(book).length ? (
-                      <TableBars
-                        series={chartSeriesFromBook(book)}
-                        title={title}
-                        significanceNote={chartSignificanceNote(book)}
-                        onAddToReport={
-                          projectId && datasetId && (book.run_id || specId)
-                            ? () => {
-                                const runId = book.run_id
-                                  ? String(book.run_id)
-                                  : specId
-                                    ? `table:${specId}`
-                                    : '';
-                                if (!runId) return;
-                                const series = chartSeriesFromBook(book);
-                                const pin = {
-                                  id: runId,
-                                  runId,
-                                  datasetId,
-                                  headline: String(book.title || labelFor(stub) || 'Chart'),
-                                  support: bannerFootnote(book),
-                                  citation: 'Chart',
-                                  afterId: '',
-                                  deck: true,
-                                  topline: true,
-                                  keepLive: true,
-                                  bars: series.flatMap(row =>
-                                    row.values.map(item => ({
-                                      label:
-                                        row.values.length > 1
-                                          ? `${row.label} · ${item.name}`
-                                          : row.label,
-                                      percent: item.value,
-                                    }))
-                                  ),
-                                };
-                                if (book.run_id) void savePin(projectId, datasetId, pin);
-                                else rememberTablePin(projectId, pin);
-                              }
-                            : undefined
-                        }
-                      />
+                    </div>
+                    {!railReady || (opening && !book) ? (
+                      <div aria-busy="true">
+                        <Skeleton className="mb-2 h-8 w-full" />
+                        <Skeleton className="mb-2 h-8 w-full" />
+                        <Skeleton className="h-48 w-full" />
+                      </div>
+                    ) : book ? (
+                      <>
+                        {openSaved?.stale ? (
+                          <div className="tables-stale">
+                            <p>
+                              {openSaved.detail ||
+                                'Rebuild means re-run this saved table on the file in use. The stub, banners and options stay the same; the numbers update.'}
+                            </p>
+                            <Button
+                              className="flow-btn"
+                              type="button"
+                              onClick={() => {
+                                if (!specId) return;
+                                void rebuildSavedTable(specId);
+                              }}
+                            >
+                              Rebuild now
+                            </Button>
+                            <Button
+                              className="flow-btn"
+                              type="button"
+                              onClick={() => {
+                                if (openSaved?.dataset_id) onFile?.(openSaved.dataset_id);
+                              }}
+                            >
+                              Open original version
+                            </Button>
+                          </div>
+                        ) : null}
+                        {view === 'chart' && chartSeriesFromBook(book).length ? (
+                          <TableBars
+                            series={chartSeriesFromBook(book)}
+                            title={title}
+                            significanceNote={chartSignificanceNote(book)}
+                            onAddToReport={
+                              projectId && datasetId && (book.run_id || specId)
+                                ? () => {
+                                    const runId = book.run_id
+                                      ? String(book.run_id)
+                                      : specId
+                                        ? `table:${specId}`
+                                        : '';
+                                    if (!runId) return;
+                                    const series = chartSeriesFromBook(book);
+                                    const pin = {
+                                      id: runId,
+                                      runId,
+                                      datasetId,
+                                      headline: String(book.title || labelFor(stub) || 'Chart'),
+                                      support: bannerFootnote(book),
+                                      citation: 'Chart',
+                                      afterId: '',
+                                      deck: true,
+                                      topline: true,
+                                      keepLive: true,
+                                      bars: series.flatMap(row =>
+                                        row.values.map(item => ({
+                                          label:
+                                            row.values.length > 1
+                                              ? `${row.label} · ${item.name}`
+                                              : row.label,
+                                          percent: item.value,
+                                        }))
+                                      ),
+                                    };
+                                    if (book.run_id) void savePin(projectId, datasetId, pin);
+                                    else rememberTablePin(projectId, pin);
+                                  }
+                                : undefined
+                            }
+                          />
+                        ) : (
+                          <BannerGrid
+                            book={book}
+                            onSelectCell={openCell}
+                            muted={Boolean(openSaved?.stale)}
+                            baseAtEnd
+                            showNets={
+                              top2 ||
+                              bottom2 ||
+                              ((book.rows as { kind?: string }[]) || []).some(
+                                row => row.kind === 'net'
+                              )
+                            }
+                            figures={figures}
+                            digits={digits}
+                            markLowBase={lowBase}
+                            columnLabels={columns.map(column => ({
+                              name: column.name,
+                              label: columnChoiceLabel(column),
+                            }))}
+                          />
+                        )}
+                      </>
                     ) : (
-                      <BannerGrid
-                        book={book}
-                        onSelectCell={openCell}
-                        muted={Boolean(openSaved?.stale)}
-                        baseAtEnd
-                        showNets={
-                          top2 ||
-                          bottom2 ||
-                          ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
-                        }
-                        figures={figures}
-                        digits={digits}
-                        markLowBase={lowBase}
-                        columnLabels={columns.map(column => ({
-                          name: column.name,
-                          label: columnChoiceLabel(column),
-                        }))}
-                      />
+                      <p className="flow-muted">
+                        {stub && banners.length
+                          ? 'Building the preview.'
+                          : stub
+                            ? 'Choose a banner to preview the table.'
+                            : 'Choose a stub to preview the table.'}
+                      </p>
                     )}
-                  </>
-                ) : (
-                  <p className="flow-muted">
-                    {stub && banners.length
-                      ? 'Building the preview.'
-                      : stub
-                        ? 'Choose a banner to preview the table.'
-                        : 'Choose a stub to preview the table.'}
-                  </p>
-                )}
-              </div>
-              {sigPanelOpen ? (
-                <TableSignificancePanel
-                  settings={significance}
-                  onChange={applySignificance}
-                  controlOptions={banners.map(column => ({
-                    value: column,
-                    label: labelFor(column),
-                  }))}
-                />
-              ) : null}
-            </div>
-            <div className="tables-foot">
-              <span>{totalBase}</span>
-              <span>{tableFootStatus(Boolean(specId) && matchesSaved(), dirty)}</span>
-            </div>
+                  </div>
+                  {sigPanelOpen ? (
+                    <TableSignificancePanel
+                      settings={significance}
+                      onChange={applySignificance}
+                      controlOptions={banners.map(column => ({
+                        value: column,
+                        label: labelFor(column),
+                      }))}
+                    />
+                  ) : null}
+                </div>
+                <div className="tables-foot">
+                  <span>{totalBase}</span>
+                  <span>{tableFootStatus(Boolean(specId) && matchesSaved(), dirty)}</span>
+                </div>
+              </>
+            ) : null}
           </section>
           <SidePanel id="tables-agent" defaultWidth={320} className="tables-agent">
             <div className="tables-agent-head">
               <span className="tables-dot" />
-              <span>{book ? title.replace(/^T\d+ · /, '') : 'Table'}</span>
+              <span>
+                {firstRun ? 'Ask the agent' : book ? title.replace(/^T\d+ · /, '') : 'Table'}
+              </span>
             </div>
             <AgentThread
               projectId={projectId || ''}
@@ -3332,10 +3412,25 @@ export function TablesBuilder({
                 label: column.label,
                 value_labels: column.labels,
               }))}
-              placeholder="Ask, or tell it to change the table…"
+              placeholder={
+                firstRun
+                  ? 'Ask, or describe a table to build…'
+                  : 'Ask, or tell it to change the table…'
+              }
               projectHref={projectId ? `/flow/p/${projectId}` : '/flow'}
-              emptyTitle={selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
-              emptyDescription="Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it."
+              emptyTitle={
+                firstRun
+                  ? 'Not sure where to start?'
+                  : selectedNumber
+                    ? `Ask about T${selectedNumber}`
+                    : 'Ask about this table'
+              }
+              emptyDescription={
+                firstRun
+                  ? 'Tell the agent what you want to know and it builds the table for you.'
+                  : 'Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it.'
+              }
+              emptySuggestions={agentPrompts}
               onFinished={result => {
                 const built = bookFromToolResults(result.tool_results);
                 const request = built

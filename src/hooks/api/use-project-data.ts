@@ -88,7 +88,11 @@ export function useProjectSessions(projectId: string | undefined | null) {
 export function useReportDocument(datasetId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.reportDocument(datasetId || ''),
-    queryFn: () => flowJson<ReportDocumentPayload>(`/datasets/${datasetId}/report/document`),
+    queryFn: () =>
+      flowJson<ReportDocumentPayload>(`/datasets/${datasetId}/report/document`, {
+        // Bound cold loads so Slides never sits on "Loading pages…" forever.
+        signal: AbortSignal.timeout(15000),
+      }),
     enabled: Boolean(datasetId),
     staleTime: PROJECT_STALE_MS.report,
     refetchOnMount: true,
@@ -207,7 +211,10 @@ export async function prefetchProjectTab(
       jobs.push(
         client.prefetchQuery({
           queryKey: projectQueryKeys.reportDocument(datasetId),
-          queryFn: () => flowJson<ReportDocumentPayload>(`/datasets/${datasetId}/report/document`),
+          queryFn: () =>
+            flowJson<ReportDocumentPayload>(`/datasets/${datasetId}/report/document`, {
+              signal: AbortSignal.timeout(15000),
+            }),
           staleTime: PROJECT_STALE_MS.report,
         })
       );
