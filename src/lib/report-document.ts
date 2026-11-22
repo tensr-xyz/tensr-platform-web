@@ -310,9 +310,14 @@ export function normalizeTextStyle(raw: unknown): TextBoxStyle {
     0,
     Math.min(MAX_LIST_INDENT, Number.isFinite(Number(indentRaw)) ? Number(indentRaw) : 0)
   );
-  const font =
+  let font =
     String(source.font_family ?? source.fontFamily ?? DEFAULT_TEXT_STYLE.fontFamily).trim() ||
     DEFAULT_TEXT_STYLE.fontFamily;
+  // Browser generic "serif" (and bare Times) was the accidental default on old
+  // decks; house text is Inter. Explicit "Times New Roman" stays a user choice.
+  if (/^(serif|times|times roman)$/i.test(font)) {
+    font = DEFAULT_TEXT_STYLE.fontFamily;
+  }
   return {
     fontFamily: font,
     fontSizePt: coercePositiveNumber(
@@ -521,7 +526,8 @@ export function tablePreviewFootnote(source: unknown): string {
 export function cssFontStack(family: string | null | undefined): string {
   const name =
     String(family || DEFAULT_TEXT_STYLE.fontFamily).trim() || DEFAULT_TEXT_STYLE.fontFamily;
-  if (/^(serif|sans-serif|monospace|system-ui|cursive|fantasy)$/i.test(name)) return name;
+  if (/^serif$/i.test(name)) return 'Inter, system-ui, sans-serif';
+  if (/^(sans-serif|monospace|system-ui|cursive|fantasy)$/i.test(name)) return name;
   if (/^inter$/i.test(name)) return 'Inter, system-ui, sans-serif';
   if (/system\s*sans/i.test(name)) return 'system-ui, sans-serif';
   if (/times/i.test(name)) return `"${name}", Times, serif`;
@@ -553,38 +559,51 @@ function objectPlainTextForFit(obj: ReportObject): string {
   return obj.text;
 }
 
+function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['pages'][number] {
+  const objects = page.objects.map(obj => ({
+    ...obj,
+    frame: { ...obj.frame },
+  }));
+  const ordered = [...objects].sort(
+    (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+  );
+  for (const obj of ordered) {
+    if (obj.kind !== 'text' || obj.hidden) continue;
+    const needed = estimateTextHeightFraction(obj);
+    if (needed <= obj.frame.h + 0.005) continue;
+    const oldBottom = obj.frame.y + obj.frame.h;
+    obj.frame.h = needed;
+    const newBottom = obj.frame.y + obj.frame.h;
+    for (const other of objects) {
+      if (other.id === obj.id) continue;
+      if (other.frame.y + 0.01 < oldBottom) continue;
+      other.frame.y = Math.min(0.95 - other.frame.h, other.frame.y + (newBottom - oldBottom));
+      if (other.frame.y + other.frame.h > 0.96) {
+        other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
+      }
+    }
+  }
+  return { ...page, objects };
+}
+
+/** Expand clipped text frames on one page (first paint); other pages stay as stored. */
+export function fitPageTextFrames(
+  document: ReportDocument | unknown,
+  pageId: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => (page.id === pageId ? fitPageObjects(page) : page)),
+  };
+}
+
 /** Expand clipped text frames and push overlapping objects down (report editor load). */
 export function fitDocumentTextFrames(document: ReportDocument | unknown): ReportDocument {
   const doc = normalizeReportDocument(document);
   return {
     ...doc,
-    pages: doc.pages.map(page => {
-      const objects = page.objects.map(obj => ({
-        ...obj,
-        frame: { ...obj.frame },
-      }));
-      const ordered = [...objects].sort(
-        (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
-      );
-      for (const obj of ordered) {
-        if (obj.kind !== 'text' || obj.hidden) continue;
-        const needed = estimateTextHeightFraction(obj);
-        if (needed <= obj.frame.h + 0.005) continue;
-        const oldBottom = obj.frame.y + obj.frame.h;
-        const delta = needed - obj.frame.h;
-        obj.frame.h = needed;
-        const newBottom = obj.frame.y + obj.frame.h;
-        for (const other of objects) {
-          if (other.id === obj.id) continue;
-          if (other.frame.y + 0.01 < oldBottom) continue;
-          other.frame.y = Math.min(0.95 - other.frame.h, other.frame.y + (newBottom - oldBottom));
-          if (other.frame.y + other.frame.h > 0.96) {
-            other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
-          }
-        }
-      }
-      return { ...page, objects };
-    }),
+    pages: doc.pages.map(fitPageObjects),
   };
 }
 

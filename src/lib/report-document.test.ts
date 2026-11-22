@@ -19,6 +19,7 @@ import {
   duplicateObject,
   duplicatePage,
   fitDocumentTextFrames,
+  fitPageTextFrames,
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
@@ -633,6 +634,69 @@ describe('reshapeReportDocument', () => {
     expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h - 0.001);
     expect(cssFontStack('Inter')).toMatch(/^Inter, system-ui, sans-serif$/);
     expect(cssFontStack('Inter')).not.toMatch(/(^|,\s*)serif\b/);
+  });
+
+  it('migrates browser serif defaults to Inter and keeps Times New Roman', () => {
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'p1',
+          objects: [
+            {
+              id: 'a',
+              kind: 'text',
+              text: 'House',
+              text_style: { font_family: 'serif' },
+            },
+            {
+              id: 'b',
+              kind: 'text',
+              text: 'Chosen',
+              text_style: { font_family: 'Times New Roman' },
+            },
+          ],
+        },
+      ],
+    });
+    expect(doc.pages[0]!.objects[0]!.textStyle.fontFamily).toBe('Inter');
+    expect(doc.pages[0]!.objects[1]!.textStyle.fontFamily).toBe('Times New Roman');
+    expect(cssFontStack('serif')).toMatch(/^Inter, system-ui, sans-serif$/);
+  });
+
+  it('fits only the named page so first paint stays cheap on large decks', () => {
+    const long =
+      'Culture shapes food and nutrition advice for 77.1% of respondents, while 22.9% say it does not.';
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'page-a',
+          objects: [
+            {
+              id: 'a',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.2, w: 0.88, h: 0.08 },
+              text: long,
+              text_style: { font_family: 'Inter', font_size_pt: 18 },
+            },
+          ],
+        },
+        {
+          id: 'page-b',
+          objects: [
+            {
+              id: 'b',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.2, w: 0.88, h: 0.08 },
+              text: long,
+              text_style: { font_family: 'Inter', font_size_pt: 18 },
+            },
+          ],
+        },
+      ],
+    });
+    const firstOnly = fitPageTextFrames(doc, 'page-a');
+    expect(firstOnly.pages[0]!.objects[0]!.frame.h).toBeGreaterThan(0.08);
+    expect(firstOnly.pages[1]!.objects[0]!.frame.h).toBe(0.08);
   });
 
   it('builds table preview title and footnote from the book, not house style', () => {
