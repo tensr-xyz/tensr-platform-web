@@ -997,12 +997,22 @@ function filterColumns(value: unknown, found = new Set<string>()): Set<string> {
   return found;
 }
 
-/** A banner of the audience column is not the audience. The rows have to be filtered to it. */
+/** Named audience used as a filter, audience_filter, or Total|Audience banner column. */
 function audienceWasUsed(record: Record<string, unknown>): boolean {
+  if (record.audience_filter && typeof record.audience_filter === 'object') return true;
+  const banner = record.banner;
+  if (Array.isArray(banner)) {
+    const asColumn = banner.some(item => {
+      if (!item || typeof item !== 'object') return false;
+      const row = item as Record<string, unknown>;
+      return Boolean(row.audience || row.filter);
+    });
+    if (asColumn) return true;
+  }
   const columns = record.audience_columns;
   if (!Array.isArray(columns) || !columns.length) return true;
   const used = filterColumns(
-    record.row_filters ?? record.filters ?? record.filter ?? record.audience_filter
+    record.row_filters || record.filters || record.filter || record.audience_filter
   );
   return columns.every(column => used.has(cell(column)));
 }
@@ -1783,7 +1793,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       if (audience) view.audience = audience;
     }
     if (!view.audienceDefinition) {
-      const definition = cell(record.audience_definition);
+      const definition = cell(record.audience_description || record.audience_definition);
       if (definition) view.audienceDefinition = definition;
     }
     if (!view.wave) {
