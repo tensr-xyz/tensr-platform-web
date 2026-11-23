@@ -552,6 +552,47 @@ export function cssFontStack(family: string | null | undefined): string {
   return `"${name}", Inter, system-ui, sans-serif`;
 }
 
+/** Gap under a text frame so the next object (table title, commentary) never overlaps. */
+const TEXT_STACK_GAP = 0.03;
+
+const TRAILING_BASE_FOOTNOTE_RE =
+  /\s+(?:Base\s*:\s*(?:Unweighted,\s*)?n\s*=\s*[\d,]+|Base\s*:\s*[\d,]+(?:\s*\([^)]*\))?|Base\s*:\s*[\d,]+\s+weighted(?:\s*\([^)]*\))?|Unweighted,\s*n\s*=\s*[\d,]+)\s*$/i;
+
+/** Drop a pasted Base / n footer from commentary; live tables already show it. */
+export function stripTrailingBaseFootnote(text: string): string {
+  let cleaned = String(text || '').trim();
+  if (!cleaned) return '';
+  let previous = '';
+  while (previous !== cleaned) {
+    previous = cleaned;
+    cleaned = cleaned.replace(TRAILING_BASE_FOOTNOTE_RE, '').trim();
+  }
+  return cleaned;
+}
+
+/** True when Study body is a deck-building ask, not a study brief. */
+export function looksLikeDeckRequestBrief(text: string): boolean {
+  const brief = String(text || '').trim();
+  if (!brief) return false;
+  const folded = brief.toLowerCase();
+  const markers = [
+    'insight slide',
+    'insight slides',
+    'executive summary',
+    'powerpoint',
+    '.pptx',
+    'client deck',
+    'clear narrative',
+    'appendix slide',
+    'questionnaire appendix',
+    'build a report',
+    'build a deck',
+    'build a presentation',
+  ];
+  if (markers.some(marker => folded.includes(marker))) return true;
+  return /\b(10|fifteen|15)\s+to\s+(15|20)\b/i.test(brief) && /\bslide/i.test(brief);
+}
+
 function estimateTextHeightFraction(obj: ReportObject): number {
   const text = objectPlainTextForFit(obj);
   if (!text) return obj.frame.h;
@@ -561,14 +602,16 @@ function estimateTextHeightFraction(obj: ReportObject): number {
     Number(obj.textStyle.lineSpacing) || DEFAULT_TEXT_STYLE.lineSpacing
   );
   const widthIn = Math.max(0.5, obj.frame.w * PAGE_WIDTH_IN);
-  // Conservative wrap: Inter at body sizes runs wider than 0.5em average.
-  const charsPerLine = Math.max(18, Math.floor((widthIn * 72) / (sizePt * 0.62)));
+  // Bold / display sizes wrap sooner; keep the estimate conservative so frames
+  // reserve room rather than painting over the object below.
+  const emWidth = obj.textStyle.bold || sizePt >= 18 ? 0.72 : 0.64;
+  const charsPerLine = Math.max(16, Math.floor((widthIn * 72) / (sizePt * emWidth)));
   let lines = 0;
   for (const paragraph of text.split(/\n/) || [text]) {
     lines += Math.max(1, Math.ceil(Math.max(1, paragraph.length) / charsPerLine));
   }
   // Object padding + selection border so the last line is never clipped.
-  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.18;
+  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.26;
   return Math.min(0.85, Math.max(obj.frame.h, heightIn / PAGE_HEIGHT_IN));
 }
 
@@ -577,29 +620,68 @@ function objectPlainTextForFit(obj: ReportObject): string {
   return obj.text;
 }
 
+function framesOverlapHorizontally(a: ReportFrame, b: ReportFrame): boolean {
+  return a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01;
+}
+
+function pushObjectsBelow(objects: ReportObject[], source: ReportObject, floorY: number): void {
+  for (const other of objects) {
+    if (other.id === source.id || other.hidden) continue;
+    if (!framesOverlapHorizontally(source.frame, other.frame)) continue;
+    if (other.frame.y + other.frame.h <= source.frame.y + 0.005) continue;
+    if (other.frame.y >= floorY - 0.001) continue;
+    // Prefer the reserved gap; shrink the pushed object if it would fall off-page.
+    other.frame.y = Math.min(0.88, floorY);
+    if (other.frame.y + other.frame.h > 0.96) {
+      other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
+    }
+  }
+}
+
 function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['pages'][number] {
-  const objects = page.objects.map(obj => ({
-    ...obj,
-    frame: { ...obj.frame },
-  }));
+  const hasTable = page.objects.some(obj => obj.kind === 'table' && !obj.hidden);
+  const isStudy =
+    String(page.title || '')
+      .trim()
+      .toLowerCase() === 'study';
+  const objects = page.objects.map(obj => {
+    const next = {
+      ...obj,
+      frame: { ...obj.frame },
+      runs: obj.runs.map(run => ({ ...run })),
+    };
+    if (next.kind !== 'text' || next.hidden) return next;
+    const plain = objectPlainTextForFit(next);
+    // Study page must never show the chat request that asked for the deck.
+    if (isStudy && looksLikeDeckRequestBrief(plain)) {
+      next.text = '';
+      next.runs = [];
+      next.hidden = true;
+      return next;
+    }
+    // Insight / appendix commentary must not repeat the table Base footer.
+    if (hasTable) {
+      const cleaned = stripTrailingBaseFootnote(plain);
+      if (cleaned !== plain.trim()) {
+        next.text = cleaned;
+        if (next.runs.length) {
+          next.runs = [{ ...next.runs[0]!, text: cleaned }];
+        }
+      }
+    }
+    return next;
+  });
   const ordered = [...objects].sort(
     (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
   );
   for (const obj of ordered) {
     if (obj.kind !== 'text' || obj.hidden) continue;
     const needed = estimateTextHeightFraction(obj);
-    if (needed <= obj.frame.h + 0.005) continue;
-    const oldBottom = obj.frame.y + obj.frame.h;
-    obj.frame.h = needed;
-    const newBottom = obj.frame.y + obj.frame.h;
-    for (const other of objects) {
-      if (other.id === obj.id) continue;
-      if (other.frame.y + 0.01 < oldBottom) continue;
-      other.frame.y = Math.min(0.95 - other.frame.h, other.frame.y + (newBottom - oldBottom));
-      if (other.frame.y + other.frame.h > 0.96) {
-        other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
-      }
+    if (needed > obj.frame.h + 0.002) {
+      obj.frame.h = needed;
     }
+    // Always keep a gap under text so wrapped lines never sit on the next frame.
+    pushObjectsBelow(objects, obj, obj.frame.y + obj.frame.h + TEXT_STACK_GAP);
   }
   return { ...page, objects };
 }

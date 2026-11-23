@@ -20,6 +20,8 @@ import {
   duplicatePage,
   fitDocumentTextFrames,
   fitPageTextFrames,
+  looksLikeDeckRequestBrief,
+  stripTrailingBaseFootnote,
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
@@ -650,9 +652,89 @@ describe('reshapeReportDocument', () => {
     const comment = fitted.pages[0]!.objects.find(obj => obj.id === 'comment')!;
     const table = fitted.pages[0]!.objects.find(obj => obj.id === 'table')!;
     expect(comment.frame.h).toBeGreaterThan(0.12);
-    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h - 0.001);
+    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.02);
     expect(cssFontStack('Inter')).toMatch(/^Inter, system-ui, sans-serif$/);
     expect(cssFontStack('Inter')).not.toMatch(/(^|,\s*)serif\b/);
+  });
+
+  it('hides Study pages that stored the chat request as the brief', () => {
+    expect(
+      looksLikeDeckRequestBrief(
+        'Executive summary, 10 to 15 insight slides with a clear narrative.'
+      )
+    ).toBe(true);
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'study',
+          title: 'Study',
+          objects: [
+            {
+              id: 'title',
+              kind: 'text',
+              text: 'Study',
+              text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
+            },
+            {
+              id: 'body',
+              kind: 'text',
+              text: 'Executive summary, 10 to 15 insight slides with a clear narrative.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+          ],
+        },
+      ],
+    });
+    const fitted = fitDocumentTextFrames(doc);
+    const body = fitted.pages[0]!.objects.find(obj => obj.id === 'body')!;
+    expect(body.hidden).toBe(true);
+    expect(body.text).toBe('');
+  });
+
+  it('pushes commentary under a tall title and strips Base footers above tables', () => {
+    expect(stripTrailingBaseFootnote('Lead at 54.2%. Base: Unweighted, n = 380')).toBe(
+      'Lead at 54.2%.'
+    );
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'page-overlap',
+          objects: [
+            {
+              id: 'title',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.06, w: 0.88, h: 0.12 },
+              text: 'No leads at 54.2% among people who prefer print materials over digital channels for patient education yours?',
+              text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
+              z_index: 1,
+            },
+            {
+              id: 'comment',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.2, w: 0.88, h: 0.1 },
+              text: 'No leads at 54.2% for print. Base: Unweighted, n = 380',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+              z_index: 2,
+            },
+            {
+              id: 'table',
+              kind: 'table',
+              table_spec_id: 'spec-1',
+              frame: { x: 0.06, y: 0.34, w: 0.88, h: 0.5 },
+              z_index: 3,
+            },
+          ],
+        },
+      ],
+    });
+    const fitted = fitDocumentTextFrames(doc);
+    const title = fitted.pages[0]!.objects.find(obj => obj.id === 'title')!;
+    const comment = fitted.pages[0]!.objects.find(obj => obj.id === 'comment')!;
+    const table = fitted.pages[0]!.objects.find(obj => obj.id === 'table')!;
+    expect(title.frame.h).toBeGreaterThan(0.12);
+    expect(comment.frame.y).toBeGreaterThanOrEqual(title.frame.y + title.frame.h + 0.02);
+    expect(comment.text).toBe('No leads at 54.2% for print.');
+    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.02);
   });
 
   it('migrates browser serif defaults to Inter and keeps Times New Roman', () => {

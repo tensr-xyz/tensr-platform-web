@@ -5242,8 +5242,8 @@ function OutputPin({ pin }: { pin: ReportPin }) {
         {lead ? <p>{lead}</p> : null}
         {bars.length ? (
           <div className="report-bars">
-            {bars.map(bar => (
-              <div key={`${pin.id}-${bar.label}`}>
+            {bars.map((bar, barIndex) => (
+              <div key={`${pin.id}-${barIndex}-${bar.label}`}>
                 <div className="report-bar-label">
                   <span>{bar.label}</span>
                   <span>{bar.percent.toFixed(1)}%</span>
@@ -6528,8 +6528,8 @@ function ReportScreen({
                     </div>
                     {finding.bars.length ? (
                       <div className="report-bars">
-                        {finding.bars.map(bar => (
-                          <div key={`${finding.id}-${bar.label}`}>
+                        {finding.bars.map((bar, barIndex) => (
+                          <div key={`${finding.id}-${barIndex}-${bar.label}`}>
                             <div className="report-bar-label">
                               <span>{bar.label}</span>
                               <span>{shownPercent(bar.percent, finding.decimals)}</span>
