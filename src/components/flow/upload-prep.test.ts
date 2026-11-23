@@ -23,6 +23,7 @@ describe('upload prep', () => {
         straightline_rows: 2,
         trap_rows: 1,
         bot_rows: 1,
+        poor_text_rows: 1,
         threshold: 0.5,
         would_remove: 11,
         would_remove_share: 0.014,
@@ -60,10 +61,26 @@ describe('upload prep', () => {
     expect(flags?.before).toContain('same answer down a grid');
     expect(flags?.before).toContain('failed an attention check');
     expect(flags?.before).toContain('bot or copy-pasted answers');
+    expect(flags?.before).not.toContain('short open answers');
     expect(flags?.after).toContain('Quality flag column');
     expect(flags?.after).toContain('11 of 800 (1.4%) would be removed at the 50% bar');
     expect(flags?.after).toContain('4 to review');
     expect(preparedCopyLabel('W5_raw.sav')).toBe('W5_raw · prepared');
+  });
+
+  it('names poor open answers without calling ordinary short reasons short', () => {
+    const flags = prepParts({
+      quality: {
+        flagged: 3,
+        respondents: 100,
+        poor_text_rows: 3,
+        threshold: 0.5,
+        would_remove: 0,
+        would_review: 3,
+      },
+    }).find(part => part.id === 'flags');
+    expect(flags?.before).toContain('3 poor open answers');
+    expect(flags?.before).not.toContain('short open');
   });
 
   it('says when no NPS scale and no quality flags were found', () => {
