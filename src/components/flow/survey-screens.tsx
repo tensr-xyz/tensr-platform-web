@@ -1141,12 +1141,10 @@ export function EvidencePanel({
   const [syntaxNote, setSyntaxNote] = useState('');
   useEffect(() => {
     setSyntaxNote('');
-    if (!datasetId || !cell?.bitset || !cell.textColumn) {
+    if (!datasetId || !cell?.textColumn) {
       setQuotes(null);
       setQuotePhase('idle');
       setEvidenceRespondents([]);
-      if (cell && !cell.bitset)
-        setError('This cell has no respondent bitset, so the verbatims cannot be listed.');
       return;
     }
     setError('');
@@ -1154,17 +1152,50 @@ export function EvidencePanel({
     setQuotePhase('loading');
     setEvidenceRespondents([]);
     const controller = new AbortController();
-    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/quotes`, {
-      method: 'POST',
-      body: JSON.stringify({
-        text_column: cell.textColumn,
-        row_uid_bitset: cell.bitset,
-        page: 1,
-        page_size: 20,
-      }),
-      signal: controller.signal,
-    })
-      .then(page => {
+    const load = async () => {
+      let bitset = cell.bitset || '';
+      if (!bitset && cell.runId && cell.stubRowId && cell.bannerId) {
+        try {
+          const restored = await flowJson<{
+            provenance?: { row_uid_bitset?: string };
+          }>(
+            `/datasets/analysis-runs/${encodeURIComponent(cell.runId)}/cell-provenance` +
+              `?stub_row_id=${encodeURIComponent(cell.stubRowId)}` +
+              `&banner_id=${encodeURIComponent(cell.bannerId)}`,
+            { signal: controller.signal }
+          );
+          bitset = String(restored.provenance?.row_uid_bitset || '');
+        } catch (err) {
+          if (controller.signal.aborted) return;
+          setQuotes(null);
+          setQuotePhase('idle');
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'This cell has no respondent bitset, so the verbatims cannot be listed.'
+          );
+          return;
+        }
+      }
+      if (!bitset) {
+        setQuotes(null);
+        setQuotePhase('idle');
+        setEvidenceRespondents([]);
+        setError('This cell has no respondent bitset, so the verbatims cannot be listed.');
+        return;
+      }
+      try {
+        const page = await flowJson<Record<string, unknown>>(`/datasets/${datasetId}/quotes`, {
+          method: 'POST',
+          body: JSON.stringify({
+            text_column: cell.textColumn,
+            row_uid_bitset: bitset,
+            page: 1,
+            page_size: 20,
+          }),
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         setQuotes(page);
         setQuotePhase('ready');
         const rows = (page.quotes as { respondent_id?: string; row_uid?: string }[]) || [];
@@ -1174,13 +1205,14 @@ export function EvidencePanel({
             .map(value => String(value || ''))
             .filter(Boolean)
         );
-      })
-      .catch(err => {
+      } catch (err) {
         if (controller.signal.aborted) return;
         setQuotes(null);
         setQuotePhase('idle');
         setError(err instanceof Error ? err.message : 'Could not load verbatims');
-      });
+      }
+    };
+    void load();
     return () => controller.abort();
   }, [datasetId, cell]);
   if (!cell && variable && variable.rows.length) {

@@ -34,10 +34,11 @@ describe('flow survey grid', () => {
 
   it('keeps the cell percent, base, and n for the evidence drill', () => {
     const selected = selectionFromCell(
-      { resolved_weight: 'weight' },
+      { resolved_weight: 'weight', run_id: 'run-slim-1' },
       { id: 'row-1', label: 'Theme', source_text_column: 'open_end' },
       {
         banner_id: 'total',
+        stub_row_id: 'row-1',
         percent: 25,
         unweighted_n: 4,
         column_unweighted_n: 12,
@@ -53,6 +54,9 @@ describe('flow survey grid', () => {
       textColumn: 'open_end',
       bitset: 'bitset',
       letter: 'A',
+      runId: 'run-slim-1',
+      stubRowId: 'row-1',
+      bannerId: 'total',
     });
   });
 

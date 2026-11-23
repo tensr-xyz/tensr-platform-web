@@ -11,6 +11,7 @@ export type BannerColumn = {
 
 export type BannerCell = {
   banner_id: string;
+  stub_row_id?: string;
   percent?: number | null;
   projected_thousands?: number | null;
   index?: number | null;
@@ -93,6 +94,10 @@ export type SurveyCell = {
   percent: string;
   n: string;
   letter: string;
+  /** When the book came from a slim analyze run, Evidence can restore the bitset. */
+  runId?: string;
+  stubRowId?: string;
+  bannerId?: string;
 };
 
 export function bannerHeading(column: BannerColumn): string {
@@ -241,6 +246,9 @@ export function selectionFromCell(
   const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
   const percent = cell.percent != null ? `${cell.percent.toFixed(1)}%` : '';
   const count = cell.unweighted_n != null ? String(cell.unweighted_n) : '';
+  const runId = String(book.run_id || book.analysis_run_id || '').trim();
+  const stubRowId = String(cell.stub_row_id || row.id || '').trim();
+  const bannerId = String(cell.banner_id || '').trim();
   return {
     bitset,
     textColumn: row.source_text_column || row.column || '',
@@ -250,6 +258,9 @@ export function selectionFromCell(
     percent,
     n: count,
     letter,
+    ...(runId ? { runId } : {}),
+    ...(stubRowId ? { stubRowId } : {}),
+    ...(bannerId ? { bannerId } : {}),
   };
 }
 
