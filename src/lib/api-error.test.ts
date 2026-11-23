@@ -37,7 +37,7 @@ describe('formatApiErrorMessage', () => {
     const err = new Error('{"message":"Service Unavailable"}');
     const shown = formatApiErrorMessage(err);
     expect(shown).not.toContain('{');
-    expect(shown.toLowerCase()).toMatch(/unavailable|timed out|try again/);
+    expect(shown).toBe("Couldn't reach Tensr, try again");
   });
 
   it('maps ApiRequestError 503 the same way', () => {
@@ -45,7 +45,7 @@ describe('formatApiErrorMessage', () => {
       new ApiRequestError(503, '{"message":"Service Unavailable"}')
     );
     expect(shown).not.toContain('{');
-    expect(shown.toLowerCase()).toMatch(/unavailable|timed out|try again/);
+    expect(shown).toBe("Couldn't reach Tensr, try again");
   });
 
   it('shows the table fingerprint refuse paragraph, not a code object', () => {

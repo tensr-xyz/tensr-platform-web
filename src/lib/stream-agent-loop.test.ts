@@ -16,12 +16,16 @@ jest.mock('@/utils/auth', () => ({
   getTensrApiHeaders: () => ({}),
 }));
 
-function sseFetchResponse(body: string, status = 200) {
+function sseFetchResponse(body: string, status = 200, extraHeaders?: Record<string, string>) {
   const encoded = new TextEncoder().encode(body);
+  const headers = new Headers({
+    'Content-Type': 'text/event-stream',
+    ...(extraHeaders || {}),
+  });
   return {
     ok: status >= 200 && status < 300,
     status,
-    headers: new Map([['Content-Type', 'text/event-stream']]),
+    headers,
     text: async () => body,
     body: {
       getReader() {
@@ -373,5 +377,24 @@ describe('streamAgentLoop', () => {
     );
     const headers = new Headers((global.fetch as jest.Mock).mock.calls[0][1].headers);
     expect(headers.get('X-Tensr-Distinct-Id')).toBe('distinct-1');
+  });
+
+  it('treats a proxied 503 continuing placeholder as unreachable, not a resume hop', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      sseFetchResponse(
+        'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-503","answer_markdown":"This turn is still running. Nothing has been reported yet."}}\n\n',
+        200,
+        { 'X-Tensr-Upstream-Status': '503' }
+      )
+    );
+    await expect(
+      streamAgentLoop({
+        message: 'crosstab',
+        mode: 'agent',
+        agentVersion: 'v2',
+        sessionId: 'sess-503',
+      })
+    ).rejects.toMatchObject({ status: 503 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

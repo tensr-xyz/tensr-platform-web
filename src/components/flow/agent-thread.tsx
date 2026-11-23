@@ -69,7 +69,9 @@ import {
   openSignedDownload,
   type ExportDownload,
 } from '@/lib/excel-download';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import {
+  AGENT_LOOP_RETRYING_MESSAGE,
   runAgentLoop,
   type AgentLoopAttachment,
   type AgentLoopResponse,
@@ -664,11 +666,17 @@ export function useAgentThread({
           signal: AbortSignal.timeout(120_000),
           recover,
           onProgress: progress => {
+            if (progress.step === 'retry' && progress.message) {
+              shown(() => setStatus(progress.message));
+              publish({ status: progress.message, answer: draft });
+              return;
+            }
             const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
-            shown(() =>
-              setSteps(current => (current.includes(line) ? current : [...current, line]))
-            );
+            shown(() => {
+              setStatus('Thinking…');
+              setSteps(current => (current.includes(line) ? current : [...current, line]));
+            });
             const prior = liveChatRun();
             publish({
               steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
@@ -770,7 +778,7 @@ export function useAgentThread({
         if (aliveRef.current) loadRail();
         return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
+        const message = formatApiErrorMessage(err);
         // Clear the live panel so a failed follow-up does not keep an old deck preview.
         shown(() => {
           setStatus(message);
@@ -822,7 +830,7 @@ export function useAgentThread({
   const send = (text?: string) => void sendText(text ?? question);
 
   const approve = () => {
-    if (!plan || !sent) return;
+    if (!plan || !sent || approvingRef.current || sendingRef.current) return;
     const batch =
       plan.pending_approvals && !Array.isArray(plan.pending_approvals)
         ? plan.pending_approvals
@@ -865,11 +873,33 @@ export function useAgentThread({
       datasetId: datasetId || null,
       attachments: attachmentsRef.current,
       agentVersion: 'v2',
-      sessionId: plan.session_id,
+      sessionId: plan.session_id || sessionRef.current,
       approvedToolCalls: calls,
       approvedBatch:
         batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
       signal: AbortSignal.timeout(120_000),
+      onProgress: progress => {
+        if (turnToken !== turnTokenRef.current) return;
+        if (progress.step === 'retry' && progress.message) {
+          shown(() => setStatus(progress.message));
+          if (projectId) {
+            const current = liveChatRun();
+            if (livePublishMatches(current, projectId, approvedSession, sent)) {
+              publishLiveChatRun({ ...current!, status: progress.message, running: true });
+            }
+          }
+          return;
+        }
+        const line = visibleAgentStep(progress.step, progress.message);
+        if (!line) return;
+        shown(() => {
+          setStatus('Thinking…');
+          setSteps(current => (current.includes(line) ? current : [...current, line]));
+        });
+      },
+      onSession: sessionId => {
+        noteSession(sessionId, sent.trim());
+      },
       onDelta: chunk => writeStream(streamedRef.current + chunk),
       onReplace: next => writeStream(next),
       onPreview: preview => {
@@ -890,6 +920,7 @@ export function useAgentThread({
     })
       .then(result => {
         if (turnToken !== turnTokenRef.current) return;
+        if (result.session_id) noteSession(result.session_id, sent.trim());
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
@@ -928,6 +959,7 @@ export function useAgentThread({
             status: null,
             answer: kept,
             steps: keptSteps,
+            sessionId: result.session_id || approvedSession,
           });
         }
         approvingRef.current = false;
@@ -935,7 +967,7 @@ export function useAgentThread({
       })
       .catch(err => {
         if (turnToken !== turnTokenRef.current) return;
-        const message = err instanceof Error ? err.message : 'The plan did not run.';
+        const message = formatApiErrorMessage(err);
         shown(() => {
           setApproving(false);
           setStatus(message);
@@ -1828,8 +1860,12 @@ export function AgentThreadColumn({
             </div>
           </div>
         ) : null}
-        {thread.status === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-        {thread.status && thread.status !== 'Thinking…' ? (
+        {thread.status === 'Thinking…' || thread.status === AGENT_LOOP_RETRYING_MESSAGE ? (
+          <p className="flow-status">{thread.status}</p>
+        ) : null}
+        {thread.status &&
+        thread.status !== 'Thinking…' &&
+        thread.status !== AGENT_LOOP_RETRYING_MESSAGE ? (
           <p className="flow-error">{thread.status}</p>
         ) : null}
       </div>

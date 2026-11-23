@@ -5,7 +5,8 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { AgentLoopResponse, RunAgentLoopParams } from '@/lib/run-agent-loop';
-import { visibleTurnAnswer } from '@/components/flow/chat-output';
+import { CONTINUING_TURN_ANSWER, visibleTurnAnswer } from '@/components/flow/chat-output';
+import { isColdStartStatus } from '@/lib/cold-start-fetch';
 
 export type AgentLoopStreamProgress = {
   type: string;
@@ -280,6 +281,8 @@ export async function streamAgentLoop(
     }
   );
 
+  const upstreamBusy = Number(response.headers?.get('X-Tensr-Upstream-Status') || 0);
+
   if (!response.ok) {
     const errorText = await response.text();
     captureStreamStatus(response.status, params.sessionId, distinctId);
@@ -386,9 +389,25 @@ export async function streamAgentLoop(
   }
 
   if (!acc.result) {
+    if (isColdStartStatus(upstreamBusy)) {
+      captureStreamStatus(upstreamBusy, params.sessionId, distinctId);
+      throw new ApiRequestError(upstreamBusy, 'Service Unavailable');
+    }
     const closed = new Error('The reply did not finish. Ask again.');
     closed.name = 'AgentStreamClosed';
     throw closed;
+  }
+
+  // Proxy maps a hard 502/503/504 into a fake "continuing" SSE. Treat that as
+  // unreachable so the caller can backoff-retry on the same session id instead
+  // of hopping resume and minting duplicate chats.
+  if (
+    isColdStartStatus(upstreamBusy) &&
+    acc.result.status === 'continuing' &&
+    isGatewayBusyPlaceholder(acc.result)
+  ) {
+    captureStreamStatus(upstreamBusy, params.sessionId, distinctId);
+    throw new ApiRequestError(upstreamBusy, 'Service Unavailable');
   }
 
   if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
@@ -416,4 +435,10 @@ export async function streamAgentLoop(
   }
 
   return withVisibleAnswer(acc.result);
+}
+
+function isGatewayBusyPlaceholder(result: AgentLoopResponse): boolean {
+  if (result.tool_results?.length) return false;
+  const answer = (result.answer_markdown || '').trim();
+  return !answer || answer === CONTINUING_TURN_ANSWER || /still running/i.test(answer);
 }
