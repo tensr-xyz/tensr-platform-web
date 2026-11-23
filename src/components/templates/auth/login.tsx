@@ -69,7 +69,7 @@ const LoginTemplate = () => {
     stytch,
   } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => (searchParams.get('email') || '').trim());
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
@@ -537,7 +537,7 @@ const LoginTemplate = () => {
                 {isSendingCode ? null : <span aria-hidden="true">→</span>}
               </Button>
               <p className="signin-new">
-                New here? <Link href="/signup">Start a 30-day free trial</Link>
+                New here? <Link href="/login">Start a 30-day free trial</Link>
               </p>
               <p className="signin-terms">
                 By continuing you agree to our{' '}

@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import path from 'node:path';
+import { AUTH_SIGNUP_REDIRECTS } from './src/lib/auth-signup-redirects';
 
 const nextConfig: NextConfig = {
   // The dev badge sat on the sidebar account menu at bottom-left.
@@ -40,11 +41,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   // Stytch loginOrCreate covers signup — keep old auth URLs from 404ing.
+  // Permanent: these paths are already in prospect emails.
   async redirects() {
-    return [
-      { source: '/sign-up', destination: '/login', permanent: false },
-      { source: '/register', destination: '/login', permanent: false },
-    ];
+    return [...AUTH_SIGNUP_REDIRECTS];
   },
 
   // PostHog reverse proxy — avoids ad-blocker interference with client-side analytics
