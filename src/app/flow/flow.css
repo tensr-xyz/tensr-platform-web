@@ -12320,6 +12320,10 @@ button.chat-result-top {
   font-size: 10px;
 }
 
+.share-email-status {
+  color: var(--color-warn);
+}
+
 .share-dialog .share-link-btn {
   display: inline;
   height: auto;

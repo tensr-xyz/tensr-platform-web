@@ -182,7 +182,7 @@ function memberMark(id: string): string {
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
   if (role === 'viewer') return 'Can view';
-  if (role === 'asker') return 'Asker';
+  if (role === 'asker') return 'Can ask';
   return 'Can edit';
 }
 
@@ -515,7 +515,12 @@ export function DetailsScreen({
       `/api/organizations/${orgId}/invitations`,
       {
         method: 'POST',
-        body: JSON.stringify({ email, role: 'member' }),
+        body: JSON.stringify({
+          email,
+          role: 'member',
+          project_id: projectId,
+          project_role: role,
+        }),
       }
     )
       .then(page => {
@@ -1021,7 +1026,7 @@ export function DetailsScreen({
             value={role}
             onValueChange={setRole}
             options={[
-              { value: 'asker', label: 'Asker' },
+              { value: 'asker', label: 'Can ask' },
               { value: 'viewer', label: 'Viewer' },
               { value: 'editor', label: 'Editor' },
             ]}
