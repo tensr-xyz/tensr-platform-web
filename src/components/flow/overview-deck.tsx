@@ -275,8 +275,13 @@ export function OverviewDeck({
   const [order, setOrder] = useState(initial);
   const [chosenAudience, setChosenAudience] = useState(audience || '');
   const [saved, setSaved] = useState(false);
+  const [downloadNote, setDownloadNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    // Keep the picker on the audience the parent passed (do not snap to Total).
+    if (audience) setChosenAudience(audience);
+  }, [audience]);
   const [headline, setHeadline] = useState(true);
   const [footnote, setFootnote] = useState(true);
   const [hideLow, setHideLow] = useState(false);
@@ -411,9 +416,12 @@ export function OverviewDeck({
     }
     setBusy(true);
     setError('');
+    setDownloadNote('');
+    const buildAudience = chosenAudience || audience || 'Total sample';
+    const nDecks = perMarket ? values.length : 1;
     void Promise.resolve(
       onBuild({
-        audience: chosenAudience || audience || 'Total sample',
+        audience: buildAudience,
         slides: order,
         headline,
         footnote,
@@ -422,7 +430,14 @@ export function OverviewDeck({
         ...(perMarket ? { perMarket: { groupColumn, values } } : {}),
       })
     )
-      .then(() => setSaved(true))
+      .then(() => {
+        setSaved(true);
+        setDownloadNote(
+          perMarket
+            ? `Downloaded ${nDecks} deck${nDecks === 1 ? '' : 's'} for ${buildAudience}.`
+            : `Downloaded the overview deck for ${buildAudience}.`
+        );
+      })
       .catch(err => setError(err instanceof Error ? err.message : 'The deck did not build.'))
       .finally(() => setBusy(false));
   };
@@ -587,8 +602,9 @@ export function OverviewDeck({
                     Market decks · {selectedMarkets.length} of {visibleMarkets.length} selected
                   </h3>
                   <p className="flow-muted">
-                    One deck per value of {groupColumnLabel}. Same {order.length} slides in each,
-                    built on that market&apos;s audience.
+                    One deck per value of {groupColumnLabel}. Same {order.length}
+                    {' slides '}
+                    in each, built on that market&apos;s audience.
                   </p>
                 </div>
                 <label className="deck-markets-column">
@@ -703,7 +719,8 @@ export function OverviewDeck({
         </div>
         {error ? <p className="flow-error deck-builder-error">{error}</p> : null}
         {saved ? (
-          <p className="flow-muted deck-builder-saved">
+          <p className="flow-muted deck-builder-saved" data-testid="overview-deck-saved">
+            {downloadNote ? `${downloadNote} ` : ''}
             {perMarket
               ? 'Saved one recipe per market. Refresh them together when new data arrives.'
               : 'Saved as a recipe. The original deck is unchanged.'}

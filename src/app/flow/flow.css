@@ -15036,6 +15036,12 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   max-width: min(1120px, 94vw) !important;
 }
 
+/* Cancel is the close control — hide the absolute × so it does not sit on Build. */
+.deck-builder > button.absolute,
+.deck-builder > [class*='absolute'][class*='right-4'] {
+  display: none;
+}
+
 .deck-builder-head {
   display: flex;
   align-items: flex-start;
@@ -15237,19 +15243,25 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   background: var(--color-canvas);
   border: 1px solid var(--color-line);
   border-radius: 10px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .deck-markets-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1.4fr) minmax(88px, 0.7fr) minmax(110px, 0.9fr) minmax(
+      120px,
+      0.9fr
+    );
   align-items: center;
-  gap: 0;
+  column-gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-line);
   font-size: 13px;
   line-height: 16px;
   color: var(--color-ink);
   margin: 0;
+  min-width: 520px;
 }
 
 .deck-markets-row:last-child {
@@ -15268,7 +15280,6 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 }
 
 .deck-markets-row .check {
-  flex: 0 0 28px;
   width: 28px;
   display: flex;
   align-items: center;
@@ -15276,26 +15287,21 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .deck-markets-row > span:nth-child(2),
 .deck-markets-row > :nth-child(2) {
-  flex: 0 0 300px;
-  width: 300px;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deck-markets-row .num {
-  flex: 0 0 150px;
-  width: 150px;
   text-align: right;
-}
-
-.deck-markets-row .num + .num {
-  flex-basis: 190px;
-  width: 190px;
+  font-variant-numeric: tabular-nums;
 }
 
 .deck-markets-row .status {
-  flex: 1 1 auto;
   text-align: right;
   font-size: 12px;
+  min-width: 0;
 }
 
 .deck-markets-row .status.ready {
@@ -15617,8 +15623,16 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-top: 4px;
+}
+
+.deck-per-market > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .deck-per-market-fields {

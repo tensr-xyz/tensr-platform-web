@@ -5823,7 +5823,7 @@ function ReportScreen({
       setNote(
         created.note ||
           (created.n_copies && created.n_copies > 1
-            ? `Built ${created.n_copies} market decks and saved them as recipes.`
+            ? `Downloaded ${created.n_copies} market decks and saved them as recipes.`
             : 'Overview deck downloaded and saved as a recipe.')
       );
       setDecksTick(value => value + 1);
@@ -6159,6 +6159,7 @@ function ReportScreen({
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
+              setOverviewOpen(false);
             }}
             onClose={() => setOverviewOpen(false)}
           />

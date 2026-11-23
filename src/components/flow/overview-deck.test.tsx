@@ -73,7 +73,9 @@ describe('the deck and refresh screens', () => {
     expect(onBuild.mock.calls[0][0].audience).toBe('Weekday readers');
     expect(onBuild.mock.calls[0][0].slides).toHaveLength(OVERVIEW_SLIDES.length);
     expect(
-      await screen.findByText('Saved as a recipe. The original deck is unchanged.')
+      await screen.findByText(
+        /Downloaded the overview deck for Weekday readers\. Saved as a recipe/
+      )
     ).toBeTruthy();
   });
 
@@ -101,9 +103,7 @@ describe('the deck and refresh screens', () => {
       values: ['North', 'South'],
     });
     expect(
-      await screen.findByText(
-        'Saved one recipe per market. Refresh them together when new data arrives.'
-      )
+      await screen.findByText(/Downloaded 2 decks for Total sample\. Saved one recipe per market/)
     ).toBeTruthy();
   });
 
