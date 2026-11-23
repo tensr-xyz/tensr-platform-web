@@ -391,11 +391,21 @@ function cellFigures(
   cell: BannerCell | undefined,
   figures: CellFigure[],
   digits: number,
-  weighted = false
+  weighted = false,
+  isProjection = false
 ): string {
   const hasCount = figures.includes('count');
   const parts = figures
-    .map(figure => cellFigure(cell, figure, digits, weighted, !(hasCount && figure !== 'count')))
+    .map(figure =>
+      cellFigure(
+        cell,
+        figure,
+        digits,
+        weighted,
+        // Design weights never show a "(000s)" people label beside %.
+        isProjection && !(hasCount && figure !== 'count')
+      )
+    )
     .filter(part => part && part !== '—');
   return parts.length ? parts.join(' · ') : '—';
 }
@@ -429,7 +439,7 @@ function StackedCellFigures({
     inferential.length > 0;
   // Always stack when more than one figure is on (Row % used to overflow sideways).
   if (!wantsPercent || !multi) {
-    const text = cellFigures(cell, figures, digits, weighted);
+    const text = cellFigures(cell, figures, digits, weighted, isProjection);
     return (
       <span className="flow-cell-stack">
         <span className="flow-cell-stack-primary">

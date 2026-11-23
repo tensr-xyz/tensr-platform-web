@@ -486,7 +486,7 @@ export function sampleSizeDescriptionText(source: unknown): string {
     const unweighted = formatBaseCount(weight.unweighted_n);
     const ess = formatBaseCount(weight.kish_effective_base ?? weight.kish_ess);
     let line = `Base: ${shown} weighted (unweighted ${unweighted})`;
-    if (ess) line = `${line}; effective base = ${ess}`;
+    if (ess) line = `${line}; Kish effective n = ${ess}`;
     return line;
   }
   if (book.answered_n != null && book.respondent_n != null) {

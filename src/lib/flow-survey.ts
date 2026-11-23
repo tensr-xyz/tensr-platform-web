@@ -83,7 +83,12 @@ export type BannerRow = {
   cells?: BannerCell[];
 };
 
-export type SigLetter = { stub_row_id?: string; banner_id?: string; letter?: string };
+export type SigLetter = {
+  stub_row_id?: string;
+  banner_id?: string;
+  letter?: string;
+  comparison_type?: string;
+};
 
 export type SurveyCell = {
   bitset: string;
@@ -126,11 +131,32 @@ export function bannerHeading(column: BannerColumn): string {
   return split >= 0 ? label.slice(split + 1) : label;
 }
 
-export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string): string {
-  return letters
-    .filter(item => item.stub_row_id === rowId && item.banner_id === bannerId && item.letter)
-    .map(item => item.letter)
+/** Concatenate column letters in A–Z order; keep uppercase when both cases appear. */
+export function concatenateLetters(chars: string[]): string {
+  const best = new Map<string, string>();
+  for (const raw of chars) {
+    const letter = String(raw || '').trim();
+    if (!letter) continue;
+    const key = letter.toUpperCase();
+    const prior = best.get(key);
+    if (!prior || (prior === prior.toLowerCase() && letter === letter.toUpperCase())) {
+      best.set(key, letter === letter.toUpperCase() ? key : letter);
+    }
+  }
+  return [...best.keys()]
+    .sort((left, right) => left.localeCompare(right))
+    .map(key => best.get(key) || key)
     .join('');
+}
+
+export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string): string {
+  const onCell = letters.filter(
+    item => item.stub_row_id === rowId && item.banner_id === bannerId && item.letter
+  );
+  // Column letters and paired McNemar row letters never share a cell.
+  const hasColumn = onCell.some(item => item.comparison_type !== 'paired_item');
+  const chosen = hasColumn ? onCell.filter(item => item.comparison_type !== 'paired_item') : onCell;
+  return concatenateLetters(chosen.map(item => String(item.letter || '')));
 }
 
 export function codedStub(column: string): {

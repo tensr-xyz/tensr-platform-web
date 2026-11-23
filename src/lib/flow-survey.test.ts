@@ -5,7 +5,9 @@ import {
   chartSeriesFromBook,
   chartSignificanceNote,
   codedStub,
+  concatenateLetters,
   efficiencyPercent,
+  lettersFor,
   mediaCellLines,
   mediaCellText,
   selectionFromCell,
@@ -108,6 +110,22 @@ describe('flow survey grid', () => {
 
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
+  });
+
+  it('concatenates column letters in A–Z order and drops McNemar when mixed', () => {
+    expect(concatenateLetters(['C', 'a', 'A', 'B', 'e'])).toBe('ABCe');
+    expect(
+      lettersFor(
+        [
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'A', comparison_type: 'column_pair' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'e', comparison_type: 'column_pair' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'B', comparison_type: 'paired_item' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'C', comparison_type: 'column_pair' },
+        ],
+        'yes',
+        'london'
+      )
+    ).toBe('ACe');
   });
 
   it('shows projected thousands and index beside the column percent', () => {

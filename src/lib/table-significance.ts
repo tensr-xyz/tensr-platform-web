@@ -17,7 +17,8 @@ export type TableSignificanceSettings = {
 export const DEFAULT_TABLE_SIGNIFICANCE: TableSignificanceSettings = {
   showAs: 'letters',
   confidence: 95,
-  multipleComparison: 'bonferroni',
+  // Displayr column comparisons default to no MCC (Q defaults to FDR).
+  multipleComparison: 'none',
   meansPostHoc: 'tukey',
   dunnettControl: '',
   asProjectDefault: false,

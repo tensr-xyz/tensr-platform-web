@@ -57,7 +57,7 @@ describe('QA round 9: shared table base', () => {
       },
     });
     expect(copy.foot).toContain('120 weighted (100 unweighted)');
-    expect(copy.foot).toContain('effective n 84');
+    expect(copy.foot).toContain('Kish effective n 84');
   });
 });
 

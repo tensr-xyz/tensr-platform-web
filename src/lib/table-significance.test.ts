@@ -13,6 +13,10 @@ import {
 } from './table-significance';
 
 describe('table significance settings', () => {
+  it('defaults many-columns correction to none (Displayr column comparisons)', () => {
+    expect(DEFAULT_TABLE_SIGNIFICANCE.multipleComparison).toBe('none');
+  });
+
   it('maps confidence, display mode and request fields', () => {
     expect(alphaFromConfidence(90)).toBe(0.1);
     expect(alphaFromConfidence(99)).toBe(0.01);
