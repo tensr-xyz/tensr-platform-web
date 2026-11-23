@@ -113,4 +113,31 @@ describe('table significance settings', () => {
       'Letters: higher than that column at 95%, Bonferroni-corrected across 2 columns · Means: Tukey HSD'
     );
   });
+
+  it('prefers arrows footnote over a stale McNemar letter_test at the chosen confidence', () => {
+    expect(
+      significanceFootnoteLine(
+        {
+          significance_display: 'cell_comparisons',
+          significance_alpha: 0.05,
+          paired_within_items: true,
+          letter_test: 'Paired McNemar test at 95%.',
+          banner_columns: [{ id: 'a' }, { id: 'total' }],
+        },
+        { ...DEFAULT_TABLE_SIGNIFICANCE, showAs: 'arrows', confidence: 90 }
+      )
+    ).toBe('Arrows: higher or lower than the total at 90%');
+    expect(
+      significanceFootnoteLine(
+        {
+          significance_display: 'column_letters',
+          significance_alpha: 0.05,
+          paired_within_items: true,
+          letter_test: 'Paired McNemar test at 95%.',
+          banner_columns: [{ id: 'total' }],
+        },
+        { ...DEFAULT_TABLE_SIGNIFICANCE, showAs: 'letters', confidence: 90 }
+      )
+    ).toBe('Paired McNemar test at 90%');
+  });
 });

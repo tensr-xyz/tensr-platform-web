@@ -167,7 +167,10 @@ function columnNames(columns: { name?: string }[]): string[] {
   return columns.map(column => column.name || '').filter(Boolean);
 }
 
-/** A counts table shows projected thousands when present, otherwise the weighted count. */
+/**
+ * Counts use the same people units as the table base (never silent thousands).
+ * Projected 000s are a separate statistic and render via mediaCellLines with a k label.
+ */
 export function displayedCount(
   cell:
     | {
@@ -181,15 +184,6 @@ export function displayedCount(
 ): string {
   if (!cell) return '—';
   if (weighted) {
-    const projected = cell.projected_thousands;
-    if (typeof projected === 'number' && Number.isFinite(projected)) {
-      const shown = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
-      const unweighted = cell.unweighted_n;
-      if (unweighted != null && !Number.isNaN(Number(unweighted))) {
-        return `${shown} (${formatGroupedNumber(Number(unweighted))})`;
-      }
-      return shown;
-    }
     const raw = cell.count ?? cell.weighted_n;
     if (raw == null || Number.isNaN(Number(raw))) return '—';
     const weightedShown = formatGroupedNumber(Number(raw));
@@ -205,8 +199,9 @@ export function displayedCount(
 }
 
 /**
- * Weighted tables also ask for index and the unweighted base.
- * Projected 000s only when the weight projects to a population (Paper 5d).
+ * Statistics sent for a table run. Only what the user toggled — never force
+ * index / projected / unweighted on (Paper 5d checklist). Drop Projected 000s
+ * when the active weight is not a projection.
  */
 export function tableStatisticsForWeight(
   selected: string[],
@@ -214,19 +209,9 @@ export function tableStatisticsForWeight(
   isProjection = false
 ): string[] {
   const stats = selected.filter(Boolean);
-  if (!weighted) return stats.length ? stats : ['column_proportion'];
-  const out = [...stats];
-  const extras = isProjection
-    ? (['projected_thousands', 'index', 'unweighted_base'] as const)
-    : (['index', 'unweighted_base'] as const);
-  for (const kind of extras) {
-    if (!out.includes(kind)) out.push(kind);
-  }
-  // Drop Projected 000s when the active weight is a design weight.
-  if (!isProjection) {
-    return out.filter(kind => kind !== 'projected_thousands');
-  }
-  return out;
+  const base = stats.length ? stats : ['column_proportion'];
+  if (!weighted || isProjection) return base;
+  return base.filter(kind => kind !== 'projected_thousands');
 }
 
 /** Book weight block: projection weights carry is_projection / projection_unit. */
@@ -377,14 +362,14 @@ function cellFigure(
   figure: CellFigure,
   digits: number,
   weighted = false,
-  includeProjected = true
+  options?: { includeProjected?: boolean; includeIndex?: boolean }
 ): string {
   if (!cell) return '—';
   if (figure === 'count') return displayedCount(cell, weighted);
   if (figure === 'mean') {
     return cell.mean != null ? formatStat(cell.mean, 'mean', digits) : '—';
   }
-  return mediaCellText(cell, figure, digits, { includeProjected });
+  return mediaCellText(cell, figure, digits, options);
 }
 
 function cellFigures(
@@ -392,19 +377,20 @@ function cellFigures(
   figures: CellFigure[],
   digits: number,
   weighted = false,
-  isProjection = false
+  isProjection = false,
+  statistics: string[] = []
 ): string {
   const hasCount = figures.includes('count');
   const parts = figures
     .map(figure =>
-      cellFigure(
-        cell,
-        figure,
-        digits,
-        weighted,
-        // Design weights never show a "(000s)" people label beside %.
-        isProjection && !(hasCount && figure !== 'count')
-      )
+      cellFigure(cell, figure, digits, weighted, {
+        includeProjected:
+          isProjection &&
+          !hasCount &&
+          figure === 'percent' &&
+          statistics.includes('projected_thousands'),
+        includeIndex: figure === 'percent' && statistics.includes('index'),
+      })
     )
     .filter(part => part && part !== '—');
   return parts.length ? parts.join(' · ') : '—';
@@ -432,14 +418,16 @@ function StackedCellFigures({
   const hasCount = figures.includes('count');
   const extras = figures.filter(figure => figure !== 'percent');
   const inferential = extraCellStatLines(cell, statistics, digits);
+  const showProjected = isProjection && !hasCount && statistics.includes('projected_thousands');
+  const showIndex = statistics.includes('index');
+  const showUnweighted =
+    !hasCount &&
+    (statistics.includes('unweighted_base') || statistics.includes('projected_thousands'));
   const multi =
-    figures.length > 1 ||
-    Boolean(cell?.projected_thousands) ||
-    cell?.index != null ||
-    inferential.length > 0;
+    figures.length > 1 || showProjected || showIndex || showUnweighted || inferential.length > 0;
   // Always stack when more than one figure is on (Row % used to overflow sideways).
   if (!wantsPercent || !multi) {
-    const text = cellFigures(cell, figures, digits, weighted, isProjection);
+    const text = cellFigures(cell, figures, digits, weighted, isProjection, statistics);
     return (
       <span className="flow-cell-stack">
         <span className="flow-cell-stack-primary">
@@ -455,13 +443,12 @@ function StackedCellFigures({
     );
   }
   const lines = mediaCellLines(cell, digits, {
-    includeProjected: isProjection && !hasCount && statistics.includes('projected_thousands'),
-    includeUnweighted:
-      !hasCount &&
-      (statistics.includes('unweighted_base') || statistics.includes('projected_thousands')),
+    includeProjected: showProjected,
+    includeIndex: showIndex,
+    includeUnweighted: showUnweighted,
   });
   const extraText = extras
-    .map(figure => cellFigure(cell, figure, digits, weighted, false))
+    .map(figure => cellFigure(cell, figure, digits, weighted))
     .filter(part => part && part !== '—');
   return (
     <span className="flow-cell-stack">
@@ -543,6 +530,7 @@ export function BannerGrid({
   markLowBase = false,
   muted = false,
   columnLabels = [],
+  significance,
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
@@ -559,6 +547,8 @@ export function BannerGrid({
   markLowBase?: boolean;
   muted?: boolean;
   columnLabels?: { name: string; label: string }[];
+  /** Live Tables significance settings so the footnote matches the panel. */
+  significance?: TableSignificanceSettings | null;
 }) {
   const shownFigures = figures?.length ? figures : [figure];
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
@@ -786,7 +776,9 @@ export function BannerGrid({
           </tbody>
         </Table>
       </div>
-      {bannerFootnote(book) ? <p className="flow-muted">{bannerFootnote(book)}</p> : null}
+      {bannerFootnote(book, significance) ? (
+        <p className="flow-muted">{bannerFootnote(book, significance)}</p>
+      ) : null}
     </div>
   );
 }
@@ -2734,6 +2726,17 @@ export function TablesBuilder({
         if (token !== tableRequest.current) return;
         if (!save) {
           setBook(body);
+          // Keep the left list label in sync when the stub changes on a preview.
+          const previewId = String((body.spec as { id?: string } | undefined)?.id || '');
+          const stubMeta = ((body.stubs as { label?: string; column?: string }[]) || [])[0];
+          const listed = stubHeaderLabel(stubMeta, columns);
+          if (previewId && listed) {
+            setSpecs(current =>
+              current.map(item =>
+                (item.spec_id || item.id) === previewId ? { ...item, label: listed } : item
+              )
+            );
+          }
           return;
         }
         setDirty(false);
@@ -3304,6 +3307,14 @@ export function TablesBuilder({
                         projectId={projectId}
                         column={stub}
                         label={labelFor(stub)}
+                        memberColumns={
+                          variableSets.find(
+                            item =>
+                              String(item.name || '') === stub ||
+                              String(item.label || '') === stub ||
+                              String(item.id || '') === stub
+                          )?.columns
+                        }
                         fileName={
                           files.find(file => file.id === datasetId)?.name ||
                           datasets.find(row => (row.dataset_id || row.id) === datasetId)
@@ -3442,8 +3453,13 @@ export function TablesBuilder({
                         (((book?.rows as BannerRow[] | undefined) || [])[0]?.cells || [])[0],
                       Math.max(digits, 0),
                       {
-                        includeProjected: bookIsProjection(book),
-                        includeUnweighted: true,
+                        includeProjected:
+                          bookIsProjection(book) &&
+                          shownStatistics(statistics, meanOn).includes('projected_thousands'),
+                        includeIndex: shownStatistics(statistics, meanOn).includes('index'),
+                        includeUnweighted: shownStatistics(statistics, meanOn).includes(
+                          'unweighted_base'
+                        ),
                       }
                     )}
                     onApply={applyCellStats}
@@ -3777,7 +3793,7 @@ export function TablesBuilder({
                                       runId,
                                       datasetId,
                                       headline: String(book.title || labelFor(stub) || 'Chart'),
-                                      support: bannerFootnote(book),
+                                      support: bannerFootnote(book, significance),
                                       citation: 'Chart',
                                       afterId: '',
                                       deck: true,
@@ -3818,6 +3834,7 @@ export function TablesBuilder({
                               Boolean(weight),
                               bookIsProjection(book)
                             )}
+                            significance={significance}
                             digits={digits}
                             markLowBase={lowBase}
                             columnLabels={columns.map(column => ({

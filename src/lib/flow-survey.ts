@@ -1,5 +1,5 @@
 import type { AnalysisReportChart } from './analysis-report-types';
-import { significanceFootnoteLine } from './table-significance';
+import { significanceFootnoteLine, type TableSignificanceSettings } from './table-significance';
 
 export type BannerColumn = {
   id: string;
@@ -198,12 +198,12 @@ export function formatGroupedNumber(value: number, places = 0): string {
   });
 }
 
-/** Column %, projected thousands, and index in one cell when the book carried them. */
+/** Column %, projected thousands, and index in one cell when those stats are toggled on. */
 export function mediaCellText(
   cell: BannerCell | undefined,
   figure: 'percent' | 'row_percent' | 'total_percent' = 'percent',
   digits = 1,
-  options?: { includeProjected?: boolean }
+  options?: { includeProjected?: boolean; includeIndex?: boolean }
 ): string {
   if (!cell) return '—';
   const value =
@@ -214,27 +214,28 @@ export function mediaCellText(
         : cell.percent;
   let shown = value != null ? `${value.toFixed(digits)}%` : '—';
   if (figure === 'percent') {
-    const includeProjected = options?.includeProjected !== false;
+    const includeProjected = options?.includeProjected === true;
     const projected = cell.projected_thousands;
     if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
       const count = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
-      const labelled = `${count} (000s)`;
+      const labelled = `${count}k`;
       shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
     }
+    const includeIndex = options?.includeIndex === true;
     const index = cell.index;
-    if (typeof index === 'number' && Number.isFinite(index)) {
-      const idx = Math.round(index).toLocaleString('en-GB');
+    if (includeIndex && typeof index === 'number' && Number.isFinite(index)) {
+      const idx = `idx ${Math.round(index).toLocaleString('en-GB')}`;
       shown = shown === '—' ? idx : `${shown} · ${idx}`;
     }
   }
   return shown;
 }
 
-/** Paper 5d stacked cell lines: percent, projected+index, unweighted n. */
+/** Paper 5d stacked cell lines: percent, projected+index, unweighted n — only toggled stats. */
 export function mediaCellLines(
   cell: BannerCell | undefined,
   digits = 1,
-  options?: { includeProjected?: boolean; includeUnweighted?: boolean }
+  options?: { includeProjected?: boolean; includeUnweighted?: boolean; includeIndex?: boolean }
 ): { percent: string; detail: string; base: string } {
   if (!cell) return { percent: '—', detail: '', base: '' };
   const percent =
@@ -242,17 +243,18 @@ export function mediaCellLines(
       ? `${cell.percent.toFixed(digits)}%`
       : '—';
   const parts: string[] = [];
-  const includeProjected = options?.includeProjected !== false;
+  const includeProjected = options?.includeProjected === true;
   const projected = cell.projected_thousands;
   if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
     const rounded = formatGroupedNumber(projected, projected >= 100 ? 0 : 1).replace(/\.0$/, '');
     parts.push(`${rounded}k`);
   }
+  const includeIndex = options?.includeIndex === true;
   const index = cell.index;
-  if (typeof index === 'number' && Number.isFinite(index)) {
-    parts.push(Math.round(index).toLocaleString('en-GB'));
+  if (includeIndex && typeof index === 'number' && Number.isFinite(index)) {
+    parts.push(`idx ${Math.round(index).toLocaleString('en-GB')}`);
   }
-  const includeUnweighted = options?.includeUnweighted !== false;
+  const includeUnweighted = options?.includeUnweighted === true;
   const n = cell.unweighted_n;
   const base =
     includeUnweighted && typeof n === 'number' && Number.isFinite(n)
@@ -353,7 +355,10 @@ export function themeRead(book: Record<string, unknown>): {
 }
 
 /** The one line under a banner: base, weight, filter, effective base, and the test. */
-export function bannerFootnote(book: Record<string, unknown>): string {
+export function bannerFootnote(
+  book: Record<string, unknown>,
+  settings?: TableSignificanceSettings | null
+): string {
   const parts: string[] = [];
   if (book.answered_n != null) {
     parts.push(
@@ -377,7 +382,7 @@ export function bannerFootnote(book: Record<string, unknown>): string {
     .map(column => (column as { kish_effective_base?: number }).kish_effective_base)
     .find(value => typeof value === 'number');
   if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
-  const sigLine = significanceFootnoteLine(book);
+  const sigLine = significanceFootnoteLine(book, settings);
   if (sigLine) parts.push(sigLine);
   else {
     const letters = book.letters as unknown[] | undefined;
