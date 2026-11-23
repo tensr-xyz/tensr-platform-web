@@ -221,7 +221,7 @@ export function ResponseQualityPanel({
                   ['keep', `Keep · ${counts.keep}`],
                 ] as const
               ).map(([id, label]) => (
-                <button
+                <Button
                   key={id}
                   type="button"
                   role="tab"
@@ -231,7 +231,7 @@ export function ResponseQualityPanel({
                   onClick={() => setFilter(id)}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -255,7 +255,7 @@ export function ResponseQualityPanel({
                       </span>
                       <span className="rq-why">{qualityWhy(row.reasons) || '—'}</span>
                       <span className="rq-decide">
-                        <button
+                        <Button
                           type="button"
                           className="rq-choice"
                           data-active={row.decision === 'keep' ? 'true' : 'false'}
@@ -263,8 +263,8 @@ export function ResponseQualityPanel({
                           onClick={() => setDecision(row.row_index, 'keep')}
                         >
                           Keep
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
                           className="rq-choice"
                           data-active={row.decision === 'remove' ? 'true' : 'false'}
@@ -272,7 +272,7 @@ export function ResponseQualityPanel({
                           onClick={() => setDecision(row.row_index, 'remove')}
                         >
                           Remove
-                        </button>
+                        </Button>
                       </span>
                     </div>
                   );

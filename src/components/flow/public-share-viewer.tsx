@@ -145,9 +145,9 @@ function PageLink({
     );
   }
   return (
-    <button type="button" className="pv-page-link" onClick={() => onPageLink(target.pageId)}>
+    <Button type="button" className="pv-page-link" onClick={() => onPageLink(target.pageId)}>
       {children}
-    </button>
+    </Button>
   );
 }
 
