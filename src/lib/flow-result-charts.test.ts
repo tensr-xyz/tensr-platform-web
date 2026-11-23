@@ -66,6 +66,31 @@ describe('flow result charts', () => {
     expect(charts[0].title).toBe('Region');
   });
 
+  it('TEN-93: keeps one boxplot when Weighted and plain titles both land', () => {
+    const charts = chartsFromToolPayloads([
+      {
+        report: {
+          charts: [
+            {
+              kind: 'boxplot',
+              title: 'Trust in brand by Gender',
+              y_label: 'Trust in brand',
+              groups: [{ label: 'Male' }, { label: 'Female' }],
+            },
+            {
+              kind: 'boxplot',
+              title: 'Weighted Trust in brand by Gender',
+              y_label: 'Trust in brand',
+              groups: [{ label: 'Male' }, { label: 'Female' }],
+            },
+          ],
+        },
+      },
+    ]);
+    expect(charts).toHaveLength(1);
+    expect(charts[0].title).toBe('Weighted Trust in brand by Gender');
+  });
+
   it('derives a chart from frequency_tables when the report has none', () => {
     const charts = chartsFromToolPayloads({
       result: {

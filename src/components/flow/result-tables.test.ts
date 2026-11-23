@@ -1647,6 +1647,25 @@ describe('answer tables', () => {
     expect(resultFootnote(view, '', 'Mann-Whitney')).not.toContain('Weight: none');
   });
 
+  it('TEN-93: an Unweighted base note is not upgraded by a leftover ledger weight', () => {
+    const view = resultViewFromToolResults({
+      resolved_weight: 'none',
+      weight: { column: null, weight_aware: false },
+      n_used: 3000,
+      base_note: 'Weight: Unweighted; base = 3000; effective base = 3000 (100%).',
+      summary: {
+        base_note: 'Weight: Unweighted; base = 3000; effective base = 3000 (100%).',
+      },
+    });
+    view.weight = 'Projection weight (people)';
+    expect(view.baseDetail).toContain('Weight: Unweighted');
+    const foot = resultFootnote(view, '', 'Mann-Whitney', [
+      { name: 'proj_w', label: 'Projection weight (people)' },
+    ]);
+    expect(foot).toContain('Weight: Unweighted');
+    expect(foot).not.toContain('Projection weight');
+  });
+
   it('TEN-93: Groups and Pairwise codes become stamped value labels on the card', () => {
     const view = resultViewFromToolResults({
       procedure: 'mann_whitney_u',

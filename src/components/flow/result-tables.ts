@@ -2100,6 +2100,8 @@ function normalizeWeightDetail(detail: string): string {
 function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLabels[]): string {
   const cleaned = normalizeWeightDetail(detail);
   if (!cleaned || !/weight:/i.test(cleaned) || !weight) return cleaned;
+  // An Unweighted base note is the engine's choice. Do not upgrade it from the ledger.
+  if (/Weight:\s*Unweighted\b/i.test(cleaned)) return cleaned;
   const named = weightNote(weight, columns);
   if (!named || named === 'Unweighted') return cleaned;
   return cleaned.replace(/Weight:\s*[^;]+/i, named);
