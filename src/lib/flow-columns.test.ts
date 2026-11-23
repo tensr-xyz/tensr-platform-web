@@ -125,6 +125,60 @@ describe('picker columns', () => {
     ]);
   });
 
+  it('keeps unlabelled text categoricals on the stub list when n_unique is low', () => {
+    const options = tableStubPickerOptions(
+      [
+        {
+          name: 'gender',
+          label: 'What is your gender?',
+          type: 'string',
+          n_unique: 2,
+          n_rows: 400,
+        },
+        {
+          name: 'region',
+          label: 'Which region?',
+          type: 'string',
+          n_unique: 4,
+          n_rows: 400,
+        },
+        {
+          name: 'brand',
+          label: 'Which brand?',
+          type: 'string',
+          n_unique: 6,
+          n_rows: 400,
+        },
+        {
+          name: 'why',
+          label: 'Why that score?',
+          type: 'string',
+          n_unique: 180,
+          n_rows: 400,
+        },
+        {
+          name: 'rating',
+          label: 'How would you rate the product? (1-5)',
+          type: 'numeric',
+        },
+        {
+          name: 'spend',
+          label: 'How much did you spend?',
+          type: 'numeric',
+        },
+      ],
+      [],
+      []
+    );
+    expect(options.map(item => item.label)).toEqual([
+      'What is your gender?',
+      'Which region?',
+      'Which brand?',
+      'How would you rate the product? (1-5)',
+      'How much did you spend?',
+    ]);
+  });
+
   it('groups shared Question - Option labels when sets are missing and hides admin / Other', () => {
     const options = tableStubPickerOptions(
       [
@@ -232,6 +286,12 @@ describe('question kind', () => {
       'single'
     );
     expect(questionKind({ name: 'why', type: 'string' }, ['too dear', 'staff', 'slow'])).toBe(
+      'open'
+    );
+    expect(questionKind({ name: 'gender', type: 'string', n_unique: 2, n_rows: 400 }, [])).toBe(
+      'single'
+    );
+    expect(questionKind({ name: 'comment', type: 'string', n_unique: 180, n_rows: 400 }, [])).toBe(
       'open'
     );
     expect(questionKind({ name: 'q5_1', type: 'numeric' }, [1], new Set(['q5_1']))).toBe('multi');

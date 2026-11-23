@@ -9,7 +9,37 @@ export type FlowColumn = {
   role?: string | null;
   linked_set?: string | null;
   value_labels?: Record<string, string> | null;
+  /** Distinct non-blank values. Stub/banner pickers use this for unlabelled text. */
+  n_unique?: number | null;
+  n_rows?: number | null;
 };
+
+/** Distinct values at or below this count stay stub/banner categories when unlabelled. */
+export const TABLE_TEXT_CATEGORY_MAX = 100;
+
+/** Unlabelled string with few distinct values: a category, not an open end. */
+export function isTableTextCategorical(
+  column: {
+    type?: string | null;
+    value_labels?: Record<string, string> | null;
+    labels?: Record<string, string> | null;
+    n_unique?: number | null;
+    n_rows?: number | null;
+  },
+  nRows?: number | null
+): boolean {
+  const type = String(column.type || '').toLowerCase();
+  if (type === 'text') return false;
+  if (type !== 'string' && type !== 'categorical') return false;
+  const labels = column.value_labels || column.labels || {};
+  if (Object.keys(labels).length > 0) return true;
+  const nUnique = Number(column.n_unique);
+  if (!Number.isFinite(nUnique) || nUnique < 1) return false;
+  if (nUnique > TABLE_TEXT_CATEGORY_MAX) return false;
+  const rows = Number(nRows ?? column.n_rows);
+  if (Number.isFinite(rows) && rows >= 20 && nUnique >= rows / 2) return false;
+  return true;
+}
 
 export function isDependentColumn(column: FlowColumn): boolean {
   const name = column.name.trim();
@@ -330,6 +360,8 @@ export function questionKind(
   if (['numeric', 'number', 'float', 'integer', 'double'].includes(type)) return 'numeric';
   const unique = new Set(seen).size;
   if (seen.length && unique <= 12 && unique < seen.length / 2) return 'single';
+  // Tables metadata often has no sample values. n_unique still marks text categories.
+  if (isTableTextCategorical(column)) return 'single';
   return 'open';
 }
 
