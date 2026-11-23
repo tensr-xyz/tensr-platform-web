@@ -569,6 +569,29 @@ describe('chat output panel', () => {
     expect(outputStat(results, '')).toContain('r = -0.033');
   });
 
+  it('TEN-93: badges Shapiro-Wilk and Kruskal-Wallis instead of Frequencies', () => {
+    expect(
+      outputKind([
+        {
+          procedure: 'shapiro_wilk',
+          summary: {
+            table: [{ title: 'Test', columns: ['Statistic', 'Value'], rows: [['W', '0.98']] }],
+          },
+        },
+      ])
+    ).toBe('Shapiro-Wilk');
+    expect(
+      outputKind([
+        {
+          procedure: 'kruskal_wallis',
+          summary: {
+            table: [{ title: 'Groups', columns: ['Group', 'n'], rows: [['A', '10']] }],
+          },
+        },
+      ])
+    ).toBe('Kruskal-Wallis');
+  });
+
   it('badges Correlation and keeps r on the key stat', () => {
     const results = [
       {

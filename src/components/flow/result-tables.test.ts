@@ -1656,7 +1656,10 @@ describe('answer tables', () => {
             rows: [['1.0', '2.0', '12', '0.12', '0.12']],
           },
         ],
-        notes: ['Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.'],
+        notes: [
+          'SPSS NPAR TESTS default: asymptotic Mann–Whitney with continuity correction.',
+          'Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.',
+        ],
       },
     });
     const groups = view.tables.find(table => table.title === 'Groups');
@@ -1664,6 +1667,40 @@ describe('answer tables', () => {
     const pairs = view.tables.find(table => table.title === 'Pairwise');
     expect(pairs?.rows[0]?.slice(0, 2)).toEqual(['Male', 'Female']);
     expect(view.checks.some(note => note.includes('Effect size'))).toBe(true);
+    expect(view.checks.some(note => /Mann/.test(note))).toBe(true);
+  });
+
+  it('TEN-93: nested engine book still remaps Groups codes when summary has only codes', () => {
+    const view = resultViewFromToolResults([
+      {
+        procedure: 'mann_whitney_u',
+        summary: {
+          table: [
+            {
+              title: 'Groups',
+              columns: ['Group', 'n', 'Median'],
+              rows: [
+                ['1.0', '10', '4'],
+                ['2.0', '10', '5'],
+              ],
+            },
+          ],
+          notes: ['SPSS NPAR TESTS default: asymptotic Mann–Whitney.'],
+        },
+        result: {
+          analysis_type: 'mann_whitney_u',
+          result: {
+            group_descriptives: [
+              { group: '1.0', label: 'Male', n: 10, median: 4 },
+              { group: '2.0', label: 'Female', n: 10, median: 5 },
+            ],
+          },
+        },
+      },
+    ]);
+    const groups = view.tables.find(table => table.title === 'Groups');
+    expect(groups?.rows.map(row => row[0])).toEqual(['Male', 'Female']);
+    expect(view.checks.some(note => /Mann/.test(note))).toBe(true);
   });
 
   it('falls through an empty weight object without showing a column code in the base line', () => {

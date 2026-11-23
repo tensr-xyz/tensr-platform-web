@@ -120,6 +120,17 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
     string,
     unknown
   >;
+  // Tool wrappers nest the engine book under result.result.
+  const nested =
+    result.result && typeof result.result === 'object' && !Array.isArray(result.result)
+      ? (result.result as Record<string, unknown>)
+      : result;
+  const engine =
+    Array.isArray(nested.group_descriptives) ||
+    nested.u_statistic != null ||
+    nested.h_statistic != null
+      ? nested
+      : result;
   const meta = (report.meta && typeof report.meta === 'object' ? report.meta : {}) as Record<
     string,
     unknown
@@ -129,11 +140,11 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
       .map(tableFromReport)
       .filter(Boolean) as RunTable[]),
   ];
-  const groups = groupTable(result);
-  const anova = anovaTable(result);
+  const groups = groupTable(engine);
+  const anova = anovaTable(engine);
   if (groups && !tables.some(table => table.title === groups.title)) tables.unshift(groups);
   if (anova && !tables.some(table => table.title === anova.title)) tables.push(anova);
-  const labelledGroups = groupLabelMap(result);
+  const labelledGroups = groupLabelMap(engine);
   if (labelledGroups.size) {
     for (const table of tables) {
       if (table.title.trim().toLowerCase() !== 'groups') continue;
