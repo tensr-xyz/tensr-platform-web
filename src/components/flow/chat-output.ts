@@ -626,11 +626,13 @@ export function clientDeckReportHref(projectHref: string): string {
 }
 
 /** A weight column code and an empty cautions bullet are not part of the finding. */
-function withoutStrayEnding(text: string): string {
+export function withoutStrayEnding(text: string): string {
   const lines = text.split('\n').filter(line => {
     const trimmed = line.trim();
     if (/^cautions:?$/i.test(trimmed)) return false;
     if (/^[-*•]\s*$/.test(trimmed)) return false;
+    // A trailing "weighted by column_code" line under the reply (TEN-41).
+    if (/^weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?$/i.test(trimmed)) return false;
     return true;
   });
   return (

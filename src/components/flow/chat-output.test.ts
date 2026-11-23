@@ -2,6 +2,7 @@ import {
   answerWithoutBase,
   keepLineBreaks,
   withoutResultTokens,
+  withoutStrayEnding,
   outputChecks,
   isProcedurePlaceholder,
   hasSummaryTable,
@@ -360,6 +361,15 @@ describe('chat output panel', () => {
     expect(lead).not.toMatch(/design_weight/);
     expect(lead).not.toMatch(/Cautions/);
     expect(lead.trim().endsWith('-')).toBe(false);
+  });
+
+  it('TEN-41: drops a stray weighted-by column line from prose under the reply', () => {
+    const prose = withoutStrayEnding(
+      answerWithoutBase('Net reach is 62% among the audience.\n\nweighted by proj_weight')
+    );
+    expect(prose).toContain('62%');
+    expect(prose).not.toMatch(/proj_weight/);
+    expect(prose).not.toMatch(/weighted by/i);
   });
 
   it('prefers a labelled structured lead over model prose that quotes codes', () => {

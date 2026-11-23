@@ -29,6 +29,7 @@ import {
   answerWithoutBase,
   answerWithoutTables,
   withoutResultTokens,
+  withoutStrayEnding,
   outputBaseClause,
   outputCardReady,
   outputChecks,
@@ -1216,9 +1217,11 @@ export function useAgentThread({
     title: titledWithQuestion(table.title, columnLabels),
   }));
   const resultCharts = resultView.charts;
-  const prose = answerWithoutBase(
-    withoutResultTokens(
-      structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
+  const prose = withoutStrayEnding(
+    answerWithoutBase(
+      withoutResultTokens(
+        structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
+      )
     )
   );
   const lead = resultLead(answer, toolResults, resultTables);

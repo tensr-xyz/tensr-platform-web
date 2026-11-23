@@ -1323,6 +1323,37 @@ describe('mean comparison tables', () => {
       ['United States', 'Germany'],
     ]);
   });
+
+  it('TEN-41: summary Post hoc (tukey hsd) codes become value labels', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Post hoc (tukey hsd)',
+            columns: ['Group', 'Compared with', 'Mean difference', 'Adjusted p', 'Differs'],
+            rows: [
+              ['1.0', '2', '-0.71', '< .001', 'Yes'],
+              ['1.0', '3', '-1.95', '< .001', 'Yes'],
+              ['2.0', '3', '-1.24', '< .001', 'Yes'],
+            ],
+          },
+        ],
+      },
+      result: {
+        group_descriptives: [
+          { group: '1.0', label: 'United States', n: 40, mean: 4.9 },
+          { group: '2.0', label: 'United Kingdom', n: 40, mean: 4.2 },
+          { group: '3.0', label: 'Germany', n: 40, mean: 3.0 },
+        ],
+      },
+    });
+    const pairs = view.tables.find(table => table.title.startsWith('Post hoc'));
+    expect(pairs?.rows.map(row => row.slice(0, 2))).toEqual([
+      ['United States', 'United Kingdom'],
+      ['United States', 'Germany'],
+      ['United Kingdom', 'Germany'],
+    ]);
+  });
 });
 
 describe('summary tables', () => {
