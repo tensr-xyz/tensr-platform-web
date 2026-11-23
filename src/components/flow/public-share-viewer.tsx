@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
+import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import { runDocument } from '@/components/flow/run-document';
 import { ShareViewerFilters } from '@/components/flow/share-viewer-filters';
@@ -155,9 +156,9 @@ export function PublicShareViewer({
           </span>
         </div>
         <div className="pv-actions">
-          <button type="button" className="pv-btn" onClick={() => window.print()}>
+          <Button type="button" className="pv-btn" onClick={() => window.print()}>
             Download PDF
-          </button>
+          </Button>
           <Link className="pv-btn" href={loginHref}>
             Sign in to comment
           </Link>
@@ -173,7 +174,7 @@ export function PublicShareViewer({
                 const id = String(page.id || index);
                 const selected = (activePage?.id || pages[0]?.id) === page.id;
                 return (
-                  <button
+                  <Button
                     key={id}
                     type="button"
                     className="pv-page-item"
@@ -181,7 +182,7 @@ export function PublicShareViewer({
                     onClick={() => setActivePageId(String(page.id || ''))}
                   >
                     {index + 1} · {page.title || 'Page'}
-                  </button>
+                  </Button>
                 );
               })}
             </nav>

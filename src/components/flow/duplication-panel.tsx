@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { formatGroupedNumber } from '@/lib/flow-survey';
 
 export type DuplicationFigure = {
@@ -195,14 +196,14 @@ export function DuplicationPanel({
           <div className="duplication-net-head">
             <h3>Net reach of a combination</h3>
             {available.length ? (
-              <button type="button" className="duplication-add" onClick={addNext}>
+              <Button type="button" className="duplication-add" onClick={addNext}>
                 + Add title
-              </button>
+              </Button>
             ) : null}
           </div>
           <div className="duplication-chips">
             {selected.map(index => (
-              <button
+              <Button
                 key={labels[index]}
                 type="button"
                 className="duplication-chip"
@@ -210,7 +211,7 @@ export function DuplicationPanel({
                 aria-label={`Remove ${labels[index]}`}
               >
                 {labels[index]} <span aria-hidden="true">×</span>
-              </button>
+              </Button>
             ))}
           </div>
           <div className="duplication-net-figure">

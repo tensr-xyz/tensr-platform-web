@@ -118,7 +118,7 @@ export function ReportThemePanel({
           >
             {theme.logoUrl ? 'Replace' : 'Add'}
           </Button>
-          <input
+          <Input
             ref={fileRef}
             type="file"
             accept="image/*,.pptx,.potx"

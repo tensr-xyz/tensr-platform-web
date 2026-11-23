@@ -448,7 +448,7 @@ export function ShareDialog({
             </div>
             {linkOn ? (
               <div className="share-link-modes" role="radiogroup" aria-label="Link access">
-                <button
+                <Button
                   type="button"
                   className="share-link-mode"
                   data-active={linkAccess === 'signed_in' ? 'true' : 'false'}
@@ -458,8 +458,8 @@ export function ShareDialog({
                   onClick={() => setProjectLink('signed_in')}
                 >
                   <strong>Signed-in people in {workspaceName}</strong>
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   className="share-link-mode"
                   data-active={linkAccess === 'anonymous' ? 'true' : 'false'}
@@ -470,7 +470,7 @@ export function ShareDialog({
                 >
                   <strong>Anyone, no sign-in (read-only)</strong>
                   <span>Opens this viewer. No rows, no chat, no edits.</span>
-                </button>
+                </Button>
                 <p className="share-link-meta">
                   {pageCounts
                     ? `Pages shared: ${pageCounts.shared} of ${pageCounts.total}`

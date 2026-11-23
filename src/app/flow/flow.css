@@ -6247,7 +6247,7 @@ button.chat-result-top {
   gap: 8px;
   color: var(--color-ink);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 18px;
 }
 
@@ -6364,7 +6364,7 @@ button.chat-result-top {
   margin: 0;
   color: #fff;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--weight-semibold, 600);
   line-height: 16px;
 }
 
@@ -12515,7 +12515,7 @@ button.chat-result-top {
 
 .share-link-mode strong {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 16px;
 }
 
@@ -16438,7 +16438,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .report-inspector-tabs button[data-active='true'] {
   background: var(--color-canvas);
   color: var(--color-ink);
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .report-editor-page-logo {
@@ -16478,7 +16478,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .report-layout-picker-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 18px;
   color: var(--color-ink);
 }
@@ -16720,7 +16720,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   padding: 0;
   border: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   color: var(--color-ink);
 }
 
