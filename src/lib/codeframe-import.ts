@@ -41,6 +41,7 @@ export const CODEFRAME_IMPORT_MODES: {
 export function textColumnFromCodeColumn(codeColumn: string): string {
   const name = String(codeColumn || '').trim();
   if (name.endsWith('_codes')) return name.slice(0, -'_codes'.length);
+  if (name.endsWith('_themes')) return name.slice(0, -'_themes'.length);
   return name;
 }
 

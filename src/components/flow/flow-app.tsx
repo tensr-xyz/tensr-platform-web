@@ -42,7 +42,13 @@ import {
 } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
-import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import {
+  isCodedOpenEndColumn,
+  isIdColumn,
+  isInternalColumn,
+  sourceTextColumnFor,
+  type FlowColumn,
+} from '@/lib/flow-columns';
 import {
   formatSheetCellDisplay,
   sheetColumnHint,
@@ -4080,16 +4086,18 @@ function ResponsesScreen({
     });
     return () => setPaletteColumnContext(null);
   }, [datasetId, sheetPhase, activeLabel, activeType]);
-  const isCoded = (column: FlowColumn) =>
-    column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
   const codedColumn =
     (frameName
-      ? columns.find(column => column.name === frameName && isCoded(column))
+      ? columns.find(column => column.name === frameName && isCodedOpenEndColumn(column))
       : undefined) ||
     columns.find(column => {
       const matches = column.name === activeName || column.label === activeName;
-      return matches && isCoded(column);
+      return matches && isCodedOpenEndColumn(column);
     });
+  const codedSourceName = codedColumn ? sourceTextColumnFor(codedColumn, columns) : '';
+  const codedSourceColumn = codedSourceName
+    ? columns.find(item => item.name === codedSourceName)
+    : undefined;
   const columnValues = (column?: FlowColumn) => {
     if (!column) return [];
     const index = names.findIndex(name => name === column.name || name === column.label);
@@ -4492,8 +4500,23 @@ function ResponsesScreen({
           reviewing && datasetId ? (
             <CodingReview
               datasetId={datasetId}
-              codeColumn={reviewing.endsWith('_codes') ? reviewing : `${reviewing}_codes`}
-              textColumn={reviewing.replace(/_codes$/, '')}
+              codeColumn={
+                isCodedOpenEndColumn({ name: reviewing })
+                  ? reviewing
+                  : columns.find(
+                      column =>
+                        isCodedOpenEndColumn(column) &&
+                        sourceTextColumnFor(column, columns) === reviewing
+                    )?.name || `${reviewing}_themes`
+              }
+              textColumn={
+                isCodedOpenEndColumn({ name: reviewing })
+                  ? sourceTextColumnFor(
+                      columns.find(column => column.name === reviewing) || { name: reviewing },
+                      columns
+                    )
+                  : reviewing
+              }
               onDone={result => {
                 setReopenTheme(result?.codeColumn || reviewing);
                 setReviewing(null);
@@ -5130,18 +5153,11 @@ function ResponsesScreen({
               <CodeFrameRail
                 datasetId={datasetId}
                 column={codedColumn.name}
-                title={
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                    ?.label || codedColumn.name.replace(/_codes$/, '')
-                }
-                question={
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                    ?.label || ''
-                }
+                title={codedSourceColumn?.label || codedSourceName || codedColumn.name}
+                question={codedSourceColumn?.label || ''}
+                textColumn={codedSourceName || undefined}
                 values={columnValues(codedColumn)}
-                texts={columnValues(
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                )}
+                texts={columnValues(codedSourceColumn)}
                 onFilter={value => {
                   setValueFilter(value);
                   setShowFilters(true);

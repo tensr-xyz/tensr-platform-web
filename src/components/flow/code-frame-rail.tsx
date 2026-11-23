@@ -27,7 +27,22 @@ function rowsFrom(values: string[]): { codes: CodeRow[]; blank: number } {
       blank += 1;
       continue;
     }
-    counts.set(text, (counts.get(text) || 0) + 1);
+    // Multi-response cells are pipe-joined; count each theme once per respondent.
+    const parts = [
+      ...new Set(
+        text
+          .split('|')
+          .map(part => part.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (!parts.length) {
+      blank += 1;
+      continue;
+    }
+    for (const part of parts) {
+      counts.set(part, (counts.get(part) || 0) + 1);
+    }
   }
   const codes = [...counts.entries()]
     .map(([label, count]) => ({ id: label, label, count }))
@@ -66,6 +81,7 @@ export function CodeFrameRail({
   column,
   title,
   question = '',
+  textColumn: textColumnProp,
   values,
   texts = [],
   onFilter,
@@ -76,6 +92,8 @@ export function CodeFrameRail({
   column: string;
   title: string;
   question?: string;
+  /** Verbatim column when the coded name is not `*_codes` / `*_themes`. */
+  textColumn?: string;
   values: string[];
   texts?: string[];
   onFilter?: (value: string) => void;
@@ -109,7 +127,7 @@ export function CodeFrameRail({
     setImportMode('replace');
   }, [signature]);
   const total = values.length || 1;
-  const textColumn = textColumnFromCodeColumn(column);
+  const textColumn = String(textColumnProp || '').trim() || textColumnFromCodeColumn(column);
   const headTitle = `${title || textColumn} · ${codes.length} theme${
     codes.length === 1 ? '' : 's'
   }`;

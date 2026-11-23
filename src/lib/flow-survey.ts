@@ -159,13 +159,29 @@ export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string
   return concatenateLetters(chosen.map(item => String(item.letter || '')));
 }
 
-export function codedStub(column: string): {
+export function codedStub(
+  column: string,
+  meta?: {
+    coded_multi?: boolean;
+    multi_response?: boolean;
+    code_delimiter?: string | null;
+    source_text_column?: string | null;
+  }
+): {
   column: string;
   multiple_response?: boolean;
   value_delimiter?: string;
 } {
-  if (!column.endsWith('_codes')) return { column };
-  return { column, multiple_response: true, value_delimiter: '|' };
+  const name = String(column || '').trim();
+  const multi =
+    name.endsWith('_codes') ||
+    name.endsWith('_themes') ||
+    Boolean(meta?.coded_multi) ||
+    Boolean(meta?.multi_response) ||
+    Boolean(String(meta?.source_text_column || '').trim());
+  if (!multi) return { column: name || column };
+  const delimiter = String(meta?.code_delimiter || '|').trim() || '|';
+  return { column: name || column, multiple_response: true, value_delimiter: delimiter };
 }
 
 export function efficiencyPercent(value: unknown): string {

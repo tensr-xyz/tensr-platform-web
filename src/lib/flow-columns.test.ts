@@ -273,6 +273,35 @@ describe('picker columns', () => {
       { value: 'Q7_codes', label: 'Q7' },
     ]);
   });
+
+  it('offers agent-coded *_themes columns and metadata-coded frames', () => {
+    const { themeColumns, isCodedOpenEndColumn, sourceTextColumnFor } =
+      jest.requireActual('./flow-columns');
+    const columns = [
+      {
+        name: 'sat_reason_themes',
+        label: 'Why did you give that satisfaction score? themes',
+        source_text_column: 'sat_reason',
+        coded_multi: true,
+      },
+      { name: 'sat_reason', label: 'Why did you give that satisfaction score?' },
+      {
+        name: 'notes_coded',
+        label: 'Notes themes',
+        source_text_column: 'notes',
+        codeframe: { source_text_column: 'notes', codes: [] },
+      },
+      { name: 'region', label: 'Region' },
+    ];
+    expect(themeColumns(columns)).toEqual([
+      { value: 'sat_reason_themes', label: 'Why did you give that satisfaction score?' },
+      { value: 'notes_coded', label: 'Notes' },
+    ]);
+    expect(isCodedOpenEndColumn(columns[0])).toBe(true);
+    expect(isCodedOpenEndColumn(columns[3])).toBe(false);
+    expect(sourceTextColumnFor(columns[0], columns)).toBe('sat_reason');
+    expect(sourceTextColumnFor({ name: 'open_end_codes' }, columns)).toBe('open_end');
+  });
 });
 
 describe('question kind', () => {

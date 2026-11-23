@@ -14,6 +14,12 @@ export type FlowColumn = {
   /** Distinct non-blank values. Stub/banner pickers use this for unlabelled text. */
   n_unique?: number | null;
   n_rows?: number | null;
+  /** Open-end coding: the verbatim column this themes variable came from. */
+  source_text_column?: string | null;
+  coded_multi?: boolean;
+  multi_response?: boolean;
+  code_delimiter?: string | null;
+  codeframe?: { source_text_column?: string | null; codes?: unknown } | null;
 };
 
 /** Distinct values at or below this count stay stub/banner categories when unlabelled. */
@@ -61,10 +67,60 @@ export function dependentColumns(columns: FlowColumn[]): string[] {
     .map(column => column.name);
 }
 
+/** Agent and apply coding store themes as `*_codes` or `*_themes`. */
+export function isCodedColumnName(name: string): boolean {
+  const trimmed = String(name || '').trim();
+  return trimmed.endsWith('_codes') || trimmed.endsWith('_themes');
+}
+
+/** A themes / code-frame column the Themes screen and Variable rail can open. */
+export function isCodedOpenEndColumn(
+  column: Pick<
+    FlowColumn,
+    'name' | 'label' | 'source_text_column' | 'coded_multi' | 'multi_response' | 'codeframe'
+  >
+): boolean {
+  const name = String(column.name || '').trim();
+  if (!name) return false;
+  if (isCodedColumnName(name)) return true;
+  if (String(column.label || '').startsWith('Codes for')) return true;
+  if (String(column.source_text_column || '').trim()) return true;
+  if (column.coded_multi || column.multi_response) return true;
+  const frame = column.codeframe;
+  if (frame && typeof frame === 'object') return true;
+  return false;
+}
+
+/** Verbatim column for a coded themes variable. Prefers stored metadata over the name suffix. */
+export function sourceTextColumnFor(
+  column: Pick<FlowColumn, 'name' | 'source_text_column' | 'codeframe'>,
+  columns: { name: string }[] = []
+): string {
+  const direct = String(column.source_text_column || '').trim();
+  if (direct) return direct;
+  const frame = column.codeframe;
+  if (frame && typeof frame === 'object') {
+    const fromFrame = String(frame.source_text_column || '').trim();
+    if (fromFrame) return fromFrame;
+  }
+  const name = String(column.name || '').trim();
+  if (name.endsWith('_codes')) {
+    const source = name.slice(0, -'_codes'.length);
+    if (!columns.length || columns.some(item => item.name === source)) return source;
+    return source;
+  }
+  if (name.endsWith('_themes')) {
+    const source = name.slice(0, -'_themes'.length);
+    if (!columns.length || columns.some(item => item.name === source)) return source;
+    return source;
+  }
+  return name;
+}
+
 /** Text open ends only. Numeric and already-coded columns stay out of the code frame. */
 export function isOpenEndColumn(column: FlowColumn): boolean {
   const name = column.name.trim();
-  if (!name || name.endsWith('_codes')) return false;
+  if (!name || isCodedColumnName(name) || isCodedOpenEndColumn(column)) return false;
   const type = String(column.type || '').toLowerCase();
   if (
     type === 'numeric' ||
@@ -312,17 +368,24 @@ export function tableStubPickerOptions(
 
 /** Coded open ends for the Theme picker. The value is the stored codes column, the label its open end. */
 export function themeColumns(
-  columns: { name: string; label?: string | null }[]
+  columns: Array<
+    Pick<
+      FlowColumn,
+      'name' | 'label' | 'source_text_column' | 'coded_multi' | 'multi_response' | 'codeframe'
+    >
+  >
 ): { value: string; label: string }[] {
   return columns
-    .filter(column => column.name.endsWith('_codes'))
+    .filter(column => isCodedOpenEndColumn(column))
     .map(column => {
-      const source = column.name.replace(/_codes$/, '');
+      const source = sourceTextColumnFor(column, columns);
       const sourceColumn = columns.find(item => item.name === source);
       const own = String(column.label || '')
         .replace(/^Codes for\s+/i, '')
+        .replace(/\s+themes$/i, '')
         .trim();
-      const ownIsStoredName = !own || own === column.name || own === source;
+      const ownIsStoredName =
+        !own || own === column.name || own === source || own === `${source} themes`;
       const sourceLabel = String(sourceColumn?.label || '').trim();
       const label = !ownIsStoredName
         ? own

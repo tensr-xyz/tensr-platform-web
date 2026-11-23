@@ -31,6 +31,16 @@ describe('flow survey grid', () => {
       multiple_response: true,
       value_delimiter: '|',
     });
+    expect(codedStub('sat_reason_themes')).toEqual({
+      column: 'sat_reason_themes',
+      multiple_response: true,
+      value_delimiter: '|',
+    });
+    expect(codedStub('custom_themes', { coded_multi: true, code_delimiter: '|' })).toEqual({
+      column: 'custom_themes',
+      multiple_response: true,
+      value_delimiter: '|',
+    });
     expect(codedStub('measure')).toEqual({ column: 'measure' });
   });
 

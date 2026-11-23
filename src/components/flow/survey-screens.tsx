@@ -797,7 +797,7 @@ export function splitColumns<T extends { name: string; label: string }>(
   columns: T[],
   theme: string
 ): T[] {
-  const source = theme.replace(/_codes$/, '');
+  const source = theme.replace(/_codes$/, '').replace(/_themes$/, '');
   return pickerColumns(columns).filter(
     column =>
       column.name !== theme &&
@@ -830,7 +830,17 @@ export function ThemesPanel({
   const router = useRouter();
   const coding = codingVersionStatus(files, datasetId);
   const [columns, setColumns] = useState<
-    { name: string; label: string; type?: string; measure?: string }[]
+    {
+      name: string;
+      label: string;
+      type?: string;
+      measure?: string;
+      source_text_column?: string | null;
+      coded_multi?: boolean;
+      multi_response?: boolean;
+      code_delimiter?: string | null;
+      codeframe?: { source_text_column?: string | null } | null;
+    }[]
   >([]);
   const [stub, setStub] = useState(initialStub);
   const [banner, setBanner] = useState('');
@@ -847,7 +857,17 @@ export function ThemesPanel({
     }
     setColumnsReady(false);
     void flowJson<{
-      columns?: { name?: string; label?: string; type?: string; measure?: string }[];
+      columns?: {
+        name?: string;
+        label?: string;
+        type?: string;
+        measure?: string;
+        source_text_column?: string | null;
+        coded_multi?: boolean;
+        multi_response?: boolean;
+        code_delimiter?: string | null;
+        codeframe?: { source_text_column?: string | null } | null;
+      }[];
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         setColumns(
@@ -857,6 +877,11 @@ export function ThemesPanel({
               label: column.label || column.name || '',
               type: column.type,
               measure: column.measure,
+              source_text_column: column.source_text_column,
+              coded_multi: column.coded_multi,
+              multi_response: column.multi_response,
+              code_delimiter: column.code_delimiter,
+              codeframe: column.codeframe,
             }))
             .filter(column => column.name)
         );
@@ -888,7 +913,7 @@ export function ThemesPanel({
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
-        stubs: [codedStub(stub)],
+        stubs: [codedStub(stub, stubColumn)],
         banner: banner ? [{ column: banner }] : [],
         statistics: ['column_proportion'],
         significance_display: 'column_letters',
@@ -1061,7 +1086,7 @@ export function ThemesPanel({
                   void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
                     method: 'POST',
                     body: JSON.stringify({
-                      stubs: [codedStub(stub)],
+                      stubs: [codedStub(stub, stubColumn)],
                       banner: banner ? [{ column: banner }] : [],
                       statistics: ['column_proportion'],
                       significance_display: 'column_letters',
