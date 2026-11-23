@@ -5758,6 +5758,7 @@ function ReportScreen({
 
   const deck = async (recipe?: OverviewBuildRequest) => {
     setError('');
+    setNote('Building the PowerPoint file');
 
     // Audience overview: auto-build the standard tables from the saved audience.
     if (recipe && exportFileId) {
@@ -5852,17 +5853,23 @@ function ReportScreen({
     } catch {
       /* Fall back to pins when no reshaped document is stored. */
     }
+    const deckStem = (project?.name || 'deck').trim() || 'deck';
     const { exportOfficeDeckAndDownload } = await import('@/lib/office-deck-job');
-    await exportOfficeDeckAndDownload(exportFileId, 'deck', {
-      spec_ids: selected.map(row => row.id),
-      outputs,
-      report_document: reportDocument,
-      headlines: findings
-        .filter(finding => finding.headline)
-        .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
-      ...(template ? { template_base64: template } : {}),
-      ...(templateName ? { template_name: templateName } : {}),
-    });
+    await exportOfficeDeckAndDownload(
+      exportFileId,
+      deckStem,
+      {
+        spec_ids: selected.map(row => row.id),
+        outputs,
+        report_document: reportDocument,
+        name: deckStem,
+        // Report pages carry their own titles; do not send Overview findings by
+        // position — that paired the wrong table under each slide title.
+        ...(template ? { template_base64: template } : {}),
+        ...(templateName ? { template_name: templateName } : {}),
+      },
+      { onProgress: message => setNote(message) }
+    );
     setNote('Deck downloaded.');
     setDecksTick(value => value + 1);
   };
@@ -6093,10 +6100,12 @@ function ReportScreen({
               disabled={busy !== ''}
               onClick={() => run('deck', deck)}
             >
-              Download PPTX
+              {busy === 'deck' ? 'Building…' : 'Download PPTX'}
             </Button>
           </div>
         </div>
+        {busy === 'deck' && note ? <p className="flow-muted">{note}</p> : null}
+        {error ? <p className="flow-error">{error}</p> : null}
         <ReportEditor
           datasetId={exportFileId || null}
           pins={reportPins}
