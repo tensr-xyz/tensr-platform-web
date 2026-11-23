@@ -6,6 +6,7 @@ import {
   resultFootnote,
   resultViewFromToolResults,
   shownCount,
+  shownMetric,
   weightChipName,
   weightNote,
   withoutEngineCopies,
@@ -1016,6 +1017,9 @@ describe('result tables', () => {
     expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
       'Weight: Raked weight'
     );
+    expect(shownMetric('Weight', 'proj_weight')).toBe('Weighted');
+    expect(shownMetric('Weight', 'Projection weight (people)')).toBe('Projection weight (people)');
+    expect(shownMetric('Weight', 'none')).toBe('Unweighted');
     expect(
       resultViewFromToolResults({
         result: {
@@ -1274,6 +1278,36 @@ describe('mean comparison tables', () => {
     expect(groups[0].columns).not.toContain('score');
     const pairs = view.tables.find(table => table.title.startsWith('Post hoc'));
     expect(pairs?.rows[0].slice(0, 2)).toEqual(['Female', 'Male']);
+  });
+
+  it('TEN-41: Pairwise comparisons baked with codes become value labels', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        group_descriptives: [
+          { group: '1.0', label: 'United States', n: 40, mean: 4.9 },
+          { group: '2.0', label: 'United Kingdom', n: 40, mean: 4.2 },
+          { group: '3.0', label: 'Germany', n: 40, mean: 3.0 },
+        ],
+        report: {
+          tables: [
+            {
+              id: 'anova_posthoc',
+              title: 'Pairwise comparisons (tukey_hsd)',
+              columns: ['Group A', 'Group B', 'Mean difference', 'p (adj)'],
+              rows: [
+                ['1.0', '2.0', '-0.7', '0.01'],
+                ['1.0', '3', '-1.9', '0.01'],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const pairs = view.tables.find(table => table.title.startsWith('Pairwise comparisons'));
+    expect(pairs?.rows.map(row => row.slice(0, 2))).toEqual([
+      ['United States', 'United Kingdom'],
+      ['United States', 'Germany'],
+    ]);
   });
 });
 
