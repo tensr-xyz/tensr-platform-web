@@ -108,6 +108,8 @@ function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
   const bot = quality.bot_rows;
   const outlier = quality.outlier_rows;
   const poor = quality.poor_text_rows;
+  const flagged = quality.flagged;
+  const remove = quality.would_remove;
   const bits = [
     typeof speeder === 'number' && speeder > 0
       ? `${speeder} finished in under a third of the median time`
@@ -124,7 +126,39 @@ function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
       ? `${poor} poor open answers`
       : '',
   ].filter(Boolean);
+  // When many rows are flagged but few would be removed, say both so the title can lead small.
+  if (
+    typeof flagged === 'number' &&
+    typeof remove === 'number' &&
+    flagged > remove &&
+    remove > 0 &&
+    !bits.length
+  ) {
+    return `${flagged.toLocaleString('en-GB')} have a quality flag`;
+  }
+  if (
+    typeof flagged === 'number' &&
+    typeof remove === 'number' &&
+    flagged > remove &&
+    remove > 0 &&
+    bits.length
+  ) {
+    return `${bits.join(' · ')} · ${flagged.toLocaleString('en-GB')} flagged in total`;
+  }
   return bits.join(' · ');
+}
+
+/** Prefer the count that would actually be removed; a huge flag total reads as alarmist. */
+export function qualityFlagTitle(quality: NonNullable<PrepProposal['quality']>): string {
+  const remove = quality.would_remove;
+  const flagged = quality.flagged;
+  if (typeof remove === 'number' && remove > 0) {
+    return `Flag ${remove.toLocaleString('en-GB')} ${remove === 1 ? 'respondent' : 'respondents'}`;
+  }
+  if (typeof flagged === 'number' && flagged > 0) {
+    return `Flag ${flagged.toLocaleString('en-GB')} ${flagged === 1 ? 'respondent' : 'respondents'}`;
+  }
+  return 'No quality flags';
 }
 
 /** Threshold line for the existing flags row. Rows stay until the user chooses. */
@@ -230,15 +264,20 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
       : row('nps', 'No NPS scale found', 'No NPS scale found', 'Nothing to score', '', '')
   );
   const flagged = proposal.quality?.flagged;
-  if (typeof flagged === 'number' && flagged > 0) {
+  const remove = proposal.quality?.would_remove;
+  const hasFlags =
+    (typeof flagged === 'number' && flagged > 0) || (typeof remove === 'number' && remove > 0);
+  if (hasFlags && proposal.quality) {
+    const lead =
+      typeof remove === 'number' && remove > 0 ? remove : typeof flagged === 'number' ? flagged : 0;
     parts.push(
       row(
         'flags',
-        `${flagged} quality flags`,
-        `Flag ${flagged} ${flagged === 1 ? 'respondent' : 'respondents'}`,
+        `${lead} quality flags`,
+        qualityFlagTitle(proposal.quality),
         'Flagged, never removed',
-        qualityBefore(proposal.quality || {}),
-        qualityAfter(proposal.quality || {})
+        qualityBefore(proposal.quality),
+        qualityAfter(proposal.quality)
       )
     );
   } else {

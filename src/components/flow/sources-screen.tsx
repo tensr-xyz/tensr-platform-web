@@ -35,6 +35,10 @@ import { ResponseQualityPanel } from '@/components/flow/response-quality-panel';
 import { ConnectQualtricsDialog } from '@/components/flow/connect-qualtrics-dialog';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { showDatasetVersionUndoToast, useDatasetVersion } from '@/lib/dataset-version-undo';
+import {
+  sourceVersionTitle as sharedSourceVersionTitle,
+  versionWhen as sharedVersionWhen,
+} from '@/components/flow/version-title';
 
 export type SourceFile = {
   dataset_id?: string;
@@ -148,60 +152,10 @@ export function sourceFileName(file: SourceFile): string {
   return 'Untitled file';
 }
 
-const VERSION_MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-export function versionWhen(value?: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}:${seconds}`;
-}
-
-/** Stack-style working-copy names like "cars_EN + DE + FR". */
-function looksLikeStackName(name: string): boolean {
-  return / \+ /.test(name);
-}
+export const versionWhen = sharedVersionWhen;
 
 export function sourceVersionTitle(file: SourceFile): string {
-  if (!file.parent_dataset_id) return sourceFileName(file);
-  const original = String(file.original_filename || '').trim();
-  const label = String(file.lineage_label || '').trim();
-  let base = '';
-  let fromOperationLabel = false;
-  // Prefer the operation label ("Raked to region") so two same-day copies stay distinct
-  // by what was done. Keep stack-style file names ("cars_EN + DE + FR").
-  if (original && !looksLikeFileId(original) && looksLikeStackName(original)) {
-    base = original;
-  } else if (label && !looksLikeFileId(label)) {
-    base = label;
-    fromOperationLabel = true;
-  } else if (original && !looksLikeFileId(original)) {
-    base = original;
-  } else {
-    base = sourceFileName(file);
-  }
-  if (!base) base = 'Untitled file';
-  // Operation labels stay sentence case ("Raked to region"); file-style names keep their case.
-  const titled = fromOperationLabel ? base.charAt(0).toUpperCase() + base.slice(1) : base;
-  if (/\d{1,2}:\d{2}/.test(titled)) return titled;
-  const stamp = versionWhen(file.created_at || file.updated_at);
-  return stamp ? `${titled} · ${stamp}` : titled;
+  return sharedSourceVersionTitle(file);
 }
 
 /** Newest tip per lineage group, then every older version in one shared fold. */
@@ -317,6 +271,7 @@ export function SourcesScreen({
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectMode, setConnectMode] = useState<'qualtrics' | 'request'>('qualtrics');
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const activeId = project?.active_dataset_id || '';
   const skippedPrep = useRef<Set<string>>(new Set());
@@ -592,6 +547,7 @@ export function SourcesScreen({
         {proposal ? (
           <UploadPrepCard
             proposal={proposal.prep}
+            applying={preparing}
             fileName={(() => {
               const match = files.find(row => datasetRowId(row) === proposal.id);
               return match ? sourceFileName(match) : rememberedFileName(proposal.id);
@@ -602,6 +558,8 @@ export function SourcesScreen({
                 setError('Sign in again to prepare the file.');
                 return;
               }
+              setError(null);
+              setPreparing(true);
               void applyUploadPrep(proposal.id, bearer, kept)
                 .then(saved =>
                   moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
@@ -616,9 +574,11 @@ export function SourcesScreen({
                 })
                 .catch(err =>
                   setError(err instanceof Error ? err.message : 'The file was not prepared.')
-                );
+                )
+                .finally(() => setPreparing(false));
             }}
             onSkip={() => {
+              if (preparing) return;
               skippedPrep.current.add(proposal.id);
               const bearer = getStytchBearerForTensrApi();
               if (bearer) void skipUploadPrep(proposal.id, bearer);

@@ -24,6 +24,7 @@ import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
 import { AgentThread } from '@/components/flow/agent-thread';
 import { SidePanel } from '@/components/flow/side-panel';
+import { sourceVersionTitle } from '@/components/flow/version-title';
 import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
@@ -260,7 +261,15 @@ const FILE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 export function datasetFileLabel(row: {
   original_filename?: string | null;
   source_filenames?: string[] | null;
+  parent_dataset_id?: string | null;
+  lineage_label?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }): string {
+  // Working versions use the same stamped title as Sources (operation · day time).
+  if (row.parent_dataset_id) {
+    return sourceVersionTitle(row);
+  }
   const names = [row.original_filename, ...(row.source_filenames || [])];
   for (const name of names) {
     const text = String(name || '').trim();

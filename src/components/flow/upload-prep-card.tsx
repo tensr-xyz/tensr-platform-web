@@ -14,16 +14,18 @@ import {
 export function UploadPrepCard({
   proposal,
   fileName = '',
+  applying = false,
   onApply,
   onSkip,
 }: {
   proposal: PrepProposal;
   fileName?: string;
+  applying?: boolean;
   onApply: (body: ReturnType<typeof prepApplyBody>) => void;
   onSkip: () => void;
 }) {
   const parts = prepParts(proposal);
-  const [kept, setKept] = useState(() => parts.map(part => part.id));
+  const [kept, setKept] = useState(() => parts.filter(part => part.after).map(part => part.id));
   const [open, setOpen] = useState<string | null>(null);
   if (!parts.length) return null;
   const keptCount = parts.filter(part => kept.includes(part.id) && part.after).length;
@@ -85,26 +87,32 @@ export function UploadPrepCard({
                 </Button>
               ) : null}
             </div>
-            <div className="prep-keep" role="group" aria-label={part.title}>
-              <Button
-                type="button"
-                className="flow-btn"
-                data-active={on ? 'true' : 'false'}
-                aria-pressed={on}
-                onClick={() => setPart(part.id, true)}
-              >
-                Keep
-              </Button>
-              <Button
-                type="button"
-                className="flow-btn"
-                data-active={on ? 'false' : 'true'}
-                aria-pressed={!on}
-                onClick={() => setPart(part.id, false)}
-              >
-                Skip
-              </Button>
-            </div>
+            {part.after ? (
+              <div className="prep-keep" role="group" aria-label={part.title}>
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  data-active={on ? 'true' : 'false'}
+                  aria-pressed={on}
+                  disabled={applying}
+                  onClick={() => setPart(part.id, true)}
+                >
+                  Keep
+                </Button>
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  data-active={on ? 'false' : 'true'}
+                  aria-pressed={!on}
+                  disabled={applying}
+                  onClick={() => setPart(part.id, false)}
+                >
+                  Skip
+                </Button>
+              </div>
+            ) : (
+              <div className="prep-keep" aria-hidden="true" />
+            )}
           </div>
         );
       })}
@@ -116,15 +124,16 @@ export function UploadPrepCard({
             ? `. All ${respondents.toLocaleString('en-GB')} rows stay.`
             : '. Every row stays.'}
         </p>
-        <Button type="button" className="flow-btn" onClick={onSkip}>
+        <Button type="button" className="flow-btn" disabled={applying} onClick={onSkip}>
           Skip all
         </Button>
         <Button
           type="button"
           className="flow-btn primary"
+          disabled={applying || keptCount === 0}
           onClick={() => onApply(prepApplyBody(kept))}
         >
-          Apply {keptCount} {keptCount === 1 ? 'change' : 'changes'}
+          {applying ? 'Applying…' : `Apply ${keptCount} ${keptCount === 1 ? 'change' : 'changes'}`}
         </Button>
       </div>
     </section>
