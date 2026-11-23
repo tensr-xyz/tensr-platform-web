@@ -2895,13 +2895,11 @@ export function TablesBuilder({
         setError(result.detail || 'This file has a scale problem.');
         return false;
       }
-      setSpecs(current =>
-        current.map(item =>
-          (item.spec_id || item.id) === id ? { ...item, stale: false, detail: '' } : item
-        )
-      );
       if (result.weight_note) setError(result.weight_note);
       else setError('');
+      // Reload the rail from classify so siblings keep their live state; do not
+      // invent stale flags client-side after one rebuild.
+      reloadSpecs();
       const opened = await flowJson<Record<string, unknown>>(
         `/datasets/${result.dataset_id || datasetId}/tables/${id}`
       );
@@ -3010,9 +3008,12 @@ export function TablesBuilder({
                   {spec.stale ? (
                     <span
                       className="flow-muted"
-                      title="Built on an older file version; opens by rebuilding on this file."
+                      title={
+                        spec.detail ||
+                        'The file changed after this table was saved. Opening it re-runs the same stub and banners on the file in use.'
+                      }
                     >
-                      Needs rebuild
+                      Needs rebuild · file changed
                     </span>
                   ) : spec.filename ? (
                     <span className="flow-muted">{spec.filename}</span>
