@@ -5904,29 +5904,31 @@ function ReportScreen({
   };
 
   const bannerBook = async () => {
-    if (!datasetId || !selected.length) {
-      setError(
-        staleTables.length
-          ? 'Rebuild or deselect tables built on an older file before exporting.'
-          : 'Save a table before building a banner book.'
-      );
+    const liveSpecs = selected
+      .map(row => ({
+        ...row.spec,
+        dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
+        table_number: row.number || row.spec.table_number,
+      }))
+      .filter(spec => Object.keys(spec).length);
+    const staleIds = staleTables.map(table => table.id).filter(Boolean);
+    if (!datasetId || (!liveSpecs.length && !staleIds.length)) {
+      setError('Save a table before building a banner book.');
       return;
     }
     setError('');
-    const exportDatasetId = selected[0].datasetId || datasetId;
+    const exportDatasetId = selected[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
+    const stem =
+      (audienceNames[0] || 'banner-book').replace(/[^\w.-]+/g, '-').slice(0, 40) || 'banner-book';
     const saved = await flowJson<{ book?: { id?: string } }>(
       `/datasets/${exportDatasetId}/banner-books`,
       {
         method: 'POST',
         body: JSON.stringify({
-          name: 'Banner book',
-          specs: selected
-            .map(row => ({
-              ...row.spec,
-              dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
-              table_number: row.number || row.spec.table_number,
-            }))
-            .filter(spec => Object.keys(spec).length),
+          name: audienceNames[0] ? `${audienceNames[0]} banner book` : 'Banner book',
+          specs: liveSpecs,
+          // Stale ("Needs rebuild") tables are loaded by id; export rebuilds them.
+          spec_ids: staleIds,
         }),
       }
     );
@@ -5934,7 +5936,7 @@ function ReportScreen({
     if (!bookId) throw new Error('The banner book was not saved.');
     await downloadExport(
       `/datasets/${exportDatasetId}/banner-books/${bookId}/export.xlsx`,
-      'banner-book.xlsx',
+      `${stem}-banner-book.xlsx`,
       {
         method: 'POST',
         body: JSON.stringify({ target_dataset_id: exportDatasetId, mapping: {} }),
