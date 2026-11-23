@@ -121,7 +121,7 @@ function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
       ? `${outlier} numeric outliers`
       : '',
     typeof poor === 'number' && poor > 0 && !(typeof straight === 'number' && straight > 0)
-      ? `${poor} short open answers`
+      ? `${poor} poor open answers`
       : '',
   ].filter(Boolean);
   return bits.join(' · ');

@@ -5,6 +5,7 @@ import {
   findingsWithOutOfDate,
   missingBanner,
   outOfDateLine,
+  partitionLiveAndStale,
   reportTableFromBook,
   shownPercent,
   titledWithQuestions,
@@ -285,12 +286,26 @@ describe('report findings', () => {
     expect(stale.headline).toBe('Satisfaction by region');
   });
 
-  it('replaces a variable name once, and leaves the question text alone', () => {
+  it('replaces variable names with labels, including capitalised ones and Source file', () => {
     const titled = titledWithQuestions('region by gender', [
       { name: 'region', label: 'Which region do you live in?' },
       { name: 'gender', label: 'Gender' },
     ]);
-    expect(titled).toBe('Which region do you live in? by gender');
+    expect(titled).toBe('Which region do you live in? by Gender');
+    expect(titledWithQuestions('aware × source_wave × Gender', [])).toBe(
+      'aware × Source file × Gender'
+    );
+    expect(
+      titledWithQuestions('Q7 by source_wave', [{ name: 'source_wave', label: 'Source file' }])
+    ).toBe('Q7 by Source file');
+  });
+
+  it('keeps out-of-date tables out of the live list so the UI can collapse them', () => {
+    const live = findingFromTable({ ...table, index: 2 }, null, null);
+    const stale = findingFromStale({ id: 'old', label: 'Satisfaction by region', number: 1 });
+    const parts = partitionLiveAndStale([live, { ...stale, headline: 'duplicate' }], [stale]);
+    expect(parts.live.map(item => item.id)).toEqual([live.id]);
+    expect(parts.outdated.map(item => item.id)).toEqual([stale.id]);
   });
 
   it('keeps one finding when saved tables repeat or overlap', () => {

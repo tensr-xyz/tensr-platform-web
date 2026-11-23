@@ -178,11 +178,17 @@ function chartsFromEnvelope(envelope: Record<string, unknown> | null): AnalysisR
   return charts;
 }
 
+/** Strip a leading "Weighted " so the same axes are not shown twice. */
+function chartTitleKey(title: unknown): string {
+  const text = String(title || '').trim();
+  return text.replace(/^Weighted\s+/i, '');
+}
+
 /** Charts attached to tool results / stored runs for Flow cards. */
 export function chartsFromToolPayloads(results: unknown): AnalysisReportChart[] {
   const list = Array.isArray(results) ? results : results ? [results] : [];
   const charts: AnalysisReportChart[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   for (const item of list) {
     const record = asRecord(item);
     if (!record) continue;
@@ -190,11 +196,19 @@ export function chartsFromToolPayloads(results: unknown): AnalysisReportChart[] 
     for (const chart of [...chartsFromEnvelope(record), ...chartsFromEnvelope(nested)]) {
       const key = JSON.stringify({
         kind: chart.kind,
-        title: 'title' in chart ? chart.title : '',
+        title: 'title' in chart ? chartTitleKey(chart.title) : '',
         categories: 'categories' in chart ? chart.categories : undefined,
       });
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const prior = seen.get(key);
+      if (prior !== undefined) {
+        const oldTitle = 'title' in charts[prior] ? String(charts[prior].title || '') : '';
+        const newTitle = 'title' in chart ? String(chart.title || '') : '';
+        if (/^Weighted\s+/i.test(newTitle) && !/^Weighted\s+/i.test(oldTitle)) {
+          charts[prior] = chart;
+        }
+        continue;
+      }
+      seen.set(key, charts.length);
       charts.push(chart);
     }
   }

@@ -55,6 +55,8 @@ describe('report page layouts and theme', () => {
       ])
     );
     expect(layouts.every(item => item.protected)).toBe(true);
+    expect(getPageLayout('title_and_content')?.label).toBe('Headline + chart');
+    expect(getPageLayout('title_only')?.label).toBe('Headline + table');
     expect(getPageLayout('two_content')?.slots.map(slot => slot.label)).toEqual([
       'Left content',
       'Right content',

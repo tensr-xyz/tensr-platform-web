@@ -1,6 +1,11 @@
 /** Report document: pages with positioned live objects (slide editor engine). */
 
-import { getPageLayout } from '@/lib/report-theme';
+import {
+  getPageLayout,
+  normalizeReportTheme,
+  reportThemeForApi,
+  type ReportTheme,
+} from '@/lib/report-theme';
 import {
   applyTablePresentation,
   normalizeTableEdits,
@@ -116,11 +121,23 @@ export type ReportPage = {
   hideFromPublish: boolean;
 };
 
+export type SavedPageTemplate = {
+  id: string;
+  name: string;
+  kind: 'page';
+  layoutId: string;
+  title: string | null;
+  section: string | null;
+  objects: Array<Record<string, unknown>>;
+};
+
 export type ReportDocument = {
   pageWidthIn: number;
   pageHeightIn: number;
   aspect: typeof PAGE_ASPECT;
   defaultLabels: DefaultLabels;
+  theme: ReportTheme;
+  pageTemplates: SavedPageTemplate[];
   pages: ReportPage[];
 };
 
@@ -162,7 +179,8 @@ const HEX3 = /^[0-9A-Fa-f]{3}$/;
 
 const SLOT_FRAMES: Record<string, Record<string, ReportFrame>> = {
   title_only: {
-    title: { x: 0.08, y: 0.38, w: 0.84, h: 0.2 },
+    title: { x: 0.06, y: 0.06, w: 0.88, h: 0.12 },
+    content: { x: 0.06, y: 0.22, w: 0.88, h: 0.68 },
   },
   title_page: {
     title: { x: 0.08, y: 0.28, w: 0.84, h: 0.18 },
@@ -534,6 +552,47 @@ export function cssFontStack(family: string | null | undefined): string {
   return `"${name}", Inter, system-ui, sans-serif`;
 }
 
+/** Gap under a text frame so the next object (table title, commentary) never overlaps. */
+const TEXT_STACK_GAP = 0.03;
+
+const TRAILING_BASE_FOOTNOTE_RE =
+  /\s+(?:Base\s*:\s*(?:Unweighted,\s*)?n\s*=\s*[\d,]+|Base\s*:\s*[\d,]+(?:\s*\([^)]*\))?|Base\s*:\s*[\d,]+\s+weighted(?:\s*\([^)]*\))?|Unweighted,\s*n\s*=\s*[\d,]+)\s*$/i;
+
+/** Drop a pasted Base / n footer from commentary; live tables already show it. */
+export function stripTrailingBaseFootnote(text: string): string {
+  let cleaned = String(text || '').trim();
+  if (!cleaned) return '';
+  let previous = '';
+  while (previous !== cleaned) {
+    previous = cleaned;
+    cleaned = cleaned.replace(TRAILING_BASE_FOOTNOTE_RE, '').trim();
+  }
+  return cleaned;
+}
+
+/** True when Study body is a deck-building ask, not a study brief. */
+export function looksLikeDeckRequestBrief(text: string): boolean {
+  const brief = String(text || '').trim();
+  if (!brief) return false;
+  const folded = brief.toLowerCase();
+  const markers = [
+    'insight slide',
+    'insight slides',
+    'executive summary',
+    'powerpoint',
+    '.pptx',
+    'client deck',
+    'clear narrative',
+    'appendix slide',
+    'questionnaire appendix',
+    'build a report',
+    'build a deck',
+    'build a presentation',
+  ];
+  if (markers.some(marker => folded.includes(marker))) return true;
+  return /\b(10|fifteen|15)\s+to\s+(15|20)\b/i.test(brief) && /\bslide/i.test(brief);
+}
+
 function estimateTextHeightFraction(obj: ReportObject): number {
   const text = objectPlainTextForFit(obj);
   if (!text) return obj.frame.h;
@@ -543,14 +602,16 @@ function estimateTextHeightFraction(obj: ReportObject): number {
     Number(obj.textStyle.lineSpacing) || DEFAULT_TEXT_STYLE.lineSpacing
   );
   const widthIn = Math.max(0.5, obj.frame.w * PAGE_WIDTH_IN);
-  // Conservative wrap: Inter at body sizes runs wider than 0.5em average.
-  const charsPerLine = Math.max(18, Math.floor((widthIn * 72) / (sizePt * 0.62)));
+  // Bold / display sizes wrap sooner; keep the estimate conservative so frames
+  // reserve room rather than painting over the object below.
+  const emWidth = obj.textStyle.bold || sizePt >= 18 ? 0.72 : 0.64;
+  const charsPerLine = Math.max(16, Math.floor((widthIn * 72) / (sizePt * emWidth)));
   let lines = 0;
   for (const paragraph of text.split(/\n/) || [text]) {
     lines += Math.max(1, Math.ceil(Math.max(1, paragraph.length) / charsPerLine));
   }
   // Object padding + selection border so the last line is never clipped.
-  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.18;
+  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.26;
   return Math.min(0.85, Math.max(obj.frame.h, heightIn / PAGE_HEIGHT_IN));
 }
 
@@ -559,29 +620,68 @@ function objectPlainTextForFit(obj: ReportObject): string {
   return obj.text;
 }
 
+function framesOverlapHorizontally(a: ReportFrame, b: ReportFrame): boolean {
+  return a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01;
+}
+
+function pushObjectsBelow(objects: ReportObject[], source: ReportObject, floorY: number): void {
+  for (const other of objects) {
+    if (other.id === source.id || other.hidden) continue;
+    if (!framesOverlapHorizontally(source.frame, other.frame)) continue;
+    if (other.frame.y + other.frame.h <= source.frame.y + 0.005) continue;
+    if (other.frame.y >= floorY - 0.001) continue;
+    // Prefer the reserved gap; shrink the pushed object if it would fall off-page.
+    other.frame.y = Math.min(0.88, floorY);
+    if (other.frame.y + other.frame.h > 0.96) {
+      other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
+    }
+  }
+}
+
 function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['pages'][number] {
-  const objects = page.objects.map(obj => ({
-    ...obj,
-    frame: { ...obj.frame },
-  }));
+  const hasTable = page.objects.some(obj => obj.kind === 'table' && !obj.hidden);
+  const isStudy =
+    String(page.title || '')
+      .trim()
+      .toLowerCase() === 'study';
+  const objects = page.objects.map(obj => {
+    const next = {
+      ...obj,
+      frame: { ...obj.frame },
+      runs: obj.runs.map(run => ({ ...run })),
+    };
+    if (next.kind !== 'text' || next.hidden) return next;
+    const plain = objectPlainTextForFit(next);
+    // Study page must never show the chat request that asked for the deck.
+    if (isStudy && looksLikeDeckRequestBrief(plain)) {
+      next.text = '';
+      next.runs = [];
+      next.hidden = true;
+      return next;
+    }
+    // Insight / appendix commentary must not repeat the table Base footer.
+    if (hasTable) {
+      const cleaned = stripTrailingBaseFootnote(plain);
+      if (cleaned !== plain.trim()) {
+        next.text = cleaned;
+        if (next.runs.length) {
+          next.runs = [{ ...next.runs[0]!, text: cleaned }];
+        }
+      }
+    }
+    return next;
+  });
   const ordered = [...objects].sort(
     (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
   );
   for (const obj of ordered) {
     if (obj.kind !== 'text' || obj.hidden) continue;
     const needed = estimateTextHeightFraction(obj);
-    if (needed <= obj.frame.h + 0.005) continue;
-    const oldBottom = obj.frame.y + obj.frame.h;
-    obj.frame.h = needed;
-    const newBottom = obj.frame.y + obj.frame.h;
-    for (const other of objects) {
-      if (other.id === obj.id) continue;
-      if (other.frame.y + 0.01 < oldBottom) continue;
-      other.frame.y = Math.min(0.95 - other.frame.h, other.frame.y + (newBottom - oldBottom));
-      if (other.frame.y + other.frame.h > 0.96) {
-        other.frame.h = Math.max(0.12, 0.96 - other.frame.y);
-      }
+    if (needed > obj.frame.h + 0.002) {
+      obj.frame.h = needed;
     }
+    // Always keep a gap under text so wrapped lines never sit on the next frame.
+    pushObjectsBelow(objects, obj, obj.frame.y + obj.frame.h + TEXT_STACK_GAP);
   }
   return { ...page, objects };
 }
@@ -972,18 +1072,64 @@ function normalizePage(raw: unknown): ReportPage | null {
   };
 }
 
+function normalizeSavedPageTemplate(raw: unknown): SavedPageTemplate | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const template = pageAsTemplate(source);
+  const name =
+    String(source.name || source.label || template.title || '').trim() || 'Page template';
+  return {
+    ...template,
+    id: String(source.id || '').trim() || newId('tpl'),
+    name,
+  };
+}
+
 export function normalizeReportDocument(raw: unknown): ReportDocument {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const pages = (Array.isArray(source.pages) ? source.pages : [])
     .map(normalizePage)
     .filter((page): page is ReportPage => Boolean(page));
+  const templatesRaw = source.page_templates ?? source.pageTemplates ?? [];
+  const pageTemplates = (Array.isArray(templatesRaw) ? templatesRaw : [])
+    .map(normalizeSavedPageTemplate)
+    .filter((item): item is SavedPageTemplate => Boolean(item));
   return {
     pageWidthIn: PAGE_WIDTH_IN,
     pageHeightIn: PAGE_HEIGHT_IN,
     aspect: PAGE_ASPECT,
     defaultLabels: normalizeDefaultLabels(source.default_labels || source.defaultLabels),
+    theme: normalizeReportTheme(source.theme ?? source.reportTheme ?? source.report_theme),
+    pageTemplates,
     pages,
   };
+}
+
+export function setDocumentTheme(
+  document: ReportDocument | unknown,
+  theme: ReportTheme | unknown
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return { ...doc, theme: normalizeReportTheme(theme) };
+}
+
+export function savePageAsTemplate(
+  document: ReportDocument | unknown,
+  pageId: string,
+  name?: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const page = doc.pages.find(item => item.id === String(pageId));
+  if (!page) return doc;
+  const template = pageAsTemplate(page);
+  const label = String(name || page.title || '').trim() || 'Page template';
+  const saved: SavedPageTemplate = {
+    ...template,
+    id: newId('tpl'),
+    name: label,
+    title: label,
+  };
+  return { ...doc, pageTemplates: [...doc.pageTemplates, saved] };
 }
 
 export type PinLike = {
@@ -2849,6 +2995,16 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
       net: doc.defaultLabels.net,
       total: doc.defaultLabels.total,
     },
+    theme: reportThemeForApi(doc.theme),
+    page_templates: doc.pageTemplates.map(template => ({
+      id: template.id,
+      name: template.name,
+      kind: template.kind,
+      layout_id: template.layoutId,
+      title: template.title,
+      section: template.section,
+      objects: template.objects,
+    })),
     pages: doc.pages.map(page => ({
       id: page.id,
       title: page.title,

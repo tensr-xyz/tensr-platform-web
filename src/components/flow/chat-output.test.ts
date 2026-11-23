@@ -2,6 +2,7 @@ import {
   answerWithoutBase,
   keepLineBreaks,
   withoutResultTokens,
+  withoutStrayEnding,
   outputChecks,
   isProcedurePlaceholder,
   hasSummaryTable,
@@ -12,6 +13,7 @@ import {
   keptModelAnswer,
   EMPTY_TURN_ANSWER,
   CONTINUING_TURN_ANSWER,
+  UNFINISHED_TURN_ANSWER,
   visibleTurnAnswer,
   outputTakeaway,
   outputTitle,
@@ -60,6 +62,41 @@ describe('chat output panel', () => {
     ];
     expect(outputTitle(results, answer)).toBe('How much do you like brand A × source file');
     expect(outputKind(results)).toBe('Crosstab');
+    const longCross =
+      'What food and nutrition topics do you keep informed about? × Please select the region you live in.';
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'banner_table',
+            analysis_type: 'banner_table',
+            summary: { title: longCross },
+          },
+        ],
+        UNFINISHED_TURN_ANSWER
+      )
+    ).toMatch(/^What food and nutrition topics do you keep informed about\? × Please select/);
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'banner_table',
+            analysis_type: 'banner_table',
+            summary: { title: longCross },
+          },
+        ],
+        UNFINISHED_TURN_ANSWER
+      )
+    ).not.toBe('Crosstab');
+    expect(
+      resultLead(UNFINISHED_TURN_ANSWER, [
+        {
+          procedure: 'banner_table',
+          summary: { line: 'General health leads at 69.7% overall.' },
+        },
+      ])
+    ).toContain('69.7');
+    expect(resultLead(UNFINISHED_TURN_ANSWER, [])).toBe('');
     expect(
       outputTitle(
         [
@@ -205,6 +242,25 @@ describe('chat output panel', () => {
     expect(lead.toLowerCase()).not.toContain('banner_table');
   });
 
+  it('prefers a finished finding over pending or model-failed prose', () => {
+    const finding = {
+      procedure: 'banner_table',
+      summary: { line: 'Reach is 39.4% among institutional investors (n = 3000).' },
+    };
+    const pending = resultLead(
+      "The crosstab is still building, so I don't have the column percentages. Its status is pending, and the run reports banner_table; flags: weight_in_use, effective_n.",
+      [finding]
+    );
+    expect(pending).toMatch(/39\.4%/);
+    expect(pending.toLowerCase()).not.toContain('still building');
+    expect(pending.toLowerCase()).not.toContain('flags:');
+    expect(pending.toLowerCase()).not.toContain('banner_table');
+
+    const failed = resultLead('The model call failed, so this turn stopped.', [finding]);
+    expect(failed).toMatch(/39\.4%/);
+    expect(failed.toLowerCase()).not.toContain('model call failed');
+  });
+
   it('titles a yes or no card with the question', () => {
     const results = [
       {
@@ -307,6 +363,15 @@ describe('chat output panel', () => {
     expect(lead.trim().endsWith('-')).toBe(false);
   });
 
+  it('TEN-41: drops a stray weighted-by column line from prose under the reply', () => {
+    const prose = withoutStrayEnding(
+      answerWithoutBase('Net reach is 62% among the audience.\n\nweighted by proj_weight')
+    );
+    expect(prose).toContain('62%');
+    expect(prose).not.toMatch(/proj_weight/);
+    expect(prose).not.toMatch(/weighted by/i);
+  });
+
   it('prefers a labelled structured lead over model prose that quotes codes', () => {
     const structured =
       'Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
@@ -365,6 +430,22 @@ describe('chat output panel', () => {
     expect(lead).not.toContain('1086523.500');
     expect(lead).toContain('Male');
     expect(lead).toContain('Female');
+  });
+
+  it('collapses bare U plus a labelled lead pasted twice', () => {
+    const bare = 'U = 1086523.5, p = 0.121, r = -0.033 (negligible), consistent with chance.';
+    const labelled =
+      'Trust in Global Ledger is about the same for Male and Female. Trust in Global Ledger for Male and Female: U = 1086523.5, p = 0.121, r = -0.033 (negligible), consistent with chance. Medians: Male 3, Female 3. n = 3000.';
+    const lead = resultLead(`${bare} ${labelled} ${labelled}`, [
+      {
+        procedure: 'mann_whitney_u',
+        summary: { line: labelled },
+      },
+    ]);
+    expect(lead.toLowerCase().split('u = 1086523.5').length - 1).toBe(1);
+    expect(lead.toLowerCase().split('medians: male 3, female 3').length - 1).toBe(1);
+    expect(lead).toMatch(/about the same/i);
+    expect(lead.indexOf('about the same')).toBeLessThan(lead.indexOf('U ='));
   });
 
   it('drops empty parentheses and clamps long share percents in the lead', () => {

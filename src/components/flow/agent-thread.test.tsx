@@ -18,6 +18,8 @@ jest.mock('@/lib/flow-api', () => ({
 
 jest.mock('@/lib/run-agent-loop', () => ({
   runAgentLoop: jest.fn(),
+  AGENT_LOOP_RETRYING_MESSAGE: 'Tensr is restarting, retrying…',
+  AGENT_LOOP_UNREACHABLE_MESSAGE: "Couldn't reach Tensr, try again",
 }));
 
 const send = runAgentLoop as jest.Mock;

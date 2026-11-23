@@ -5,6 +5,9 @@ import { toast } from '@/hooks/ui/use-toast';
 import { flowJson } from '@/lib/flow-api';
 import { datasetRestorePath } from '@/lib/dataset-versions';
 
+/** Responses footer / chat status after Undo restores a prior dataset version. */
+export const DATASET_VERSION_RESTORED_NOTE = 'Restored the previous version.';
+
 /** Restore an earlier dataset version and make it the project's active file. */
 export async function useDatasetVersion(opts: {
   projectId: string;

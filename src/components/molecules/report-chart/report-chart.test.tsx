@@ -252,6 +252,13 @@ describe('ReportChart palette kinds', () => {
     );
     expect(labelled.container.textContent).toContain('Strongly distrust');
     expect(labelled.container.textContent).not.toMatch(/\bage_band\b/);
+    const tickLabels = Array.from(labelled.container.querySelectorAll('text')).map(
+      node => node.textContent || ''
+    );
+    const axisLabels = tickLabels.filter(text =>
+      ['Strongly distrust', 'Distrust', 'Neither'].includes(text)
+    );
+    expect(axisLabels).toEqual(['Strongly distrust', 'Distrust', 'Neither']);
     labelled.unmount();
 
     const box = render(

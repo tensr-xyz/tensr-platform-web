@@ -102,7 +102,7 @@ export function ThreadResult({
   const prose = answerWithoutBase(
     withoutResultTokens(tables.length || charts.length ? answerWithoutTables(answer) : answer)
   );
-  if (!tables.length && !charts.length) {
+  if (!tables.length && !charts.length && !view.duplication) {
     if (!prose) return null;
     return <FlowMarkdown className="chat-prose">{prose}</FlowMarkdown>;
   }
@@ -122,6 +122,8 @@ export function ThreadResult({
       rCheck={view.rCheck}
       rStatement={view.rStatement}
       runId={outputRunIds(enriched)[0]}
+      duplication={view.duplication}
+      audience={view.audience}
     />
   );
 }

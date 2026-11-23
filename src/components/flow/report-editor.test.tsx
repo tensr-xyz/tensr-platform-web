@@ -243,4 +243,32 @@ describe('ReportEditor formatting', () => {
     expect(screen.getByText('No pages yet')).toBeTruthy();
     expect(screen.queryByText('Loading pages…')).toBeNull();
   });
+
+  it('opens a layout picker on Add page and exposes report theme controls', async () => {
+    renderEditor(<ReportEditor datasetId="ds-1" pins={[]} />);
+    expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add page' }));
+    expect(await screen.findByRole('dialog', { name: 'Add a page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Title page/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Headline \+ chart/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Blank$/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Headline \+ chart/i }));
+    await waitFor(() => expect(screen.getByLabelText('Page 2: Page 2')).toBeTruthy());
+
+    const inspector = screen.getByLabelText('Object inspector');
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Report theme' }));
+    expect(await within(inspector).findByLabelText('Report theme')).toBeTruthy();
+    expect(within(inspector).getByText(/Applies to every page/)).toBeTruthy();
+    expect(within(inspector).getByRole('button', { name: 'Save as team theme' })).toBeTruthy();
+    expect(within(inspector).getByRole('button', { name: 'From a .pptx' })).toBeTruthy();
+
+    fireEvent.contextMenu(screen.getByLabelText('Page 1: Finding'));
+    expect(await screen.findByRole('menu', { name: 'Page actions' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Save page as template' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Hide from export' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate page' }));
+    await waitFor(() => expect(screen.getByLabelText(/Page 2: Finding \(copy\)/)).toBeTruthy());
+  });
 });

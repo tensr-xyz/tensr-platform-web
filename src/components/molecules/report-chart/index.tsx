@@ -71,14 +71,16 @@ function formatAxisValue(
   return formatNumberTick(value, sampleValues);
 }
 
-/** Prefer a stored value label over a bare code on scatter axes. */
+/** Prefer a stored value label over a bare code. Exact codes only — no rounding. */
 function labelledTick(value: number, labels?: Record<string, string>): string | null {
   if (!labels) return null;
   const keys = [
     String(value),
-    String(Math.round(value)),
     Number.isInteger(value) ? String(value) : value.toPrecision(12).replace(/\.?0+$/, ''),
   ];
+  if (Math.abs(value - Math.round(value)) < 1e-9) {
+    keys.push(String(Math.round(value)));
+  }
   for (const key of keys) {
     const found = labels[key];
     if (found) return found;
@@ -88,6 +90,30 @@ function labelledTick(value: number, labels?: Record<string, string>): string | 
     if (Number.isFinite(numeric) && Math.abs(numeric - value) < 1e-6) return label;
   }
   return null;
+}
+
+/** One tick per labelled code so histogram axes do not repeat value labels. */
+function labelledCodeTicks(
+  labels: Record<string, string>,
+  xMin: number,
+  xMax: number,
+  padL: number,
+  plotW: number
+): { value: number; x: number; label: string }[] {
+  const span = xMax - xMin || 1;
+  const ticks: { value: number; x: number; label: string }[] = [];
+  for (const [key, label] of Object.entries(labels)) {
+    const value = Number(key);
+    if (!Number.isFinite(value) || value < xMin - 1e-9 || value > xMax + 1e-9) continue;
+    if (!String(label || '').trim()) continue;
+    ticks.push({
+      value,
+      x: padL + ((value - xMin) / span) * plotW,
+      label: String(label),
+    });
+  }
+  ticks.sort((a, b) => a.value - b.value);
+  return ticks;
 }
 
 function AxisFrame({
@@ -279,10 +305,19 @@ function ChartBody({
     const gap = Math.max(1, plotW / n > 20 ? 2 : 1);
     const barW = Math.max(1, (plotW - gap * (n - 1)) / n);
     const yS = scaleLinear(0, maxC, padT + plotH, padT);
-    const xTicks = ticksInDomain(xMin, xMax, layout.maxTicksX).map(v => ({
-      value: v,
-      x: padL + ((v - xMin) / (xMax - xMin || 1)) * plotW,
-    }));
+    const labelled =
+      chart.x_tick_labels && Object.keys(chart.x_tick_labels).length > 0
+        ? labelledCodeTicks(chart.x_tick_labels, xMin, xMax, padL, plotW)
+        : null;
+    const xTicks =
+      labelled && labelled.length > 0
+        ? labelled.map(t => ({ value: t.value, x: t.x }))
+        : ticksInDomain(xMin, xMax, layout.maxTicksX).map(v => ({
+            value: v,
+            x: padL + ((v - xMin) / (xMax - xMin || 1)) * plotW,
+          }));
+    const labelByValue =
+      labelled && labelled.length > 0 ? new Map(labelled.map(t => [t.value, t.label])) : null;
     const yTicks = ticksInDomain(0, maxC, layout.maxTicksY).map(v => ({
       value: v,
       y: yS(v),
@@ -317,7 +352,9 @@ function ChartBody({
           xTicks={xTicks}
           yTicks={yTicks}
           xFormatter={v =>
-            labelledTick(v, chart.x_tick_labels) ?? formatAxisValue(v, xScale, xSamples, xDates)
+            labelByValue?.get(v) ??
+            labelledTick(v, chart.x_tick_labels) ??
+            formatAxisValue(v, xScale, xSamples, xDates)
           }
           yFormatter={v => formatNumberTick(v, ySamples)}
           xAxisLabel={chart.x_label}

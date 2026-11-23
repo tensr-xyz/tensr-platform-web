@@ -805,24 +805,26 @@ export function WaveRefresh({
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="share-dialog deck-builder wave-refresh">
-        <DialogHeader>
-          <DialogDescription>{reportLine}</DialogDescription>
-          <DialogTitle>Refresh with a new wave</DialogTitle>
-        </DialogHeader>
-        <div className="wave-refresh-toolbar">
-          <p className="flow-muted">The current deck and data stay as they are</p>
-          <div className="flow-row">
-            <Button type="button" className="flow-btn" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="flow-btn primary"
-              disabled={busy || (!hasNext && step === 'file')}
-              onClick={() => void build()}
-            >
-              {busy ? 'Building…' : 'Build new version'}
-            </Button>
+        <div className="deck-builder-head">
+          <DialogHeader className="deck-builder-titles">
+            <DialogDescription>{reportLine}</DialogDescription>
+            <DialogTitle>Refresh with a new wave</DialogTitle>
+          </DialogHeader>
+          <div className="wave-refresh-toolbar">
+            <p className="flow-muted">The current deck and data stay as they are</p>
+            <div className="deck-builder-actions">
+              <Button type="button" className="flow-btn" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flow-btn primary"
+                disabled={busy || (!hasNext && step === 'file')}
+                onClick={() => void build()}
+              >
+                {busy ? 'Building…' : 'Build new version'}
+              </Button>
+            </div>
           </div>
         </div>
         <div className="wave-refresh-steps">
@@ -1013,19 +1015,19 @@ export function WaveRefresh({
             </p>
           </div>
         ) : null}
-        {error ? <p className="flow-error">{error}</p> : null}
-        <div className="flow-row">
-          {step === 'matches' ? (
-            <Button type="button" className="flow-btn" onClick={() => setStep('moved')}>
-              Review what moved
-            </Button>
-          ) : null}
-          {step === 'moved' ? (
-            <Button type="button" className="flow-btn" onClick={() => setStep('matches')}>
-              Back to matches
-            </Button>
-          ) : null}
-          {step === 'file' ? null : (
+        {error ? <p className="flow-error wave-refresh-error">{error}</p> : null}
+        {step === 'file' ? null : (
+          <div className="wave-refresh-foot">
+            {step === 'matches' ? (
+              <Button type="button" className="flow-btn" onClick={() => setStep('moved')}>
+                Review what moved
+              </Button>
+            ) : null}
+            {step === 'moved' ? (
+              <Button type="button" className="flow-btn" onClick={() => setStep('matches')}>
+                Back to matches
+              </Button>
+            ) : null}
             <Button
               type="button"
               className="flow-btn"
@@ -1034,8 +1036,8 @@ export function WaveRefresh({
             >
               {fileName ? 'Change file' : 'Choose file'}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

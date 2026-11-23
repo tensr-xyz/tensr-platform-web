@@ -23,6 +23,13 @@ export type BannerCell = {
   column_weighted_n?: number;
   unweighted_n?: number;
   weighted_n?: number;
+  effective_base?: number | null;
+  standard_error?: number | null;
+  z_statistic?: number | null;
+  missing_count?: number | null;
+  column_responses_percent?: number | null;
+  ci_low?: number | null;
+  ci_high?: number | null;
   provenance?: {
     row_uid_bitset?: string;
     origin_bitsets?: Record<string, { row_uid_bitset?: string }>;
@@ -30,12 +37,48 @@ export type BannerCell = {
   };
 };
 
+/** Extra stacked lines for statistics beyond the Show chips (Paper 5d). */
+export function extraCellStatLines(
+  cell: BannerCell | undefined,
+  statistics: string[],
+  digits = 1
+): string[] {
+  if (!cell) return [];
+  const kinds = new Set(statistics);
+  const lines: string[] = [];
+  if (kinds.has('z_statistic') && typeof cell.z_statistic === 'number') {
+    lines.push(`z ${cell.z_statistic.toFixed(Math.max(digits, 2))}`);
+  }
+  if (kinds.has('standard_error') && typeof cell.standard_error === 'number') {
+    lines.push(`se ${cell.standard_error.toFixed(Math.max(digits, 3))}`);
+  }
+  if (kinds.has('effective_base') && typeof cell.effective_base === 'number') {
+    lines.push(`eff ${formatGroupedNumber(cell.effective_base, 0)}`);
+  }
+  if (kinds.has('missing_count') && typeof cell.missing_count === 'number') {
+    lines.push(`miss ${formatGroupedNumber(cell.missing_count, 0)}`);
+  }
+  if (
+    kinds.has('confidence_interval') &&
+    typeof cell.ci_low === 'number' &&
+    typeof cell.ci_high === 'number'
+  ) {
+    lines.push(`ci ${cell.ci_low.toFixed(digits)}–${cell.ci_high.toFixed(digits)}%`);
+  }
+  if (kinds.has('column_responses_percent') && typeof cell.column_responses_percent === 'number') {
+    lines.push(`resp ${cell.column_responses_percent.toFixed(digits)}%`);
+  }
+  return lines;
+}
+
 export type BannerRow = {
   id: string;
   label?: string;
   column?: string;
   source_text_column?: string | null;
   kind?: string;
+  /** Stub letter when paired item tests run inside a banner column (TEN-190). */
+  letter_slot?: string;
   cells?: BannerCell[];
 };
 
@@ -154,6 +197,37 @@ export function mediaCellText(
     }
   }
   return shown;
+}
+
+/** Paper 5d stacked cell lines: percent, projected+index, unweighted n. */
+export function mediaCellLines(
+  cell: BannerCell | undefined,
+  digits = 1,
+  options?: { includeProjected?: boolean; includeUnweighted?: boolean }
+): { percent: string; detail: string; base: string } {
+  if (!cell) return { percent: '—', detail: '', base: '' };
+  const percent =
+    cell.percent != null && Number.isFinite(cell.percent)
+      ? `${cell.percent.toFixed(digits)}%`
+      : '—';
+  const parts: string[] = [];
+  const includeProjected = options?.includeProjected !== false;
+  const projected = cell.projected_thousands;
+  if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
+    const rounded = formatGroupedNumber(projected, projected >= 100 ? 0 : 1).replace(/\.0$/, '');
+    parts.push(`${rounded}k`);
+  }
+  const index = cell.index;
+  if (typeof index === 'number' && Number.isFinite(index)) {
+    parts.push(Math.round(index).toLocaleString('en-GB'));
+  }
+  const includeUnweighted = options?.includeUnweighted !== false;
+  const n = cell.unweighted_n;
+  const base =
+    includeUnweighted && typeof n === 'number' && Number.isFinite(n)
+      ? `n ${formatGroupedNumber(n)}`
+      : '';
+  return { percent, detail: parts.join(' · '), base };
 }
 
 export function selectionFromCell(

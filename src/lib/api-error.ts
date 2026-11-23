@@ -18,7 +18,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-const SERVICE_UNAVAILABLE = 'The dataset service is starting up. Wait a few seconds and try again.';
+const SERVICE_UNAVAILABLE = "Couldn't reach Tensr, try again";
 
 const ASSISTANT_ROUTE_NOT_FOUND = 'The AI assistant could not be reached. Refresh and try again.';
 

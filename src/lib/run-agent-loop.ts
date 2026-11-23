@@ -18,11 +18,20 @@ import {
 } from '@/lib/agent-conversation-history';
 import { EMPTY_TURN_ANSWER } from '@/components/flow/chat-output';
 
-const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502]);
-const WARMUP_AGENT_LOOP_STATUSES = new Set([500, 503]);
+const RETRYABLE_AGENT_LOOP_STATUSES = new Set([500, 502, 503, 504]);
+const AGENT_LOOP_MAX_ATTEMPTS = 5;
+const AGENT_LOOP_RETRY_DELAYS_MS = [800, 1600, 2400, 3200];
+export const AGENT_LOOP_RETRYING_MESSAGE = 'Tensr is restarting, retrying…';
+export const AGENT_LOOP_UNREACHABLE_MESSAGE = "Couldn't reach Tensr, try again";
 
 function isStreamEndedWithoutResult(error: unknown): boolean {
   return error instanceof Error && error.name === 'AgentStreamClosed';
+}
+
+function isRetryableAgentLoopError(error: unknown): boolean {
+  if (isStreamEndedWithoutResult(error)) return true;
+  if (!(error instanceof ApiRequestError)) return false;
+  return RETRYABLE_AGENT_LOOP_STATUSES.has(error.status);
 }
 
 export type AgentLoopOpenDataset = {
@@ -155,10 +164,10 @@ export function downloadLoopExcelExports(
 }
 
 export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoopResponse> {
-  const maxAttempts = 3;
   let lastError: unknown;
+  let liveSessionId = params.sessionId ?? null;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < AGENT_LOOP_MAX_ATTEMPTS; attempt++) {
     try {
       const response = await streamAgentLoop(
         {
@@ -172,7 +181,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           approvedToolCalls: params.approvedToolCalls ?? null,
           attachments: params.attachments ?? null,
           agentVersion: params.agentVersion,
-          sessionId: params.sessionId,
+          sessionId: liveSessionId,
           resume: params.resume,
           approvedBatch: params.approvedBatch,
           resumeHops: params.resumeHops,
@@ -182,7 +191,10 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           onDelta: params.onDelta,
           onReplace: params.onReplace,
           onPreview: params.onPreview,
-          onSession: params.onSession,
+          onSession: sessionId => {
+            liveSessionId = sessionId;
+            params.onSession?.(sessionId);
+          },
           recover: params.recover,
           signal: params.signal,
         }
@@ -201,27 +213,28 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         throw error;
       }
       lastError = error;
-      const status = error instanceof ApiRequestError ? error.status : 0;
-      const warmup =
-        attempt === 0 &&
-        (WARMUP_AGENT_LOOP_STATUSES.has(status) || isStreamEndedWithoutResult(error));
-      if (warmup) {
-        await new Promise<void>(resolve => {
-          window.setTimeout(resolve, 800);
-        });
-        continue;
+      if (!isRetryableAgentLoopError(error) || attempt >= AGENT_LOOP_MAX_ATTEMPTS - 1) {
+        if (isRetryableAgentLoopError(error)) {
+          throw new ApiRequestError(503, AGENT_LOOP_UNREACHABLE_MESSAGE);
+        }
+        throw error;
       }
-      if (RETRYABLE_AGENT_LOOP_STATUSES.has(status) && attempt < maxAttempts - 1) {
-        await new Promise<void>(resolve => {
-          window.setTimeout(resolve, 1200 * (attempt + 1));
-        });
-        continue;
-      }
-      throw error;
+      params.onProgress?.({
+        type: 'progress',
+        step: 'retry',
+        message: AGENT_LOOP_RETRYING_MESSAGE,
+      });
+      const wait =
+        AGENT_LOOP_RETRY_DELAYS_MS[Math.min(attempt, AGENT_LOOP_RETRY_DELAYS_MS.length - 1)];
+      await new Promise<void>(resolve => {
+        window.setTimeout(resolve, wait);
+      });
     }
   }
 
-  throw lastError;
+  throw lastError instanceof ApiRequestError
+    ? lastError
+    : new ApiRequestError(503, AGENT_LOOP_UNREACHABLE_MESSAGE);
 }
 
 export function chartsFromToolResults(

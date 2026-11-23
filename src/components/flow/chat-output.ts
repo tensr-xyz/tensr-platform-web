@@ -226,6 +226,17 @@ function isLeadSentence(text: string): boolean {
   return text.trim().split(/\s+/).filter(Boolean).length > 14;
 }
 
+/** Crosstab / by titles are card names even when longer than a lead sentence. */
+function isTableCrossTitle(text: string): boolean {
+  return /[×]|(\s+by\s+)/i.test(text);
+}
+
+function cardTitleText(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= 90) return trimmed;
+  return `${trimmed.slice(0, 89).trimEnd()}…`;
+}
+
 /** The question on the column this result is about, when the title is only an answer such as Yes. */
 function questionFromBody(
   body: Record<string, unknown> | undefined,
@@ -352,6 +363,8 @@ export function isBlandAnswer(text: string): boolean {
 /** Plain text when a turn would otherwise leave the chat blank. */
 export const EMPTY_TURN_ANSWER = 'The reply did not finish. Ask again.';
 export const CONTINUING_TURN_ANSWER = 'This turn is still running. Nothing has been reported yet.';
+export const UNFINISHED_TURN_ANSWER =
+  'This turn did not end on a result, a conceptual answer, a question, or an unsupported outcome.';
 
 /** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
 export function visibleTurnAnswer(status: string | undefined, text: string): string {
@@ -462,13 +475,24 @@ export function resultLead(
     answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
   ).trim();
   // A finish stub is not a lead; use the structured result lines instead.
-  if (prose === EMPTY_TURN_ANSWER || prose === CONTINUING_TURN_ANSWER) prose = '';
+  const unfinishedStub =
+    prose === EMPTY_TURN_ANSWER ||
+    prose === CONTINUING_TURN_ANSWER ||
+    prose === UNFINISHED_TURN_ANSWER ||
+    /^this turn did not end on a result/i.test(prose);
+  if (unfinishedStub) prose = '';
   const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
   const deniesTheTable =
     /not returned|was not returned|can.?t give|cannot give|could not (?:give|return|show)|was not run/i.test(
       prose
     );
   if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
+  // TEN-188: pending / failed-model prose must not beat a finished result line.
+  const pendingOrFailedProse =
+    /still building|status is pending|flags:\s*\w|reports?\s+banner_table|model call failed|this turn stopped|building the table/i.test(
+      prose
+    );
+  if (pendingOrFailedProse && finding) return guardUserText(withoutStrayEnding(finding));
   const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
   const hasDigits = (text: string) => /\d/.test(text);
   // Prefer the structured summary when the model still quotes snake_case codes.
@@ -476,15 +500,31 @@ export function resultLead(
     /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/.test(text) ||
     /\bWeight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\b/.test(text);
   const preferFinding = Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose));
+  // Duplication leads are stamped by the engine (Paper 6n). Prefer them over model prose
+  // so the card does not repeat net reach in two formats.
+  const duplicationFinding =
+    Boolean(finding) &&
+    Array.isArray(results) &&
+    results.some(item => {
+      const nested = item?.result && typeof item.result === 'object' ? item.result : item;
+      const record =
+        nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : {};
+      return (
+        record.kind === 'brand_duplication' ||
+        record.analysis_type === 'brand_duplication' ||
+        record.procedure === 'brand_duplication'
+      );
+    });
   const text =
+    (duplicationFinding ? finding : '') ||
     (preferFinding ? finding : '') ||
     (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||
     (finding && hasDigits(finding) && !hasFigure(prose) ? finding : '') ||
-    (prose && hasDigits(prose) ? prose : '') ||
+    (prose && hasDigits(prose) && !pendingOrFailedProse ? prose : '') ||
     finding ||
-    prose ||
-    outputTakeaway(answer);
+    (pendingOrFailedProse || unfinishedStub ? '' : prose) ||
+    (unfinishedStub ? '' : outputTakeaway(answer));
   const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(text)));
   const headline = tables ? funnelHeadline(tables) : '';
   const figures = cleaned.match(/%/g)?.length ?? 0;
@@ -500,16 +540,72 @@ function collapseRepeatedLead(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
   const half = Math.floor(trimmed.length / 2);
-  if (half < 40) return trimmed;
-  const left = trimmed.slice(0, half).trim();
-  const right = trimmed.slice(half).trim();
-  if (left && right && (right.startsWith(left) || left === right)) return left;
+  if (half >= 40) {
+    const left = trimmed.slice(0, half).trim();
+    const right = trimmed.slice(half).trim();
+    if (left && right && (right.startsWith(left) || left === right)) return left;
+  }
+  // Same block twice with a space between (length not an even split).
+  for (let size = Math.floor(trimmed.length / 2); size >= 40; size -= 1) {
+    const block = trimmed.slice(0, size).trimEnd();
+    if (block.length < 40) break;
+    const rest = trimmed.slice(size).trimStart();
+    if (rest === block || rest.startsWith(block)) return block;
+  }
   // Same U/F/t clause twice on one line.
   const match = trimmed.match(
     /^(.+?\b(?:U|H|F|t)\s*(?:\([^)]*\))?\s*=\s*-?[\d.,]+.+?)(?:\s+\1)+$/i
   );
   if (match?.[1]) return match[1].trim();
-  return trimmed;
+  return collapseSubsumedStatSentences(trimmed);
+}
+
+/** Split on sentence endings without cutting decimal places (1086523.5). */
+function leadSentenceParts(line: string): string[] {
+  const parts = line
+    .trim()
+    .split(/\.(?:\s+|$)/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  return parts.map(part =>
+    part.endsWith('.') || part.endsWith('!') || part.endsWith('?') ? part : `${part}.`
+  );
+}
+
+function looksLikeBareStatLead(sentence: string): boolean {
+  const low = sentence.trim().toLowerCase();
+  if (
+    /^(?:welch'?s\s+)?(?:survey\s+)?(?:pearson\s+chi-square|u|h|f|t|z|χ²|chi-square)\b/.test(low)
+  ) {
+    return low.includes('p =') || low.includes('p <') || low.includes('p-value');
+  }
+  return false;
+}
+
+/** Drop a bare U/F/t … p = … and keep each labelled sentence once. */
+function collapseSubsumedStatSentences(line: string): string {
+  const parts = leadSentenceParts(line);
+  if (parts.length < 2) return line;
+  const norms = parts.map(part => part.replace(/\.$/, '').toLowerCase());
+  const drop = new Set<number>();
+  norms.forEach((short, index) => {
+    if (short.length < 16 || !/\d/.test(short) || !looksLikeBareStatLead(short)) return;
+    const subsumed = norms.some(
+      (longer, other) =>
+        other !== index && longer.length > short.length + 4 && longer.includes(short)
+    );
+    if (subsumed) drop.add(index);
+  });
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  parts.forEach((part, index) => {
+    if (drop.has(index)) return;
+    const key = norms[index];
+    if (seen.has(key)) return;
+    seen.add(key);
+    kept.push(part);
+  });
+  return kept.join(' ').trim();
 }
 
 /** A funnel output opens that output. Other outputs open the table builder. */
@@ -530,11 +626,13 @@ export function clientDeckReportHref(projectHref: string): string {
 }
 
 /** A weight column code and an empty cautions bullet are not part of the finding. */
-function withoutStrayEnding(text: string): string {
+export function withoutStrayEnding(text: string): string {
   const lines = text.split('\n').filter(line => {
     const trimmed = line.trim();
     if (/^cautions:?$/i.test(trimmed)) return false;
     if (/^[-*•]\s*$/.test(trimmed)) return false;
+    // A trailing "weighted by column_code" line under the reply (TEN-41).
+    if (/^weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?$/i.test(trimmed)) return false;
     return true;
   });
   return (
@@ -576,7 +674,8 @@ function summaryLine(
     const text = line.trim();
     if (!text || !/[A-Za-z]/.test(text) || !/\d/.test(text)) return;
     // The default summarize stub is the procedure name; it is not a lead.
-    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square)\b/i.test(text)) return;
+    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square|descriptives)\b/i.test(text)) return;
+    if (/flags:\s*\w/i.test(text) || /building the table/i.test(text)) return;
     if (seen.has(text)) return;
     seen.add(text);
     lines.push(text);
@@ -681,7 +780,10 @@ export function outputTitle(
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
     if (typeof title === 'string' && PROCEDURE_TITLE.test(title.trim())) continue;
-    if (typeof title === 'string' && title.trim() && !isLeadSentence(title)) {
+    const keepLongTitle =
+      typeof title === 'string' &&
+      (isTableCrossTitle(title) || procedureOf(item) === 'banner_table');
+    if (typeof title === 'string' && title.trim() && (keepLongTitle || !isLeadSentence(title))) {
       const shown = titledWithQuestion(title, columns);
       const kindName = (
         KIND_LABELS[procedureOf(item)] ||
@@ -691,10 +793,10 @@ export function outputTitle(
       if (kindName && shown.toLowerCase().startsWith(kindName) && shown.split(/\s+/).length > 2) {
         continue;
       }
-      if (isQuestion(shown)) return shown;
+      if (isQuestion(shown) || keepLongTitle) return cardTitleText(shown);
       const fromColumn = questionFromBody(bodyOf(item), columns);
-      if (fromColumn) return fromColumn;
-      if (shown.trim()) return shown;
+      if (fromColumn) return cardTitleText(fromColumn);
+      if (shown.trim()) return cardTitleText(shown);
     }
     const body = bodyOf(item);
     const measure = first(body, [

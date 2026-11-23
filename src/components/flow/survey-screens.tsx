@@ -31,6 +31,7 @@ import {
   isIdColumn,
   isInternalColumn,
   isOtherSpecifyField,
+  isTableTextCategorical,
   openEndColumns,
   pickerColumns,
   questionnaireOutline,
@@ -73,6 +74,8 @@ import {
   codedStub,
   lettersFor,
   formatGroupedNumber,
+  extraCellStatLines,
+  mediaCellLines,
   mediaCellText,
   selectionFromCell,
   themeRead,
@@ -85,6 +88,18 @@ import {
 import { tableBaseCopy } from '@/components/flow/table-base';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
 import { isTableSourceChanged } from '@/components/flow/stale-table';
+import type { SavedAudience } from '@/components/flow/audience-panel';
+import { BannerAddPicker, bannerChipClass } from '@/components/flow/table-banner-picker';
+import { CellStatsPopover, type SummaryColumnKind } from '@/components/flow/cell-stats-popover';
+import {
+  bannerRefLabel,
+  bannerRefsFromSpec,
+  bannerRequestItems,
+  columnNamesFromBannerRefs,
+  tableBannerKey,
+  tableBannerKeys,
+  type TableBannerRef,
+} from '@/components/flow/table-banner-refs';
 
 type DatasetRow = {
   dataset_id?: string;
@@ -188,15 +203,40 @@ export function displayedCount(
   return formatGroupedNumber(Number(raw));
 }
 
-/** Weighted tables also ask for projected thousands, index, and the unweighted base. */
-export function tableStatisticsForWeight(selected: string[], weighted: boolean): string[] {
+/**
+ * Weighted tables also ask for index and the unweighted base.
+ * Projected 000s only when the weight projects to a population (Paper 5d).
+ */
+export function tableStatisticsForWeight(
+  selected: string[],
+  weighted: boolean,
+  isProjection = false
+): string[] {
   const stats = selected.filter(Boolean);
   if (!weighted) return stats.length ? stats : ['column_proportion'];
   const out = [...stats];
-  for (const kind of ['projected_thousands', 'index', 'unweighted_base'] as const) {
+  const extras = isProjection
+    ? (['projected_thousands', 'index', 'unweighted_base'] as const)
+    : (['index', 'unweighted_base'] as const);
+  for (const kind of extras) {
     if (!out.includes(kind)) out.push(kind);
   }
+  // Drop Projected 000s when the active weight is a design weight.
+  if (!isProjection) {
+    return out.filter(kind => kind !== 'projected_thousands');
+  }
   return out;
+}
+
+/** Book weight block: projection weights carry is_projection / projection_unit. */
+export function bookIsProjection(
+  book: { weight?: { is_projection?: boolean; projection_unit?: string | null } | null } | null
+): boolean {
+  const weight = book?.weight;
+  if (!weight || typeof weight !== 'object') return false;
+  if (weight.is_projection === true) return true;
+  if (weight.is_projection === false) return false;
+  return Boolean(weight.projection_unit);
 }
 
 /** The footer says Saved only once the open table matches what was stored. */
@@ -219,6 +259,14 @@ export function savedTableMatches(
     savedBanners.every((name, index) => name === banners[index])
   );
 }
+
+export {
+  audienceBannerSizeLabel,
+  bannerRefsFromSpec,
+  bannerRequestItems,
+  tableBannerKey,
+} from '@/components/flow/table-banner-refs';
+export type { TableBannerRef } from '@/components/flow/table-banner-refs';
 
 const FILE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -351,6 +399,81 @@ function cellFigures(
   return parts.length ? parts.join(' · ') : '—';
 }
 
+/** Paper 5d: one statistic group per line so multi-stat cells do not collide. */
+function StackedCellFigures({
+  cell,
+  figures,
+  digits,
+  weighted,
+  letter,
+  isProjection = false,
+  statistics = [],
+}: {
+  cell: BannerCell | undefined;
+  figures: CellFigure[];
+  digits: number;
+  weighted: boolean;
+  letter?: string;
+  isProjection?: boolean;
+  statistics?: string[];
+}) {
+  const wantsPercent = figures.includes('percent');
+  const hasCount = figures.includes('count');
+  const extras = figures.filter(figure => figure !== 'percent');
+  const inferential = extraCellStatLines(cell, statistics, digits);
+  const multi =
+    figures.length > 1 ||
+    Boolean(cell?.projected_thousands) ||
+    cell?.index != null ||
+    inferential.length > 0;
+  // Always stack when more than one figure is on (Row % used to overflow sideways).
+  if (!wantsPercent || !multi) {
+    const text = cellFigures(cell, figures, digits, weighted);
+    return (
+      <span className="flow-cell-stack">
+        <span className="flow-cell-stack-primary">
+          {text}
+          {letter ? <span className="grid-letter"> {letter}</span> : null}
+        </span>
+        {inferential.map(text => (
+          <span key={text} className="flow-cell-stack-muted">
+            {text}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  const lines = mediaCellLines(cell, digits, {
+    includeProjected: isProjection && !hasCount && statistics.includes('projected_thousands'),
+    includeUnweighted:
+      !hasCount &&
+      (statistics.includes('unweighted_base') || statistics.includes('projected_thousands')),
+  });
+  const extraText = extras
+    .map(figure => cellFigure(cell, figure, digits, weighted, false))
+    .filter(part => part && part !== '—');
+  return (
+    <span className="flow-cell-stack">
+      <span className="flow-cell-stack-primary">
+        {lines.percent}
+        {letter ? <span className="grid-letter"> {letter}</span> : null}
+      </span>
+      {lines.detail ? <span className="flow-cell-stack-muted">{lines.detail}</span> : null}
+      {lines.base ? <span className="flow-cell-stack-muted">{lines.base}</span> : null}
+      {extraText.map(text => (
+        <span key={text} className="flow-cell-stack-muted">
+          {text}
+        </span>
+      ))}
+      {inferential.map(text => (
+        <span key={text} className="flow-cell-stack-muted">
+          {text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {
   const groups: { label: string; span: number }[] = [];
   for (const column of columns) {
@@ -404,6 +527,7 @@ export function BannerGrid({
   showNets = false,
   figure = 'percent',
   figures,
+  statistics = [],
   digits = 1,
   markLowBase = false,
   muted = false,
@@ -418,6 +542,8 @@ export function BannerGrid({
   showNets?: boolean;
   figure?: CellFigure;
   figures?: CellFigure[];
+  /** Full statistic kinds selected in the cell-stats popover. */
+  statistics?: string[];
   digits?: number;
   markLowBase?: boolean;
   muted?: boolean;
@@ -425,6 +551,13 @@ export function BannerGrid({
 }) {
   const shownFigures = figures?.length ? figures : [figure];
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
+  const isProjection = bookIsProjection(book);
+  const cellStatistics =
+    statistics.length > 0
+      ? statistics
+      : Array.isArray((book.spec as { statistics?: string[] } | undefined)?.statistics)
+        ? ((book.spec as { statistics?: string[] }).statistics as string[])
+        : [];
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
@@ -527,6 +660,9 @@ export function BannerGrid({
                 <tr key={row.id}>
                   <th title={row.label}>
                     {row.label}
+                    {row.letter_slot && lettersShown ? (
+                      <span className="grid-slot"> {row.letter_slot}</span>
+                    ) : null}
                     {showQuotes && quotes != null ? (
                       <span className="flow-muted"> {quotes}</span>
                     ) : null}
@@ -537,7 +673,14 @@ export function BannerGrid({
                     if (row.kind === 'not_coded') {
                       return (
                         <td key={column.id} className="flow-muted">
-                          {cellFigures(cell, shownFigures, digits, weighted)}
+                          <StackedCellFigures
+                            cell={cell}
+                            figures={shownFigures}
+                            digits={digits}
+                            weighted={weighted}
+                            isProjection={isProjection}
+                            statistics={cellStatistics}
+                          />
                         </td>
                       );
                     }
@@ -574,9 +717,16 @@ export function BannerGrid({
                               type="button"
                               data-active={picked === cellKey}
                             >
-                              {cellFigures(cell, shownForRow, digits, weighted)}
+                              <StackedCellFigures
+                                cell={cell}
+                                figures={shownForRow}
+                                digits={digits}
+                                weighted={weighted}
+                                isProjection={isProjection}
+                                statistics={cellStatistics}
+                                letter={letter || undefined}
+                              />
                               {markLowBase && cell?.low_base ? ' *' : ''}
-                              {letter ? <span className="grid-letter"> {letter}</span> : null}
                               {arrowsShown && !letter
                                 ? (() => {
                                     const arrow = arrowForCell(book, row.id, column.id);
@@ -1554,8 +1704,7 @@ type TableColumn = {
   n_rows?: number | null;
 };
 
-/** Distinct values at or below this count stay stub/banner categories when unlabelled. */
-export const TABLE_TEXT_CATEGORY_MAX = 100;
+export { TABLE_TEXT_CATEGORY_MAX, isTableTextCategorical } from '@/lib/flow-columns';
 
 /** A weight column by role, name, or label. The weight menu lists these; stub/banner do not. */
 export function isTableWeightColumn(
@@ -1575,28 +1724,6 @@ export function isTableWeightColumn(
     return true;
   }
   return /\bweight\b/i.test(String(column.label || ''));
-}
-
-/** Unlabelled string with few distinct values: a category, not an open end. */
-export function isTableTextCategorical(
-  column: {
-    type?: string;
-    labels?: Record<string, string>;
-    n_unique?: number | null;
-    n_rows?: number | null;
-  },
-  nRows?: number | null
-): boolean {
-  const type = String(column.type || '').toLowerCase();
-  if (type === 'text') return false;
-  if (type !== 'string' && type !== 'categorical') return false;
-  if (Object.keys(column.labels || {}).length > 0) return true;
-  const nUnique = Number(column.n_unique);
-  if (!Number.isFinite(nUnique) || nUnique < 1) return false;
-  if (nUnique > TABLE_TEXT_CATEGORY_MAX) return false;
-  const rows = Number(nRows ?? column.n_rows);
-  if (Number.isFinite(rows) && rows >= 20 && nUnique >= rows / 2) return false;
-  return true;
 }
 
 /** Stub and banner choices. Ids, open text, and weight columns are not questions. */
@@ -1709,12 +1836,7 @@ export function columnChoiceLabel(column: { name: string; label: string }): stri
 }
 
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
-  const names: string[] = [];
-  for (const banner of spec?.banners || []) {
-    if (banner.column) names.push(String(banner.column));
-    for (const column of banner.columns || []) names.push(String(column));
-  }
-  return names.filter((name, index) => name && names.indexOf(name) === index);
+  return tableBannerKeys(bannerRefsFromSpec(spec));
 }
 
 /** The banner book an agent turn produced, if any. */
@@ -1978,10 +2100,17 @@ export function TablesBuilder({
   const [specs, setSpecs] = useState<SavedSpec[]>([]);
   const [books, setBooks] = useState<SavedBook[]>([]);
   const [stub, setStub] = useState(initialStub);
-  const [banners, setBanners] = useState<string[]>(initialBanner ? [initialBanner] : []);
+  const [banners, setBanners] = useState<TableBannerRef[]>(
+    initialBanner ? [{ kind: 'column', column: initialBanner }] : []
+  );
+  const [audiences, setAudiences] = useState<SavedAudience[]>([]);
   const [weight, setWeight] = useState('');
   const activeWeightName = useRef('');
   const [statistics, setStatistics] = useState<string[]>(['column_proportion']);
+  const [summaryColumns, setSummaryColumns] = useState<SummaryColumnKind[]>([]);
+  const [cellStatsOpen, setCellStatsOpen] = useState(false);
+  const [selectedSpecIds, setSelectedSpecIds] = useState<string[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [digits, setDigits] = useState(0);
   const [significance, setSignificance] = useState<TableSignificanceSettings>(() => {
     const saved = loadProjectSignificance(projectId);
@@ -2151,6 +2280,14 @@ export function TablesBuilder({
         setColumns([]);
         setVariableSets([]);
       });
+    void flowJson<{ audiences?: SavedAudience[] }>(`/datasets/${datasetId}/audiences`)
+      .then(page => {
+        if (!live) return;
+        setAudiences(Array.isArray(page.audiences) ? page.audiences : []);
+      })
+      .catch(() => {
+        if (live) setAudiences([]);
+      });
     return () => {
       live = false;
     };
@@ -2165,6 +2302,8 @@ export function TablesBuilder({
     role: column.role,
     linked_set: column.linked_set,
     value_labels: column.labels,
+    n_unique: column.n_unique,
+    n_rows: column.n_rows,
   }));
   const outlineQuestions: OutlineQuestion[] = questionnaireOutline(
     pickerColumnsMeta,
@@ -2247,7 +2386,14 @@ export function TablesBuilder({
           post_hoc_control?: string;
           filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
           stubs?: { column?: string; nets?: { label?: string; values?: unknown[] }[] }[];
-          banners?: { column?: string; columns?: string[]; nested?: unknown }[];
+          banners?: {
+            column?: string;
+            columns?: string[];
+            nested?: unknown;
+            filter?: { combine?: string; filters?: unknown[] };
+            audience?: string;
+            label?: string;
+          }[];
           weight?: { column?: string } | string | null;
         }
       | undefined;
@@ -2265,17 +2411,20 @@ export function TablesBuilder({
     setCustomNets(userNets(storedNets));
     setTop2(storedNets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
     setBottom2(storedNets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
-    const names = bannerNames(spec);
-    if (names.length) setBanners(names);
+    const refs = bannerRefsFromSpec(spec);
+    if (refs.length) setBanners(refs);
     setNest(Boolean(spec?.nest_banners));
-    const showKinds = ['count', 'column_proportion', 'row_proportion', 'total_proportion'] as const;
     const savedStats = Array.isArray(spec?.statistics)
-      ? spec.statistics.filter((kind): kind is (typeof showKinds)[number] =>
-          (showKinds as readonly string[]).includes(String(kind))
-        )
+      ? spec.statistics.map(String).filter(kind => kind && kind !== 'column_mean')
       : [];
     if (savedStats.length) setStatistics(savedStats);
     setMeanOn(Array.isArray(spec?.statistics) && spec.statistics.includes('column_mean'));
+    const savedSummaries = (
+      (spec as { summary_columns?: string[] } | undefined)?.summary_columns || []
+    )
+      .map(String)
+      .filter((kind): kind is SummaryColumnKind => kind === 'average' || kind === 'total');
+    setSummaryColumns(savedSummaries);
     const decimals = spec?.decimals;
     if (decimals && typeof decimals === 'object') {
       const first = Object.values(decimals).find(value => typeof value === 'number');
@@ -2356,6 +2505,121 @@ export function TablesBuilder({
     void runTable(true);
   }
 
+  /** Paper 5d: apply cell stats (and optional summaries) to this table or every saved table. */
+  function applyCellStats(next: {
+    statistics: string[];
+    summaryColumns: SummaryColumnKind[];
+    scope: 'this' | 'all';
+  }) {
+    setStatistics(next.statistics.filter(kind => kind !== 'column_mean'));
+    setMeanOn(next.statistics.includes('column_mean') || meanOn);
+    setSummaryColumns(next.summaryColumns);
+    if (next.scope === 'this') {
+      setDirty(true);
+      return;
+    }
+    const targets =
+      selectedSpecIds.length >= 2
+        ? selectedSpecIds
+        : activeSpecs.map(spec => String(spec.spec_id || spec.id || '')).filter(Boolean);
+    void batchPatchSelected({
+      statistics: tableStatisticsForWeight(
+        next.statistics,
+        Boolean(weight),
+        bookIsProjection(book)
+      ),
+      summary_columns: next.summaryColumns,
+      ...(targets.length ? { onlyIds: targets } : {}),
+    });
+  }
+
+  /** Re-save several tables with shared weight / filter / banner / cell stats. */
+  async function batchPatchSelected(patch: {
+    weight?: string;
+    filter_ref?: { filters: { column: string; op: string; value: string | string[] }[] } | null;
+    banner?: ReturnType<typeof bannerRequestItems>;
+    statistics?: string[];
+    summary_columns?: SummaryColumnKind[];
+    onlyIds?: string[];
+  }) {
+    if (!datasetId) return;
+    const ids = patch.onlyIds?.length ? patch.onlyIds : selectedSpecIds;
+    if (ids.length < 1) return;
+    setBatchBusy(true);
+    setError('');
+    try {
+      for (const id of ids) {
+        const listed = activeSpecs.find(spec => (spec.spec_id || spec.id) === id);
+        const fileId = String(listed?.dataset_id || datasetId);
+        const existing = await flowJson<Record<string, unknown>>(
+          `/datasets/${fileId}/tables/${encodeURIComponent(id)}`
+        ).catch(() => null);
+        const spec = (existing?.spec || {}) as {
+          stubs?: { column?: string; nets?: { label: string; values: string[] }[] }[];
+          banners?: unknown[];
+          statistics?: string[];
+          nest_banners?: boolean;
+          decimals?: Record<string, number>;
+          weight?: { column?: string } | string | null;
+          filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
+          summary_columns?: string[];
+        };
+        const stubColumn = String(spec.stubs?.[0]?.column || stub || '');
+        if (!stubColumn) continue;
+        const bodyWeight =
+          patch.weight !== undefined
+            ? patch.weight
+            : storedWeightColumn(spec.weight) || weight || 'none';
+        await flowJson(`/datasets/${fileId}/tables`, {
+          method: 'POST',
+          body: JSON.stringify({
+            stubs: spec.stubs?.length ? spec.stubs : stubsForRun(stubColumn, []),
+            banner:
+              patch.banner ||
+              bannerRequestItems(bannerRefsFromSpec({ banners: spec.banners as never })),
+            statistics:
+              patch.statistics ||
+              tableStatisticsForWeight(
+                shownStatistics(spec.statistics || statistics, meanOn),
+                Boolean(bodyWeight && bodyWeight !== 'none'),
+                bookIsProjection(existing)
+              ),
+            ...significanceRequestFields(significance),
+            nest_banners: Boolean(spec.nest_banners),
+            low_base_threshold: lowBase ? 30 : 0,
+            suppress_low_base: false,
+            decimals: spec.decimals || shownDecimals(statistics, digits, meanOn),
+            weight: bodyWeight || 'none',
+            ...(patch.summary_columns?.length || spec.summary_columns?.length
+              ? {
+                  summary_columns:
+                    patch.summary_columns ||
+                    (spec.summary_columns || []).filter(
+                      (kind): kind is SummaryColumnKind => kind === 'average' || kind === 'total'
+                    ),
+                }
+              : {}),
+            spec_id: id,
+            ...(patch.filter_ref !== undefined
+              ? patch.filter_ref?.filters?.length
+                ? { filter_ref: patch.filter_ref }
+                : {}
+              : spec.filter?.filters?.length
+                ? { filter_ref: { filters: spec.filter.filters } }
+                : {}),
+            save: true,
+          }),
+        });
+      }
+      setSelectedSpecIds([]);
+      setNote('Saved a new version of each selected table.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the selected tables');
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   const tableRequest = useRef(0);
   async function runTable(save: boolean) {
     const token = ++tableRequest.current;
@@ -2386,14 +2650,15 @@ export function TablesBuilder({
     setError('');
     const selectedStats = tableStatisticsForWeight(
       shownStatistics(statistics, meanOn),
-      Boolean(weight)
+      Boolean(weight),
+      bookIsProjection(book)
     );
     const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
         stubs: stubsForRun(stub, nets),
-        banner: banners.map(columnName => ({ column: columnName })),
+        banner: bannerRequestItems(banners),
         statistics: selectedStats,
         ...significanceRequestFields(significance),
         nest_banners: nest,
@@ -2401,6 +2666,7 @@ export function TablesBuilder({
         suppress_low_base: false,
         decimals: shownDecimals(statistics, digits, meanOn),
         weight: weight || 'none',
+        ...(summaryColumns.length ? { summary_columns: summaryColumns } : {}),
         ...(openId ? { spec_id: openId } : {}),
         ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
         save,
@@ -2421,11 +2687,14 @@ export function TablesBuilder({
       });
   }
 
+  const projectionFlag = bookIsProjection(book) ? '1' : '0';
   const optionsKey = [
     top2,
     bottom2,
     weight,
     statistics.join(','),
+    summaryColumns.join(','),
+    projectionFlag,
     digits,
     JSON.stringify(significanceRequestFields(significance)),
     nest,
@@ -2447,7 +2716,7 @@ export function TablesBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionsKey]);
   // Runs after the options effect in the same commit, so the flag covers exactly one update.
-  const shapeKey = `${stub}|${banners.join(',')}`;
+  const shapeKey = `${stub}|${tableBannerKeys(banners).join(',')}`;
   const lastShape = useRef(shapeKey);
   useEffect(() => {
     if (lastShape.current === shapeKey) return;
@@ -2477,7 +2746,13 @@ export function TablesBuilder({
   function matchesSaved(): boolean {
     const spec = currentSpec() as {
       stubs?: { column?: string }[];
-      banners?: { column?: string; columns?: string[] }[];
+      banners?: {
+        column?: string;
+        columns?: string[];
+        filter?: { combine?: string; filters?: unknown[] };
+        audience?: string;
+        label?: string;
+      }[];
     } | null;
     const id = String((book?.spec as { id?: string } | undefined)?.id || '');
     const listed = Boolean(id) && specs.some(item => (item.spec_id || item.id) === id);
@@ -2486,7 +2761,7 @@ export function TablesBuilder({
       String(spec?.stubs?.[0]?.column || ''),
       bannerNames(spec || undefined),
       stub,
-      banners
+      tableBannerKeys(banners)
     );
   }
 
@@ -2600,13 +2875,11 @@ export function TablesBuilder({
         setError(result.detail || 'This file has a scale problem.');
         return false;
       }
-      setSpecs(current =>
-        current.map(item =>
-          (item.spec_id || item.id) === id ? { ...item, stale: false, detail: '' } : item
-        )
-      );
       if (result.weight_note) setError(result.weight_note);
       else setError('');
+      // Reload the rail from classify so siblings keep their live state; do not
+      // invent stale flags client-side after one rebuild.
+      reloadSpecs();
       const opened = await flowJson<Record<string, unknown>>(
         `/datasets/${result.dataset_id || datasetId}/tables/${id}`
       );
@@ -2652,7 +2925,7 @@ export function TablesBuilder({
   }
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
-        banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
+        banners.length ? ` by ${banners.map(ref => bannerRefLabel(ref, labelFor)).join(', ')}` : ''
       }`
     : 'Save a table';
   const baseCopy = tableBaseCopy(
@@ -2690,13 +2963,24 @@ export function TablesBuilder({
         ) : activeSpecs.length ? (
           activeSpecs.map(spec => {
             const id = spec.spec_id || spec.id || '';
+            const multiSelected = selectedSpecIds.includes(id);
             return (
               <Button
                 key={id}
                 className="tables-saved"
                 type="button"
-                data-active={id === specId}
-                onClick={() => openSavedSpec(spec)}
+                data-active={id === specId || multiSelected}
+                data-batch={multiSelected ? 'true' : undefined}
+                onClick={event => {
+                  if (event.shiftKey) {
+                    setSelectedSpecIds(current =>
+                      current.includes(id) ? current.filter(item => item !== id) : [...current, id]
+                    );
+                    return;
+                  }
+                  setSelectedSpecIds([]);
+                  openSavedSpec(spec);
+                }}
               >
                 <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
@@ -2704,9 +2988,12 @@ export function TablesBuilder({
                   {spec.stale ? (
                     <span
                       className="flow-muted"
-                      title="Built on an older file version; opens by rebuilding on this file."
+                      title={
+                        spec.detail ||
+                        'The file changed after this table was saved. Opening it re-runs the same stub and banners on the file in use.'
+                      }
                     >
-                      Needs rebuild
+                      Needs rebuild · file changed
                     </span>
                   ) : spec.filename ? (
                     <span className="flow-muted">{spec.filename}</span>
@@ -2720,6 +3007,52 @@ export function TablesBuilder({
         ) : (
           <p className="flow-muted">No saved tables yet</p>
         )}
+        {selectedSpecIds.length >= 2 ? (
+          <div className="tables-batch-bar" role="status">
+            <p className="tables-batch-count">{selectedSpecIds.length} tables selected</p>
+            <div className="tables-batch-actions">
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy || !weight}
+                onClick={() => void batchPatchSelected({ weight: weight || 'none' })}
+              >
+                Weight
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() =>
+                  void batchPatchSelected({
+                    filter_ref: tableFilter?.filters.length ? tableFilter : null,
+                  })
+                }
+              >
+                Filter
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() => setCellStatsOpen(true)}
+              >
+                Cell stats
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() => void batchPatchSelected({ banner: bannerRequestItems(banners) })}
+              >
+                Banner
+              </Button>
+            </div>
+            <p className="tables-batch-hint">
+              Shift-click tables in the list to select. Each change saves a new version.
+            </p>
+          </div>
+        ) : null}
         {parkedSpecs.length ? (
           <>
             <div className="tables-rail-head">
@@ -2798,16 +3131,20 @@ export function TablesBuilder({
                 onPickQuestion={value => {
                   if (!value) return;
                   setStub(value);
-                  setBanners(current => current.filter(item => item !== value));
+                  setBanners(current =>
+                    current.filter(item => !(item.kind === 'column' && item.column === value))
+                  );
                 }}
-                selectedGroups={banners}
+                selectedGroups={columnNamesFromBannerRefs(banners)}
                 onPickGroup={value => {
                   if (!value || value === stub) return;
-                  setBanners(current =>
-                    current.includes(value)
-                      ? current.filter(item => item !== value)
-                      : [...current, value]
-                  );
+                  setBanners(current => {
+                    const key = tableBannerKey({ kind: 'column', column: value });
+                    if (current.some(item => tableBannerKey(item) === key)) {
+                      return current.filter(item => tableBannerKey(item) !== key);
+                    }
+                    return [...current, { kind: 'column', column: value }];
+                  });
                 }}
                 onAskAgent={() => {
                   const root = document.querySelector(
@@ -2937,52 +3274,71 @@ export function TablesBuilder({
                     options={[
                       { value: '', label: '+ Drop variable' },
                       ...stubOptions
-                        .filter(item => !banners.includes(item.value))
+                        .filter(
+                          item =>
+                            !banners.some(
+                              banner => banner.kind === 'column' && banner.column === item.value
+                            )
+                        )
                         .map(item => ({ value: item.value, label: item.label })),
                     ]}
                   />
                 </div>
                 <div className="tables-line">
                   <span>Banner</span>
-                  {banners.map(name => (
-                    <span key={name} className="tables-chip-wrap">
-                      <VariablePreviewTrigger
-                        datasetId={datasetId}
-                        projectId={projectId}
-                        column={name}
-                        label={labelFor(name)}
-                        fileName={
-                          files.find(file => file.id === datasetId)?.name ||
-                          datasets.find(row => (row.dataset_id || row.id) === datasetId)
-                            ?.original_filename ||
-                          ''
-                        }
-                      />
-                      <Button
-                        className="tables-chip-clear"
-                        type="button"
-                        aria-label={`Remove ${labelFor(name)}`}
-                        onClick={() => setBanners(current => current.filter(item => item !== name))}
-                      >
-                        ×
-                      </Button>
-                    </span>
-                  ))}
-                  <ChoiceSelect
-                    className="flow-input"
-                    aria-label="Add banner"
-                    searchable
-                    value=""
-                    onValueChange={value => {
-                      if (!value || value === stub || banners.includes(value)) return;
-                      setBanners(current => [...current, value]);
+                  {banners.map(ref => {
+                    const key = tableBannerKey(ref);
+                    const label = bannerRefLabel(ref, labelFor);
+                    return (
+                      <span key={key} className={bannerChipClass(ref)}>
+                        {ref.kind === 'column' ? (
+                          <VariablePreviewTrigger
+                            datasetId={datasetId}
+                            projectId={projectId}
+                            column={ref.column}
+                            label={label}
+                            fileName={
+                              files.find(file => file.id === datasetId)?.name ||
+                              datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                                ?.original_filename ||
+                              ''
+                            }
+                          />
+                        ) : (
+                          <span className="tables-chip-label">{label}</span>
+                        )}
+                        <Button
+                          className="tables-chip-clear"
+                          type="button"
+                          aria-label={`Remove ${label}`}
+                          onClick={() =>
+                            setBanners(current =>
+                              current.filter(item => tableBannerKey(item) !== key)
+                            )
+                          }
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    );
+                  })}
+                  <BannerAddPicker
+                    audiences={audiences}
+                    questions={stubOptions.map(item => ({
+                      value: item.value,
+                      label: item.label,
+                    }))}
+                    selected={banners}
+                    stub={stub}
+                    onPick={ref => {
+                      const key = tableBannerKey(ref);
+                      if (ref.kind === 'column' && ref.column === stub) return;
+                      setBanners(current =>
+                        current.some(item => tableBannerKey(item) === key)
+                          ? current
+                          : [...current, ref]
+                      );
                     }}
-                    options={[
-                      { value: '', label: '+' },
-                      ...stubOptions
-                        .filter(item => item.value !== stub && !banners.includes(item.value))
-                        .map(item => ({ value: item.value, label: item.label })),
-                    ]}
                   />
                 </div>
                 <div className="tables-line wrap">
@@ -3007,6 +3363,43 @@ export function TablesBuilder({
                       </Button>
                     ))}
                   </div>
+                  <CellStatsPopover
+                    open={cellStatsOpen}
+                    onOpenChange={setCellStatsOpen}
+                    statistics={shownStatistics(statistics, meanOn)}
+                    isProjection={bookIsProjection(book)}
+                    meanOn={meanOn}
+                    summaryColumns={summaryColumns}
+                    tableCount={
+                      selectedSpecIds.length >= 2
+                        ? selectedSpecIds.length
+                        : Math.max(activeSpecs.length, 1)
+                    }
+                    preview={mediaCellLines(
+                      (
+                        ((book?.rows as BannerRow[] | undefined) || []).find(
+                          row => row.kind === 'value' || !row.kind
+                        )?.cells || []
+                      ).find(cell => cell.banner_id === 'total') ||
+                        (((book?.rows as BannerRow[] | undefined) || [])[0]?.cells || [])[0],
+                      Math.max(digits, 0),
+                      {
+                        includeProjected: bookIsProjection(book),
+                        includeUnweighted: true,
+                      }
+                    )}
+                    onApply={applyCellStats}
+                    trigger={
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        data-active={cellStatsOpen}
+                        aria-expanded={cellStatsOpen}
+                      >
+                        In each cell ▾
+                      </Button>
+                    }
+                  />
                   <Button
                     className="flow-btn"
                     type="button"
@@ -3355,6 +3748,11 @@ export function TablesBuilder({
                               )
                             }
                             figures={figures}
+                            statistics={tableStatisticsForWeight(
+                              shownStatistics(statistics, meanOn),
+                              Boolean(weight),
+                              bookIsProjection(book)
+                            )}
                             digits={digits}
                             markLowBase={lowBase}
                             columnLabels={columns.map(column => ({
@@ -3389,7 +3787,7 @@ export function TablesBuilder({
               settings={significance}
               onChange={applySignificance}
               onClose={() => setSigPanelOpen(false)}
-              controlOptions={banners.map(column => ({
+              controlOptions={columnNamesFromBannerRefs(banners).map(column => ({
                 value: column,
                 label: labelFor(column),
               }))}

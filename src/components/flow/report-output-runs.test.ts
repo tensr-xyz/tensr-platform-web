@@ -3,6 +3,7 @@ import {
   dayLabel,
   metricLines,
   outputRuns,
+  shortOutputTitle,
   statusCounts,
   summaryText,
 } from './report-output-runs';
@@ -117,5 +118,19 @@ describe('run record fields', () => {
     expect(weightedBaseLabel(28.4)).toBe('Weighted base 28.4');
     expect(weightedBaseLabel(260_662_973)).toMatch(/thousand/);
     expect(weightedBaseLabel(260_662_973)).not.toContain('260,662,973');
+  });
+});
+
+describe('shortOutputTitle', () => {
+  it('keeps a normal short title', () => {
+    expect(shortOutputTitle('Satisfaction by brand')).toBe('Satisfaction by brand');
+  });
+
+  it('takes the first joined segment from a long label list', () => {
+    expect(
+      shortOutputTitle(
+        'Read or visited in last 30 days: Global Ledger, Read or visited in last 30 days: Capital Daily, Read or visited in last 30 days: Business Weekly'
+      )
+    ).toBe('Read or visited in last 30 days: Global Ledger');
   });
 });

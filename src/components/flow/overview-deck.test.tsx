@@ -195,6 +195,26 @@ describe('the deck and refresh screens', () => {
     ).toEqual({ group_column: 'region', values: ['North'] });
   });
 
+  it('pads the choose-file step like the market decks dialog', () => {
+    render(
+      <WaveRefresh
+        previous={[{ name: 'role', label: 'Seniority' }]}
+        next={[]}
+        onClose={() => undefined}
+      />
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('wave-refresh');
+    expect(dialog.querySelector('.deck-builder-head')).toBeTruthy();
+    expect(dialog.querySelector('.wave-refresh-steps')).toBeTruthy();
+    expect(dialog.querySelector('.wave-refresh-file')).toBeTruthy();
+    expect(screen.getByText('Refresh with a new wave')).toBeTruthy();
+    expect(screen.getByText('The current deck and data stay as they are')).toBeTruthy();
+    expect(screen.getByText('1 · Choose file')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Choose file' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Build new version' })).toBeDisabled();
+  });
+
   it('walks the second-wave steps and keeps a movers summary', () => {
     render(
       <WaveRefresh

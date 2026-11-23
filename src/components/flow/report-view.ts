@@ -8,6 +8,15 @@ export const REPORT_VIEW_OPTIONS: { value: ReportView; label: string }[] = [
   { value: 'outputs', label: 'Outputs' },
 ];
 
+/**
+ * Overview (Paper 6a) paints Deliverables immediately. Key findings keep a
+ * separate skeleton until `/overview` returns — never blank the whole page.
+ */
+export const REPORT_OVERVIEW_BOOT = {
+  phase: 'ready' as const,
+  findingsPhase: 'loading' as const,
+};
+
 const STORAGE_PREFIX = 'tensr-report-view:';
 
 export function reportViewStorageKey(projectId: string): string {
