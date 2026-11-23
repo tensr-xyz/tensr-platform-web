@@ -540,16 +540,72 @@ function collapseRepeatedLead(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
   const half = Math.floor(trimmed.length / 2);
-  if (half < 40) return trimmed;
-  const left = trimmed.slice(0, half).trim();
-  const right = trimmed.slice(half).trim();
-  if (left && right && (right.startsWith(left) || left === right)) return left;
+  if (half >= 40) {
+    const left = trimmed.slice(0, half).trim();
+    const right = trimmed.slice(half).trim();
+    if (left && right && (right.startsWith(left) || left === right)) return left;
+  }
+  // Same block twice with a space between (length not an even split).
+  for (let size = Math.floor(trimmed.length / 2); size >= 40; size -= 1) {
+    const block = trimmed.slice(0, size).trimEnd();
+    if (block.length < 40) break;
+    const rest = trimmed.slice(size).trimStart();
+    if (rest === block || rest.startsWith(block)) return block;
+  }
   // Same U/F/t clause twice on one line.
   const match = trimmed.match(
     /^(.+?\b(?:U|H|F|t)\s*(?:\([^)]*\))?\s*=\s*-?[\d.,]+.+?)(?:\s+\1)+$/i
   );
   if (match?.[1]) return match[1].trim();
-  return trimmed;
+  return collapseSubsumedStatSentences(trimmed);
+}
+
+/** Split on sentence endings without cutting decimal places (1086523.5). */
+function leadSentenceParts(line: string): string[] {
+  const parts = line
+    .trim()
+    .split(/\.(?:\s+|$)/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  return parts.map(part =>
+    part.endsWith('.') || part.endsWith('!') || part.endsWith('?') ? part : `${part}.`
+  );
+}
+
+function looksLikeBareStatLead(sentence: string): boolean {
+  const low = sentence.trim().toLowerCase();
+  if (
+    /^(?:welch'?s\s+)?(?:survey\s+)?(?:pearson\s+chi-square|u|h|f|t|z|χ²|chi-square)\b/.test(low)
+  ) {
+    return low.includes('p =') || low.includes('p <') || low.includes('p-value');
+  }
+  return false;
+}
+
+/** Drop a bare U/F/t … p = … and keep each labelled sentence once. */
+function collapseSubsumedStatSentences(line: string): string {
+  const parts = leadSentenceParts(line);
+  if (parts.length < 2) return line;
+  const norms = parts.map(part => part.replace(/\.$/, '').toLowerCase());
+  const drop = new Set<number>();
+  norms.forEach((short, index) => {
+    if (short.length < 16 || !/\d/.test(short) || !looksLikeBareStatLead(short)) return;
+    const subsumed = norms.some(
+      (longer, other) =>
+        other !== index && longer.length > short.length + 4 && longer.includes(short)
+    );
+    if (subsumed) drop.add(index);
+  });
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  parts.forEach((part, index) => {
+    if (drop.has(index)) return;
+    const key = norms[index];
+    if (seen.has(key)) return;
+    seen.add(key);
+    kept.push(part);
+  });
+  return kept.join(' ').trim();
 }
 
 /** A funnel output opens that output. Other outputs open the table builder. */

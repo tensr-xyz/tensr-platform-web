@@ -422,6 +422,22 @@ describe('chat output panel', () => {
     expect(lead).toContain('Female');
   });
 
+  it('collapses bare U plus a labelled lead pasted twice', () => {
+    const bare = 'U = 1086523.5, p = 0.121, r = -0.033 (negligible), consistent with chance.';
+    const labelled =
+      'Trust in Global Ledger is about the same for Male and Female. Trust in Global Ledger for Male and Female: U = 1086523.5, p = 0.121, r = -0.033 (negligible), consistent with chance. Medians: Male 3, Female 3. n = 3000.';
+    const lead = resultLead(`${bare} ${labelled} ${labelled}`, [
+      {
+        procedure: 'mann_whitney_u',
+        summary: { line: labelled },
+      },
+    ]);
+    expect(lead.toLowerCase().split('u = 1086523.5').length - 1).toBe(1);
+    expect(lead.toLowerCase().split('medians: male 3, female 3').length - 1).toBe(1);
+    expect(lead).toMatch(/about the same/i);
+    expect(lead.indexOf('about the same')).toBeLessThan(lead.indexOf('U ='));
+  });
+
   it('drops empty parentheses and clamps long share percents in the lead', () => {
     const lead = resultLead('Heard is 38.062% ( ) in the North.');
     expect(lead).toContain('38.1%');
