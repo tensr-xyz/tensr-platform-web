@@ -6,6 +6,7 @@ import {
   resultFootnote,
   resultViewFromToolResults,
   shownCount,
+  shownMetric,
   weightChipName,
   weightNote,
   withoutEngineCopies,
@@ -1010,12 +1011,29 @@ describe('result tables', () => {
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
     expect(weightChipName('', 'none', [])).toBe('Unweighted');
+    expect(weightChipName('Unweighted', 'Projection weight (people)', [])).toBe('Unweighted');
+    expect(weightChipName('none', 'Projection weight (people)', [])).toBe('Unweighted');
     expect(
       weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
     ).toBe('Design weight');
+    expect(
+      resultViewFromToolResults({
+        result: {
+          method: 'spearman',
+          resolved_weight: 'none',
+          columns: ['a', 'b'],
+          matrix: { a: { a: 1, b: 0.1 }, b: { a: 0.1, b: 1 } },
+          p_values: { a: { b: 0.5 }, b: { a: 0.5 } },
+          n: 40,
+        },
+      }).weight
+    ).toBe('Unweighted');
     expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
       'Weight: Raked weight'
     );
+    expect(shownMetric('Weight', 'proj_weight')).toBe('Weighted');
+    expect(shownMetric('Weight', 'Projection weight (people)')).toBe('Projection weight (people)');
+    expect(shownMetric('Weight', 'none')).toBe('Unweighted');
     expect(
       resultViewFromToolResults({
         result: {
@@ -1274,6 +1292,36 @@ describe('mean comparison tables', () => {
     expect(groups[0].columns).not.toContain('score');
     const pairs = view.tables.find(table => table.title.startsWith('Post hoc'));
     expect(pairs?.rows[0].slice(0, 2)).toEqual(['Female', 'Male']);
+  });
+
+  it('TEN-41: Pairwise comparisons baked with codes become value labels', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        group_descriptives: [
+          { group: '1.0', label: 'United States', n: 40, mean: 4.9 },
+          { group: '2.0', label: 'United Kingdom', n: 40, mean: 4.2 },
+          { group: '3.0', label: 'Germany', n: 40, mean: 3.0 },
+        ],
+        report: {
+          tables: [
+            {
+              id: 'anova_posthoc',
+              title: 'Pairwise comparisons (tukey_hsd)',
+              columns: ['Group A', 'Group B', 'Mean difference', 'p (adj)'],
+              rows: [
+                ['1.0', '2.0', '-0.7', '0.01'],
+                ['1.0', '3', '-1.9', '0.01'],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const pairs = view.tables.find(table => table.title.startsWith('Pairwise comparisons'));
+    expect(pairs?.rows.map(row => row.slice(0, 2))).toEqual([
+      ['United States', 'United Kingdom'],
+      ['United States', 'Germany'],
+    ]);
   });
 });
 
@@ -1622,7 +1670,10 @@ describe('answer tables', () => {
             rows: [['1.0', '2.0', '12', '0.12', '0.12']],
           },
         ],
-        notes: ['Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.'],
+        notes: [
+          'SPSS NPAR TESTS default: asymptotic Mann–Whitney with continuity correction.',
+          'Effect size (negligible; r < 0.1 negligible). Cutoffs: Cohen, 1988.',
+        ],
       },
     });
     const groups = view.tables.find(table => table.title === 'Groups');
@@ -1630,6 +1681,40 @@ describe('answer tables', () => {
     const pairs = view.tables.find(table => table.title === 'Pairwise');
     expect(pairs?.rows[0]?.slice(0, 2)).toEqual(['Male', 'Female']);
     expect(view.checks.some(note => note.includes('Effect size'))).toBe(true);
+    expect(view.checks.some(note => /Mann/.test(note))).toBe(true);
+  });
+
+  it('TEN-93: nested engine book still remaps Groups codes when summary has only codes', () => {
+    const view = resultViewFromToolResults([
+      {
+        procedure: 'mann_whitney_u',
+        summary: {
+          table: [
+            {
+              title: 'Groups',
+              columns: ['Group', 'n', 'Median'],
+              rows: [
+                ['1.0', '10', '4'],
+                ['2.0', '10', '5'],
+              ],
+            },
+          ],
+          notes: ['SPSS NPAR TESTS default: asymptotic Mann–Whitney.'],
+        },
+        result: {
+          analysis_type: 'mann_whitney_u',
+          result: {
+            group_descriptives: [
+              { group: '1.0', label: 'Male', n: 10, median: 4 },
+              { group: '2.0', label: 'Female', n: 10, median: 5 },
+            ],
+          },
+        },
+      },
+    ]);
+    const groups = view.tables.find(table => table.title === 'Groups');
+    expect(groups?.rows.map(row => row[0])).toEqual(['Male', 'Female']);
+    expect(view.checks.some(note => /Mann/.test(note))).toBe(true);
   });
 
   it('falls through an empty weight object without showing a column code in the base line', () => {
@@ -1812,7 +1897,7 @@ describe('answer tables', () => {
     const lead = funnelHeadline(view.tables);
     expect(lead).toContain('40.0%');
     expect(lead).toContain('20.0%');
-    expect((lead.match(/%/g) || []).length).toBeLessThan(5);
+    expect(lead).toContain('from the previous stage');
   });
 });
 
@@ -1823,5 +1908,39 @@ describe('counts', () => {
     expect(shownCount('1,054,430')).toBe('1,054,430');
     expect(shownCount('2.67896e+06')).not.toContain('e');
     expect(formatDecimalText('2.67896e+06', 1, 'Count')).not.toContain('e');
+  });
+
+  it('keeps thousands separators on whole counts after rounding decimals', () => {
+    expect(formatDecimalText('1221043.0', 1, 'Count')).toBe('1,221,043');
+    expect(formatDecimalText('183028.4', 1, 'Count')).toBe('183,028');
+    expect(formatDecimalText('1,221,043.0', 1, 'Frequency')).toBe('1,221,043');
+  });
+});
+
+describe('funnelHeadline', () => {
+  it('quotes stage-to-stage conversion and high/low group shares', () => {
+    const lead = funnelHeadline([
+      {
+        title: 'Funnel',
+        columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+        rows: [
+          ['Aware', '1,000', '100.0', ''],
+          ['Tried', '400', '40.0', '40.0'],
+          ['Bought', '200', '20.0', '50.0'],
+        ],
+      },
+      {
+        title: 'Funnel by group',
+        columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+        rows: [
+          ['Bought', 'United Kingdom', '120', '31.3', '40.0'],
+          ['Bought', 'Germany', '40', '13.8', '35.0'],
+        ],
+      },
+    ]);
+    expect(lead).toContain('40.0% from the previous stage');
+    expect(lead).toContain('50.0% from the previous stage');
+    expect(lead).toContain('United Kingdom is highest at 31.3%');
+    expect(lead).toContain('Germany is lowest at 13.8%');
   });
 });

@@ -37,6 +37,7 @@ import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
 import { isAiEnabled } from '@/lib/ai-controls';
 import { defaultTemplateName } from '@/lib/project-templates';
 import { formatApiErrorMessage } from '@/lib/api-error';
+import { labelledMeasure } from '@/lib/measure-level';
 import {
   useDatasetColumns,
   useDatasetPreview,
@@ -70,17 +71,6 @@ type AskerTurn = {
   weight?: string;
   source?: string;
 };
-
-function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
-  const codes = Object.keys(labels)
-    .map(key => Number(String(key).replace(/\.0$/, '')))
-    .filter(value => Number.isInteger(value));
-  if (codes.length !== Object.keys(labels).length || codes.length < 3) return 'nominal';
-  const unique = [...new Set(codes)].sort((a, b) => a - b);
-  if (unique.length < 3) return 'nominal';
-  const missing = unique[unique.length - 1] - unique[0] + 1 - unique.length;
-  return missing <= 1 ? 'ordinal' : 'nominal';
-}
 
 /** The measure and the reason, using the API's source when it sent one. */
 function displayedMeasure(column: FlowColumn): { measure: string; source: string } {

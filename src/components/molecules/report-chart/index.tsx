@@ -316,7 +316,9 @@ function ChartBody({
           layout={layout}
           xTicks={xTicks}
           yTicks={yTicks}
-          xFormatter={v => formatAxisValue(v, xScale, xSamples, xDates)}
+          xFormatter={v =>
+            labelledTick(v, chart.x_tick_labels) ?? formatAxisValue(v, xScale, xSamples, xDates)
+          }
           yFormatter={v => formatNumberTick(v, ySamples)}
           xAxisLabel={chart.x_label}
           yAxisLabel="Count"

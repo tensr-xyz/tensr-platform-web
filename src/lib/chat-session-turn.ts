@@ -1,3 +1,4 @@
+import { EMPTY_TURN_ANSWER, resultLead } from '@/components/flow/chat-output';
 import type { AgentLoopResponse } from '@/lib/run-agent-loop';
 
 export type StoredChatTurn = {
@@ -9,6 +10,20 @@ export type StoredChatTurn = {
 
 function turnHasAnswer(turn: StoredChatTurn): boolean {
   return Boolean((turn.answer || '').trim() || turn.tool_results?.length);
+}
+
+/**
+ * Text shown when reopening a chat. Prefer the stored reply; if it was lost,
+ * use the result lead so a finished analysis is not "did not finish".
+ */
+export function restoredChatAnswer(turn: StoredChatTurn | undefined): string {
+  if (!turn) return '';
+  const stored = (turn.answer || '').trim();
+  if (stored && stored !== EMPTY_TURN_ANSWER) return stored;
+  const salvaged = resultLead(stored || '', turn.tool_results).trim();
+  if (salvaged) return salvaged;
+  if (stored) return stored;
+  return turn.steps?.length ? EMPTY_TURN_ANSWER : '';
 }
 
 /** How many saved turns already answered this question. */
@@ -36,7 +51,6 @@ export function savedChatTurn(
   );
   if (answered.length <= alreadyAnswered) return null;
   const match = answered[answered.length - 1];
-  const answer = match.answer || '';
   const results = match.tool_results;
   const steps = (match.steps || []).flatMap(step => {
     const name = step.name || '';
@@ -46,7 +60,7 @@ export function savedChatTurn(
   return {
     status: 'ok',
     mode,
-    answer_markdown: answer,
+    answer_markdown: restoredChatAnswer(match),
     session_id: undefined,
     tool_results: results,
     tool_trace: steps,

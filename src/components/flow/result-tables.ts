@@ -151,6 +151,11 @@ export function formatDecimalText(value: string, places: number, header = ''): s
   let shown = number.toFixed(digits);
   if (kind === 'percent' || kind === 'median')
     shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  // Whole counts keep thousands separators after rounding (1221043.0 → 1,221,043).
+  if (kind === 'whole' && Math.abs(number) >= 1000) {
+    const whole = Number(shown);
+    if (Number.isFinite(whole)) return `${plainNumber(whole)}${match[3] || ''}`;
+  }
   return `${shown}${match[3] || ''}`;
 }
 
@@ -696,29 +701,41 @@ function withoutRepeatedTables(tables: RunTable[]): RunTable[] {
   });
 }
 
-/** Whole-base stage shares, then the highest and lowest group at the last stage. */
+/** Whole-base stage shares with conversions, then the highest and lowest group with figures. */
 export function funnelHeadline(tables: RunTable[]): string {
   const stage = tables.find(isStageFunnel);
   if (!stage) return '';
-  const shareColumn = stage.columns.findIndex(column => column.toLowerCase().includes('% of base'));
+  const headers = stage.columns.map(column => column.toLowerCase());
+  const shareColumn = headers.findIndex(column => column.includes('% of base'));
+  const conversionColumn = headers.findIndex(column => column.includes('conversion'));
   if (shareColumn < 0) return '';
   const parts = stage.rows
-    .map(row => {
+    .map((row, index) => {
       const name = (row[0] || '').trim();
       const share = (row[shareColumn] || '').trim();
       if (!name || !share) return '';
-      return `${name} ${share.includes('%') ? share : `${share}%`}`;
+      let piece = `${name} ${share.includes('%') ? share : `${share}%`}`;
+      if (index > 0 && conversionColumn >= 0) {
+        const conversion = (row[conversionColumn] || '').trim().replace(/%/g, '');
+        if (conversion) {
+          piece = `${piece} (${conversion}% from the previous stage)`;
+        }
+      }
+      return piece;
     })
     .filter(Boolean)
     .slice(0, 6);
   if (!parts.length) return '';
-  let text = `Of the base, ${parts.join(', ')}.`;
+  let text = parts.join(', ');
+  if (!text.endsWith('.')) text = `${text}.`;
   const group = tables.find(isGroupFunnel);
   if (!group) return text;
-  const headers = group.columns.map(column => column.toLowerCase());
-  const stageColumn = headers.indexOf('stage');
-  const groupColumn = headers.findIndex(column => column === 'group' || column.startsWith('group'));
-  const groupedShare = headers.findIndex(column => column.includes('% of base'));
+  const groupHeaders = group.columns.map(column => column.toLowerCase());
+  const stageColumn = groupHeaders.indexOf('stage');
+  const groupColumn = groupHeaders.findIndex(
+    column => column === 'group' || column.startsWith('group')
+  );
+  const groupedShare = groupHeaders.findIndex(column => column.includes('% of base'));
   const last = (stage.rows[stage.rows.length - 1]?.[0] || '').trim().toLowerCase();
   const scored = group.rows
     .filter(row => (row[stageColumn] || '').trim().toLowerCase() === last)
@@ -731,7 +748,9 @@ export function funnelHeadline(tables: RunTable[]): string {
   const high = scored.reduce((best, item) => (item.share > best.share ? item : best));
   const low = scored.reduce((best, item) => (item.share < best.share ? item : best));
   if (high.name === low.name) return text;
-  return `${text} At the last stage, ${high.name} is highest and ${low.name} is lowest.`;
+  const highShare = oneDecimal(high.share);
+  const lowShare = oneDecimal(low.share);
+  return `${text} ${high.name} is highest at ${highShare}%; ${low.name} is lowest at ${lowShare}%.`;
 }
 
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
@@ -833,7 +852,7 @@ function groupLabels(groups: unknown): Map<string, string> {
   return labels;
 }
 
-/** Groups/Pairwise cells that still hold codes get the stamped value labels. */
+/** Groups/Pairwise/Post hoc cells that still hold codes get the stamped value labels. */
 function relabelRankTables(tables: RunTable[], labels: Map<string, string>): RunTable[] {
   if (!labels.size) return tables;
   const shown = (raw: string) =>
@@ -846,7 +865,13 @@ function relabelRankTables(tables: RunTable[], labels: Map<string, string>): Run
         rows: table.rows.map(row => (row.length ? [shown(row[0] || ''), ...row.slice(1)] : row)),
       };
     }
-    if (title === 'pairwise') {
+    // Pairwise, Post hoc (tukey), Pairwise comparisons (tukey_hsd), Multiple Comparisons.
+    if (
+      title === 'pairwise' ||
+      title.startsWith('post hoc') ||
+      title.startsWith('pairwise comparisons') ||
+      title === 'multiple comparisons'
+    ) {
       return {
         ...table,
         rows: table.rows.map(row => {
@@ -926,6 +951,11 @@ function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
   };
 }
 
+function shownGroupCode(raw: string, labels: Map<string, string>): string {
+  if (!raw) return raw;
+  return labels.get(raw) || labels.get(raw.replace(/\.0$/, '')) || labels.get(`${raw}.0`) || raw;
+}
+
 function postHocTable(value: unknown, labels: Map<string, string> = new Map()): RunTable | null {
   const block =
     value && typeof value === 'object' && !Array.isArray(value)
@@ -936,12 +966,8 @@ function postHocTable(value: unknown, labels: Map<string, string> = new Map()): 
     .filter(row => row && typeof row === 'object')
     .map(row => {
       const record = row as Record<string, unknown>;
-      const left =
-        labels.get(cell(record.group1 ?? record.group_a ?? record.a)) ||
-        cell(record.group1 ?? record.group_a ?? record.a);
-      const right =
-        labels.get(cell(record.group2 ?? record.group_b ?? record.b)) ||
-        cell(record.group2 ?? record.group_b ?? record.b);
+      const left = shownGroupCode(cell(record.group1 ?? record.group_a ?? record.a), labels);
+      const right = shownGroupCode(cell(record.group2 ?? record.group_b ?? record.b), labels);
       if (!left || !right) return null;
       return [
         left,
@@ -1427,13 +1453,38 @@ function weightName(record: Record<string, unknown>): string {
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
       return label;
     }
-    if (column) return column;
+    if (column) {
+      const meta = record.column_metadata;
+      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+        const entry = (meta as Record<string, unknown>)[column];
+        if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+          const named = stripCodeBrackets(
+            cell((entry as { label?: unknown }).label).trim(),
+            column
+          );
+          if (
+            named &&
+            named.toLowerCase() !== 'weight' &&
+            named.toLowerCase() !== column.toLowerCase()
+          ) {
+            return named;
+          }
+        }
+      }
+      return column;
+    }
+  }
+  if (typeof record.resolved_weight === 'string') {
+    const resolved = record.resolved_weight.trim();
+    // An explicit none is this run's choice. Do not fall through to the project ledger.
+    if (/^(none|unweighted|null)$/i.test(resolved)) return 'Unweighted';
+    if (resolved) return resolved;
   }
   const named =
-    typeof record.weight === 'string'
-      ? record.weight
-      : typeof record.resolved_weight === 'string'
-        ? record.resolved_weight
+    typeof record.weight_label === 'string' && record.weight_label.trim()
+      ? record.weight_label
+      : typeof record.weight === 'string'
+        ? record.weight
         : typeof record.weight_column === 'string'
           ? record.weight_column
           : typeof record.active_weight_column === 'string'
@@ -1978,22 +2029,33 @@ export function shownMetric(label: string, value: string): string {
     return 'Unweighted';
   }
   if (name === 'weight' && folded === 'active none; weight_column none') return 'Unweighted';
+  // A snake_case column code is not a label a person should read.
+  if (name === 'weight' && /[a-z]_[a-z0-9]/i.test(text) && !/\s/.test(text)) {
+    return 'Weighted';
+  }
   return value;
 }
 
-/** The name on the weight chip. A missing weight is Unweighted. The sentinel none is not a name. */
+/** The name on the weight chip. This run's weight wins over the project ledger. */
 export function weightChipName(
   resultWeight: string,
   ledgerWeight: string,
   columns: ColumnLabels[] = []
 ): string {
-  const chosen = [resultWeight, ledgerWeight]
-    .map(item => item.trim())
-    .find(item => item && !/^(none|unweighted|null)$/i.test(item));
-  if (!chosen) return 'Unweighted';
-  const note = weightNote(chosen, columns);
-  if (note === 'Unweighted' || note === 'Weighted') return note;
-  return note.replace(/^Weight:\s*/, '');
+  const result = resultWeight.trim();
+  if (result) {
+    if (/^(none|unweighted|null)$/i.test(result)) return 'Unweighted';
+    const note = weightNote(result, columns);
+    if (note === 'Unweighted' || note === 'Weighted') return note;
+    return note.replace(/^Weight:\s*/, '');
+  }
+  const ledger = ledgerWeight.trim();
+  if (ledger && !/^(none|unweighted|null)$/i.test(ledger)) {
+    const note = weightNote(ledger, columns);
+    if (note === 'Unweighted' || note === 'Weighted') return note;
+    return note.replace(/^Weight:\s*/, '');
+  }
+  return 'Unweighted';
 }
 
 /** The weight's label. The bare column name "weight" is not a label. */

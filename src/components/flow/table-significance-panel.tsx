@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ChoiceSelect } from '@/components/ui/select';
@@ -13,14 +14,28 @@ import {
 export function TableSignificancePanel({
   settings,
   onChange,
+  onClose,
   controlOptions,
 }: {
   settings: TableSignificanceSettings;
   onChange: (next: TableSignificanceSettings) => void;
+  /** Escape dismisses the panel (retest finding on TEN-165). */
+  onClose?: () => void;
   controlOptions: { value: string; label: string }[];
 }) {
   const set = (patch: Partial<TableSignificanceSettings>) => onChange({ ...settings, ...patch });
   const dunnett = settings.meansPostHoc === 'dunnett';
+
+  useEffect(() => {
+    if (!onClose) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
     <aside className="tables-sig-panel" aria-label="Significance">

@@ -36,7 +36,6 @@ import {
   isClientDeckResult,
   clientDeckReportHref,
   isProcedurePlaceholder,
-  EMPTY_TURN_ANSWER,
   keptModelAnswer,
   visibleTurnAnswer,
   outputKind,
@@ -57,7 +56,12 @@ import {
 } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { savePin, useProjectPins } from '@/components/flow/report-pins';
-import { answeredTurnCount, savedChatTurn, type StoredChatTurn } from '@/lib/chat-session-turn';
+import {
+  answeredTurnCount,
+  restoredChatAnswer,
+  savedChatTurn,
+  type StoredChatTurn,
+} from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
 import {
   downloadsFromToolResults,
@@ -1006,8 +1010,7 @@ export function useAgentThread({
                   {
                     user: item.user,
                     note: '',
-                    answer:
-                      (item.answer || '').trim() || (item.steps?.length ? EMPTY_TURN_ANSWER : ''),
+                    answer: restoredChatAnswer(item),
                     toolResults: item.tool_results,
                     steps: item.steps,
                   },
@@ -1015,8 +1018,7 @@ export function useAgentThread({
               : []
           );
           const last = exchanges[exchanges.length - 1];
-          const restoredAnswer =
-            (last?.answer || '').trim() || (last?.steps?.length ? EMPTY_TURN_ANSWER : '');
+          const restoredAnswer = last?.answer || '';
           const restoredTurn: AgentLoopResponse | null = last
             ? {
                 status: 'ok',

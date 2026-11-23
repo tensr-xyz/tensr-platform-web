@@ -307,6 +307,66 @@ describe('chat output panel', () => {
     expect(lead.trim().endsWith('-')).toBe(false);
   });
 
+  it('prefers a labelled structured lead over model prose that quotes codes', () => {
+    const structured =
+      'Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
+    const lead = resultLead('trust_b1 and age_band: Pearson r = -0.001023, p = 0.955.', [
+      { procedure: 'correlation', summary: { line: structured } },
+    ]);
+    expect(lead).toContain('Trust in Global Ledger');
+    expect(lead).toContain('-0.001');
+    expect(lead).not.toContain('trust_b1');
+    expect(lead).not.toContain('-0.001023');
+  });
+
+  it('keeps a funnel lead that already has conversion and high/low figures', () => {
+    const apiLine =
+      'Aware 100.0%, Tried 40.0% (40.0% from the previous stage), Bought 20.0% (50.0% from the previous stage). ' +
+      'By group, United Kingdom 31.3%, Germany 13.8%. United Kingdom is highest at 31.3%; Germany is lowest at 13.8%.';
+    const lead = resultLead(
+      apiLine,
+      [{ procedure: 'funnel', summary: { line: apiLine } }],
+      [
+        {
+          title: 'Funnel',
+          columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+          rows: [
+            ['Aware', '1000', '100.0', ''],
+            ['Tried', '400', '40.0', '40.0'],
+            ['Bought', '200', '20.0', '50.0'],
+          ],
+        },
+        {
+          title: 'Funnel by group',
+          columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+          rows: [
+            ['Bought', 'United Kingdom', '120', '31.3', '40.0'],
+            ['Bought', 'Germany', '40', '13.8', '35.0'],
+          ],
+        },
+      ]
+    );
+    expect(lead).toContain('from the previous stage');
+    expect(lead).toContain('highest at 31.3%');
+    expect(lead).toContain('lowest at 13.8%');
+  });
+
+  it('collapses a repeated Mann-Whitney sentence and trims U trailing zeros', () => {
+    const once =
+      'Trust for Male and Female: U = 1086523.500, p = 0.121, r = -0.033, consistent with chance. Medians: Male 3, Female 3.';
+    const lead = resultLead(`${once} ${once}`, [
+      {
+        procedure: 'mann_whitney_u',
+        summary: { line: once.replace('.500', '.5') },
+      },
+    ]);
+    expect(lead.toLowerCase().split('male and female').length - 1).toBe(1);
+    expect(lead).toContain('U = 1086523.5');
+    expect(lead).not.toContain('1086523.500');
+    expect(lead).toContain('Male');
+    expect(lead).toContain('Female');
+  });
+
   it('drops empty parentheses and clamps long share percents in the lead', () => {
     const lead = resultLead('Heard is 38.062% ( ) in the North.');
     expect(lead).toContain('38.1%');
@@ -507,7 +567,7 @@ describe('chat output panel', () => {
 
   it('leads with Mann-Whitney and correlation when the reply did not finish', () => {
     const mw =
-      'Trust for Men and Women: U = 12.000, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
+      'Trust for Men and Women: U = 12, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
     const corr =
       'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance. n = 3000.';
     const lead = resultLead(EMPTY_TURN_ANSWER, [
@@ -515,7 +575,7 @@ describe('chat output panel', () => {
         procedure: 'mann_whitney_u',
         summary: {
           line: mw,
-          statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+          statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
         },
       },
       {
@@ -526,7 +586,7 @@ describe('chat output panel', () => {
         },
       },
     ]);
-    expect(lead).toContain('U = 12.000');
+    expect(lead).toContain('U = 12');
     expect(lead).toContain('Pearson r = 0.012');
     expect(lead.toLowerCase()).not.toContain('did not finish');
     expect(
@@ -535,13 +595,76 @@ describe('chat output panel', () => {
           {
             procedure: 'mann_whitney_u',
             summary: {
-              statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+              statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
             },
           },
         ],
         EMPTY_TURN_ANSWER
       )
     ).toContain('r = -0.033');
+  });
+
+  it('badges Mann-Whitney even when the summary carries table rows', () => {
+    const results = [
+      {
+        procedure: 'mann_whitney_u',
+        summary: {
+          line: 'Trust for Male and Female: U = 12, p = 0.121, r = -0.033, consistent with chance.',
+          statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
+          table: [
+            {
+              title: 'Groups',
+              columns: ['Group', 'n', 'Median'],
+              rows: [
+                ['Male', '8', '3'],
+                ['Female', '8', '3'],
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    expect(outputKind(results)).toBe('Mann-Whitney');
+    expect(outputKind(results)).not.toBe('Frequencies');
+    expect(outputStat(results, '')).toContain('r = -0.033');
+  });
+
+  it('TEN-93: badges Shapiro-Wilk and Kruskal-Wallis instead of Frequencies', () => {
+    expect(
+      outputKind([
+        {
+          procedure: 'shapiro_wilk',
+          summary: {
+            table: [{ title: 'Test', columns: ['Statistic', 'Value'], rows: [['W', '0.98']] }],
+          },
+        },
+      ])
+    ).toBe('Shapiro-Wilk');
+    expect(
+      outputKind([
+        {
+          procedure: 'kruskal_wallis',
+          summary: {
+            table: [{ title: 'Groups', columns: ['Group', 'n'], rows: [['A', '10']] }],
+          },
+        },
+      ])
+    ).toBe('Kruskal-Wallis');
+  });
+
+  it('badges Correlation and keeps r on the key stat', () => {
+    const results = [
+      {
+        procedure: 'correlation',
+        summary: {
+          line: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
+          statistic: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
+          table: [{ title: 'Correlations', columns: ['A', 'B'], rows: [['Trust', '0.012']] }],
+        },
+      },
+    ];
+    expect(outputKind(results)).toBe('Correlation');
+    expect(outputStat(results, '')).toContain('r = 0.012');
   });
 
   it('reads a structured report answer when the summary line is missing', () => {
@@ -551,13 +674,12 @@ describe('chat output panel', () => {
         result: {
           report: {
             answer_from_result: true,
-            answer:
-              'Score for Men and Women: U = 18.000, p = 0.040, r = 0.76, unlikely to be chance.',
+            answer: 'Score for Men and Women: U = 18, p = 0.040, r = 0.76, unlikely to be chance.',
           },
         },
       },
     ]);
-    expect(lead).toContain('U = 18.000');
+    expect(lead).toContain('U = 18');
     expect(lead).toContain('r = 0.76');
   });
 
