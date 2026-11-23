@@ -205,6 +205,25 @@ describe('chat output panel', () => {
     expect(lead.toLowerCase()).not.toContain('banner_table');
   });
 
+  it('prefers a finished finding over pending or model-failed prose', () => {
+    const finding = {
+      procedure: 'banner_table',
+      summary: { line: 'Reach is 39.4% among institutional investors (n = 3000).' },
+    };
+    const pending = resultLead(
+      "The crosstab is still building, so I don't have the column percentages. Its status is pending, and the run reports banner_table; flags: weight_in_use, effective_n.",
+      [finding]
+    );
+    expect(pending).toMatch(/39\.4%/);
+    expect(pending.toLowerCase()).not.toContain('still building');
+    expect(pending.toLowerCase()).not.toContain('flags:');
+    expect(pending.toLowerCase()).not.toContain('banner_table');
+
+    const failed = resultLead('The model call failed, so this turn stopped.', [finding]);
+    expect(failed).toMatch(/39\.4%/);
+    expect(failed.toLowerCase()).not.toContain('model call failed');
+  });
+
   it('titles a yes or no card with the question', () => {
     const results = [
       {

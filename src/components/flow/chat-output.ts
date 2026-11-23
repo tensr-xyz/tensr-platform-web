@@ -469,6 +469,12 @@ export function resultLead(
       prose
     );
   if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
+  // TEN-188: pending / failed-model prose must not beat a finished result line.
+  const pendingOrFailedProse =
+    /still building|status is pending|flags:\s*\w|reports?\s+banner_table|model call failed|this turn stopped|building the table/i.test(
+      prose
+    );
+  if (pendingOrFailedProse && finding) return guardUserText(withoutStrayEnding(finding));
   const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
   const hasDigits = (text: string) => /\d/.test(text);
   // Prefer the structured summary when the model still quotes snake_case codes.
@@ -481,9 +487,9 @@ export function resultLead(
     (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||
     (finding && hasDigits(finding) && !hasFigure(prose) ? finding : '') ||
-    (prose && hasDigits(prose) ? prose : '') ||
+    (prose && hasDigits(prose) && !pendingOrFailedProse ? prose : '') ||
     finding ||
-    prose ||
+    (pendingOrFailedProse ? '' : prose) ||
     outputTakeaway(answer);
   const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(text)));
   const headline = tables ? funnelHeadline(tables) : '';
@@ -576,7 +582,8 @@ function summaryLine(
     const text = line.trim();
     if (!text || !/[A-Za-z]/.test(text) || !/\d/.test(text)) return;
     // The default summarize stub is the procedure name; it is not a lead.
-    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square)\b/i.test(text)) return;
+    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square|descriptives)\b/i.test(text)) return;
+    if (/flags:\s*\w/i.test(text) || /building the table/i.test(text)) return;
     if (seen.has(text)) return;
     seen.add(text);
     lines.push(text);
