@@ -10,10 +10,10 @@ import { flowJson } from '@/lib/flow-api';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { OutputPage } from '@/components/flow/output-page';
 import {
+  applyServerPins,
   cachedReportRuns,
   pinsFromRuns,
   savePin,
-  setProjectPins,
   shareRequest,
   useProjectPins,
   type RunSummary,
@@ -121,7 +121,7 @@ export function ReportOutputs({
     setError('');
     const applyRuns = (next: OutputRun[], raw: RunSummary[]) => {
       if (!live) return;
-      if (raw.length) setProjectPins(projectId, pinsFromRuns(raw));
+      if (raw.length) applyServerPins(projectId, pinsFromRuns(raw));
       setRuns(next);
       if (openRunId) {
         setSelectedId(openRunId);
@@ -197,6 +197,14 @@ export function ReportOutputs({
   }, [openRunId, refreshKey]);
 
   useEffect(() => {
+    if (!openRunId || phase !== 'ready') return;
+    const row = Array.from(document.querySelectorAll<HTMLElement>('.outputs-row')).find(
+      el => el.getAttribute('data-run-id') === openRunId
+    );
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [openRunId, phase, refreshKey, runs]);
+
+  useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       setDetailPhase('idle');
@@ -224,8 +232,15 @@ export function ReportOutputs({
   }, [selectedId]);
 
   const pins = useProjectPins(projectId, []);
-  const pinnedRuns = useMemo(() => new Set(pins.map(pin => pin.runId)), [pins]);
-  const stateOf = (run: OutputRun) => runState(run.status, pinnedRuns.has(run.id));
+  const pinnedRuns = useMemo(() => {
+    const ids = new Set(pins.map(pin => pin.runId));
+    for (const run of runs) {
+      if (run.inReport) ids.add(run.id);
+    }
+    return ids;
+  }, [pins, runs]);
+  const stateOf = (run: OutputRun) =>
+    runState(run.status, pinnedRuns.has(run.id) || run.inReport === true);
   const tally = useMemo(() => outputCounts(runs, pinnedRuns), [runs, pinnedRuns]);
   const counts = tally.counts;
   const visible = useMemo(() => {
@@ -438,6 +453,7 @@ export function ReportOutputs({
                     key={run.id}
                     className="outputs-row"
                     type="button"
+                    data-run-id={run.id}
                     data-active={run.id === selectedId}
                     onClick={() => setSelectedId(run.id)}
                     onDoubleClick={() => {

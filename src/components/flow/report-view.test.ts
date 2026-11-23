@@ -3,6 +3,7 @@ import {
   readStoredReportView,
   REPORT_OVERVIEW_BOOT,
   reportViewFromPaneParam,
+  reportViewHref,
   reportViewStorageKey,
   writeStoredReportView,
 } from '@/components/flow/report-view';
@@ -43,5 +44,14 @@ describe('report view storage', () => {
     expect(initialReportView('p1', 'outputs')).toBe('outputs');
     expect(initialReportView('p1', null)).toBe('slides');
     expect(initialReportView('p2', null)).toBe('overview');
+  });
+
+  it('builds deep links for Slides and Outputs with an optional run', () => {
+    expect(reportViewHref('/flow/p/1', 'slides')).toBe('/flow/p/1/report?pane=slides');
+    expect(reportViewHref('/flow/p/1', 'outputs')).toBe('/flow/p/1/report?pane=outputs');
+    expect(reportViewHref('/flow/p/1', 'outputs', 'run-9')).toBe(
+      '/flow/p/1/report?pane=outputs&run=run-9'
+    );
+    expect(reportViewHref('/flow/p/1', 'overview', 'run-9')).toBe('/flow/p/1/report?pane=overview');
   });
 });

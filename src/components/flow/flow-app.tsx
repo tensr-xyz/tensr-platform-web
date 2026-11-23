@@ -9,7 +9,7 @@ import {
   EmptyTitle,
 } from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
@@ -53,7 +53,12 @@ import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
 import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
+import {
+  analysisReportHref,
+  baseCount,
+  outputOpenHref,
+  outputTableTabLabel,
+} from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 import { DetailsScreen } from '@/components/flow/details-screen';
@@ -103,7 +108,9 @@ import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import {
   initialReportView,
+  readStoredReportView,
   REPORT_OVERVIEW_BOOT,
+  reportViewFromPaneParam,
   writeStoredReportView,
   type ReportView,
 } from '@/components/flow/report-view';
@@ -122,11 +129,11 @@ import {
   type RunTable,
 } from '@/components/flow/run-document';
 import {
+  applyServerPins,
   deliverableOutputs,
   pinsFromRuns,
   rememberReportRuns,
   savePin,
-  setProjectPins,
   shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
@@ -670,9 +677,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (!finishedRun || finishedRun.nonce === handledRun.current) return;
     handledRun.current = finishedRun.nonce;
     if (projectId && section !== 'report') {
-      router.push(
-        `/flow/p/${projectId}/report?pane=outputs&run=${encodeURIComponent(finishedRun.runId)}`
-      );
+      router.push(analysisReportHref(`/flow/p/${projectId}`, finishedRun.runId));
     }
   }, [finishedRun, projectId, section, router]);
   const page = visibleProjectSection(section);
@@ -2859,6 +2864,7 @@ function ChatScreen({
   onChanged?: () => void;
   onReportUpdated?: () => void;
 }) {
+  const router = useRouter();
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const columnsQuery = useDatasetColumns(datasetId);
@@ -2963,6 +2969,7 @@ function ChatScreen({
       .then(() => {
         setReportedRun(runId);
         setStatus('Added to the report.');
+        router.push(analysisReportHref(projectHref, runId));
       })
       .catch(() => setStatus('That result could not be added to the report.'));
   };
@@ -3195,7 +3202,7 @@ function ChatScreen({
           >
             {recipeNote.text}{' '}
             {recipeNote.outputs ? (
-              <Link href={`${projectHref}/report?pane=outputs`}>Open Outputs</Link>
+              <Link href={analysisReportHref(projectHref)}>Open Outputs</Link>
             ) : null}
           </p>
         ) : null}
@@ -3381,8 +3388,8 @@ function ChatScreen({
                       className="flow-btn primary"
                       href={
                         runIds[0]
-                          ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
-                          : `${projectHref}/report?pane=outputs`
+                          ? analysisReportHref(projectHref, runIds[0])
+                          : analysisReportHref(projectHref)
                       }
                     >
                       Open
@@ -5332,6 +5339,10 @@ function ReportScreen({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const paneParam = searchParams.get('pane');
+  const runParam = searchParams.get('run') || '';
   const [pane, setPane] = useState<ReportView>(() =>
     typeof window === 'undefined'
       ? 'overview'
@@ -5342,24 +5353,39 @@ function ReportScreen({
   const [staleErrors, setStaleErrors] = useState<Record<string, string>>({});
   const lastRun = useAnalysisSetupStore(s => s.lastRun);
   const seenRun = useRef(lastRun?.nonce || 0);
+  /** Switcher only: remember this project's last manual view and keep the URL in sync. */
   const setView = useCallback(
     (view: ReportView) => {
       setPane(view);
       writeStoredReportView(projectId, view);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pane', view);
+      if (view !== 'outputs') params.delete('run');
+      const query = params.toString();
+      router.replace(`/flow/p/${projectId}/report${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [projectId]
+    [projectId, router, searchParams]
   );
+  /** Deep link / programmatic: show the view but do not overwrite the switcher preference. */
+  const showView = useCallback((view: ReportView) => {
+    setPane(view);
+  }, []);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setPane(initialReportView(projectId, params.get('pane')));
-    if (params.get('run')) setOpenRunId(params.get('run') || '');
-  }, [projectId]);
+    const fromUrl = reportViewFromPaneParam(paneParam);
+    if (fromUrl) {
+      showView(fromUrl);
+    } else {
+      showView(readStoredReportView(projectId) || 'overview');
+    }
+    setOpenRunId(runParam);
+  }, [projectId, paneParam, runParam, showView]);
   useEffect(() => {
     if (!lastRun || lastRun.nonce === seenRun.current) return;
     seenRun.current = lastRun.nonce;
-    setView('outputs');
+    showView('outputs');
     setOpenRunId(lastRun.runId);
-  }, [lastRun, setView]);
+    router.replace(analysisReportHref(`/flow/p/${projectId}`, lastRun.runId), { scroll: false });
+  }, [lastRun, showView, router, projectId]);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);
@@ -5440,7 +5466,7 @@ function ReportScreen({
         }
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
-        setProjectPins(projectId, pinsFromRuns(runs));
+        applyServerPins(projectId, pinsFromRuns(runs));
         setSavedTotal(
           savedTableTotal([
             overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
@@ -6310,7 +6336,7 @@ function ReportScreen({
                 type="button"
                 disabled={busy !== ''}
                 onClick={() => {
-                  setView('slides');
+                  showView('slides');
                   run('deck', deck);
                 }}
               >

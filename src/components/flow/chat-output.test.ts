@@ -839,8 +839,10 @@ describe('chat output panel', () => {
     expect(isClientDeckResult(results)).toBe(true);
     expect(outputKind(results)).toBe('Client deck');
     expect(outputCardReady({ status: 'ok', tool_results: results }, false)).toBe(true);
-    expect(outputOpenHref('/flow/p/1', 'Client deck', 'job-deck')).toBe('/flow/p/1/report');
-    expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report');
+    expect(outputOpenHref('/flow/p/1', 'Client deck', 'job-deck')).toBe(
+      '/flow/p/1/report?pane=slides'
+    );
+    expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report?pane=slides');
     expect(outputRunIds(results)[0]).toBe('job-deck');
   });
 });

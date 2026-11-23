@@ -611,18 +611,26 @@ function collapseSubsumedStatSentences(line: string): string {
 /** A funnel output opens that output. Other outputs open the table builder. */
 export function outputOpenHref(projectHref: string, kind: string, runId: string): string {
   if (kind === 'Funnel' && runId) {
-    return `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runId)}`;
+    return analysisReportHref(projectHref, runId);
   }
   if (kind === 'Client deck') {
-    // Report editor, first page — not the Outputs pane (no stored analysis summary).
-    return `${projectHref}/report`;
+    // Slides view — not Outputs (no stored analysis summary for a deck job).
+    return clientDeckReportHref(projectHref);
   }
   return `${projectHref}/tables`;
 }
 
-/** Open the Report editor scrolled to the deck's first page. */
+/** Open Report › Outputs on a finished analysis (and highlight that run). */
+export function analysisReportHref(projectHref: string, runId?: string | null): string {
+  if (runId) {
+    return `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runId)}`;
+  }
+  return `${projectHref}/report?pane=outputs`;
+}
+
+/** Open Report › Slides for a client deck. */
 export function clientDeckReportHref(projectHref: string): string {
-  return `${projectHref}/report`;
+  return `${projectHref}/report?pane=slides`;
 }
 
 /** A weight column code and an empty cautions bullet are not part of the finding. */
