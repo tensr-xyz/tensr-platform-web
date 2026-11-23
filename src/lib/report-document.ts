@@ -2680,6 +2680,24 @@ const APPENDIX_MARKERS = [
   'reasons and verbatims',
 ];
 const VARIANT_SECTION_PREFIXES = ['board', 'short', 'audience'];
+const STRUCTURAL_SECTIONS = new Set([
+  'title',
+  'executive summary',
+  'methods',
+  'methodology',
+  'evidence',
+  'appendix',
+]);
+const STRUCTURAL_TITLES = new Set([
+  'study',
+  'report',
+  'executive summary',
+  'how to read this report',
+  'evidence',
+]);
+const PCT_PAIR_RE = /(\d+(?:\.\d+)?)\s*%\s*vs\.?\s*(\d+(?:\.\d+)?)\s*%/gi;
+const INCOMPLETE_PCT_VS_RE = /\(\s*\d+(?:\.\d+)?%\s*vs\.?\s*$/i;
+const WEAK_GAP_PP = 3;
 
 function sectionLabel(kind: ReportReshapeKind, audienceLabel = ''): string {
   if (kind === 'board') return 'Board';
@@ -2714,11 +2732,127 @@ function isMethodsOrAppendixPage(page: ReportPage): boolean {
   return section.startsWith('evidence') || section.startsWith('appendix');
 }
 
+function isStructuralReportPage(page: ReportPage): boolean {
+  const section = (page.section || '').trim().toLowerCase();
+  const title = page.title.trim().toLowerCase();
+  if (
+    STRUCTURAL_SECTIONS.has(section) ||
+    [...STRUCTURAL_SECTIONS].some(
+      marker => section.startsWith(`${marker} `) || section.startsWith(`${marker}·`)
+    )
+  ) {
+    return true;
+  }
+  if (STRUCTURAL_TITLES.has(title) || title.startsWith('executive summary')) return true;
+  return isMethodsOrAppendixPage(page);
+}
+
 function isSourceFindingPage(page: ReportPage): boolean {
   if (isVariantSection(page.section)) return false;
-  if (isMethodsOrAppendixPage(page)) return false;
+  if (isStructuralReportPage(page)) return false;
   if (page.hideFromExport) return false;
   return true;
+}
+
+function pageHasVisual(page: ReportPage): boolean {
+  return page.objects.some(
+    obj => obj.kind === 'chart' || obj.kind === 'table' || obj.kind === 'image'
+  );
+}
+
+function pageBodyText(page: ReportPage): string {
+  return page.objects
+    .filter(obj => obj.kind === 'text' && (obj.slotId || '').toLowerCase() !== 'title')
+    .map(obj => String(obj.text || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function maxPctGapPp(text: string): number {
+  let best = 0;
+  const source = String(text || '');
+  PCT_PAIR_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PCT_PAIR_RE.exec(source))) {
+    const left = Number(match[1]);
+    const right = Number(match[2]);
+    if (Number.isFinite(left) && Number.isFinite(right)) {
+      best = Math.max(best, Math.abs(left - right));
+    }
+  }
+  return best;
+}
+
+function cleanFindingTitle(title: string, body = ''): string {
+  let text = String(title || '').trim();
+  if (!text) return '';
+  if (INCOMPLETE_PCT_VS_RE.test(text)) {
+    PCT_PAIR_RE.lastIndex = 0;
+    const pair = PCT_PAIR_RE.exec(String(body || ''));
+    if (pair) {
+      const stem = text.replace(INCOMPLETE_PCT_VS_RE, '').replace(/[ \-–—:]+$/u, '');
+      text = `${stem} (${pair[1]}% vs ${pair[2]}%)`.trim();
+    } else {
+      text = text
+        .replace(INCOMPLETE_PCT_VS_RE, '')
+        .replace(/[ \-–—:(]+$/u, '')
+        .trim();
+    }
+  }
+  return text;
+}
+
+function findingStrength(page: ReportPage): [number, number, number, number] {
+  const section = (page.section || '').trim().toLowerCase();
+  const title = page.title || '';
+  const body = pageBodyText(page);
+  const gap = Math.max(maxPctGapPp(title), maxPctGapPp(body));
+  const gapScore = gap > 0 && gap < WEAK_GAP_PP ? gap * 0.05 : gap;
+  const insights = ['insights', 'findings', 'headline findings'].includes(section) ? 1 : 0;
+  const visual = pageHasVisual(page) ? 1 : 0;
+  const substance = Math.min(title.trim().length, 120) / 120;
+  return [insights, visual, gapScore, substance];
+}
+
+function isWeakGapPage(page: ReportPage): boolean {
+  const gap = Math.max(maxPctGapPp(page.title || ''), maxPctGapPp(pageBodyText(page)));
+  return gap > 0 && gap < WEAK_GAP_PP;
+}
+
+function pickFindingPages(sources: ReportPage[], slots: number): ReportPage[] {
+  if (slots <= 0) return [];
+  const ranked = [...sources].sort((a, b) => {
+    const left = findingStrength(a);
+    const right = findingStrength(b);
+    for (let i = 0; i < left.length; i += 1) {
+      if (left[i]! !== right[i]!) return right[i]! - left[i]!;
+    }
+    return 0;
+  });
+  const strong = ranked.filter(page => !isWeakGapPage(page));
+  // Drop tiny % gaps when any stronger page exists — do not pad the board with them.
+  if (strong.length) return strong.slice(0, slots);
+  return ranked.slice(0, slots);
+}
+
+function studyTitleFromPages(pages: ReportPage[]): string {
+  for (const page of pages) {
+    const section = (page.section || '').trim().toLowerCase();
+    const title = page.title.trim();
+    if (
+      section === 'title' &&
+      title &&
+      !['study', 'report', 'untitled'].includes(title.toLowerCase())
+    ) {
+      return title;
+    }
+  }
+  for (const page of pages) {
+    if ((page.section || '').trim().toLowerCase() === 'title' && page.title.trim()) {
+      return page.title.trim();
+    }
+  }
+  return '';
 }
 
 function clonePageForVariant(
@@ -2726,7 +2860,8 @@ function clonePageForVariant(
   options: { section: string; titlePrefix?: string }
 ): ReportPage {
   const prefix = String(options.titlePrefix || '').trim();
-  let title = page.title;
+  const body = pageBodyText(page);
+  let title = cleanFindingTitle(page.title, body);
   if (prefix && title && !title.toLowerCase().startsWith(prefix.toLowerCase())) {
     title = `${prefix}: ${title}`;
   }
@@ -2737,7 +2872,88 @@ function clonePageForVariant(
     section: options.section,
     hideFromExport: false,
     hideFromPublish: false,
-    objects: page.objects.map(obj => ({ ...obj, id: newId('obj') })),
+    objects: page.objects.map(obj => {
+      const next = { ...obj, id: newId('obj') };
+      if (next.kind === 'text' && (next.slotId || '').toLowerCase() === 'title') {
+        next.text = title;
+      }
+      return next;
+    }),
+  };
+}
+
+function boardTitlePage(options: {
+  section: string;
+  studyTitle: string;
+  kind: ReportReshapeKind;
+  audienceLabel?: string;
+}): ReportPage {
+  const layoutId = 'title_page';
+  const study = String(options.studyTitle || '').trim();
+  let headline = 'Board briefing';
+  let subtitle = study || 'Five slides for the board. Full report kept.';
+  if (options.kind === 'short') {
+    headline = 'Short version';
+    subtitle = study || 'Condensed report. Full report kept.';
+  } else if (options.kind === 'audience') {
+    const audience = String(options.audienceLabel || '').trim() || 'Audience';
+    headline = `For ${audience}`;
+    subtitle = study || 'Audience version. Full report kept.';
+  } else if (study) {
+    headline = study;
+    subtitle = 'Board briefing';
+  }
+  return {
+    id: newId('page'),
+    title: headline,
+    layoutId,
+    section: options.section,
+    hideFromExport: false,
+    hideFromPublish: false,
+    objects: [
+      {
+        id: newId('obj'),
+        kind: 'text',
+        frame: frameForSlot(layoutId, 'title') || { x: 0.08, y: 0.28, w: 0.84, h: 0.18 },
+        zIndex: 1,
+        hidden: false,
+        slotId: 'title',
+        text: headline,
+        textStyle: { ...DEFAULT_TEXT_STYLE, fontSizePt: 32, bold: true },
+        runs: [],
+        binding: null,
+        shapeType: null,
+        imageUrl: null,
+        runId: null,
+        pinId: null,
+        tableSpecId: null,
+        tableStyle: normalizeTableStyle(undefined),
+        tableRules: [],
+        tableEdits: normalizeTableEdits(undefined),
+        keepLive: true,
+      },
+      {
+        id: newId('obj'),
+        kind: 'text',
+        frame: frameForSlot(layoutId, 'subtitle') || { x: 0.08, y: 0.5, w: 0.84, h: 0.12 },
+        zIndex: 2,
+        hidden: false,
+        slotId: 'subtitle',
+        text: subtitle,
+        textStyle: { ...DEFAULT_TEXT_STYLE, fontSizePt: 18 },
+        runs: [],
+        binding: null,
+        shapeType: null,
+        imageUrl: null,
+        runId: null,
+        pinId: null,
+        tableSpecId: null,
+        tableStyle: normalizeTableStyle(undefined),
+        tableRules: [],
+        tableEdits: normalizeTableEdits(undefined),
+        keepLive: true,
+      },
+    ],
   };
 }
 
@@ -2745,12 +2961,12 @@ function defaultRecommendationBullets(pages: ReportPage[], count: number): strin
   const wanted = Math.max(1, Math.min(count || 3, 8));
   const bullets: string[] = [];
   for (const page of pages) {
-    const title = page.title.trim();
+    const title = cleanFindingTitle(page.title, pageBodyText(page));
     if (!title) continue;
-    bullets.push(`Focus on: ${title}`);
+    bullets.push(title);
     if (bullets.length >= wanted) break;
   }
-  while (bullets.length < wanted) bullets.push('Add a recommendation here.');
+  while (bullets.length < wanted) bullets.push('Add an implication here.');
   return bullets.slice(0, wanted);
 }
 
@@ -2762,9 +2978,8 @@ function recommendationsPage(options: {
   const layoutId = 'title_and_content';
   const title = options.title || 'Recommendations';
   const lines = options.bullets.map(item => String(item).trim()).filter(Boolean);
-  const body = (lines.length ? lines : ['Add a recommendation here.'])
-    .map(line => `• ${line}`)
-    .join('\n');
+  // Plain lines — listStyle:bullet adds the marker in the editor.
+  const body = (lines.length ? lines : ['Add an implication here.']).join('\n');
   return {
     id: newId('page'),
     title,
@@ -2843,24 +3058,44 @@ export function reshapeReportDocument(
   let wantRecs = options.includeRecommendations;
   if (wantRecs == null) wantRecs = kind === 'board' || kind === 'audience';
   wantRecs = Boolean(wantRecs);
+  let wantTitle = kind === 'board' || slideCap >= 4;
+  let findingSlots = Math.max(0, slideCap - (wantTitle ? 1 : 0) - (wantRecs ? 1 : 0));
+  if (findingSlots === 0 && slideCap >= 1 && !wantRecs) {
+    findingSlots = 1;
+    wantTitle = false;
+  } else if (findingSlots === 0 && wantRecs && slideCap >= 2) {
+    findingSlots = Math.max(1, slideCap - 1 - (wantTitle ? 1 : 0));
+    if (findingSlots < 1) {
+      wantTitle = false;
+      findingSlots = Math.max(1, slideCap - 1);
+    }
+  }
 
   const kept = doc.pages.filter(page => (page.section || '') !== section);
   const sources = kept.filter(isSourceFindingPage);
-  const findingSlots = Math.max(1, slideCap - (wantRecs ? 1 : 0));
-  const withVisual = sources.filter(page =>
-    page.objects.some(obj => obj.kind === 'chart' || obj.kind === 'table' || obj.kind === 'image')
-  );
-  const rest = sources.filter(page => !withVisual.includes(page));
-  const chosen = [...withVisual, ...rest].slice(0, findingSlots);
+  let chosen = pickFindingPages(sources, findingSlots);
+  if (!chosen.length && sources.length && findingSlots > 0) {
+    chosen = sources.slice(0, 1);
+  }
   const titlePrefix =
     kind === 'audience' && String(options.audienceLabel || '').trim()
       ? String(options.audienceLabel).trim()
       : '';
 
-  const variantPages: ReportPage[] = chosen.map(page =>
-    clonePageForVariant(page, { section, titlePrefix })
-  );
-  const variantPageIds = variantPages.map(page => page.id);
+  const variantPages: ReportPage[] = [];
+  if (wantTitle) {
+    variantPages.push(
+      boardTitlePage({
+        section,
+        studyTitle: studyTitleFromPages(kept),
+        kind,
+        audienceLabel: options.audienceLabel,
+      })
+    );
+  }
+  for (const page of chosen) {
+    variantPages.push(clonePageForVariant(page, { section, titlePrefix }));
+  }
 
   if (wantRecs) {
     const bullets = (options.recommendationBullets || [])
@@ -2870,9 +3105,21 @@ export function reshapeReportDocument(
       bullets.length > 0
         ? bullets
         : defaultRecommendationBullets(chosen, options.recommendationCount ?? 3);
-    const recPage = recommendationsPage({ section, bullets: resolved });
-    variantPages.push(recPage);
-    variantPageIds.push(recPage.id);
+    const recTitle = kind === 'board' ? 'Implications' : 'Recommendations';
+    variantPages.push(recommendationsPage({ section, bullets: resolved, title: recTitle }));
+  }
+
+  let trimmed = variantPages;
+  if (trimmed.length > slideCap) {
+    if (wantRecs && trimmed.length >= 2) {
+      const head = wantTitle ? trimmed.slice(0, 1) : [];
+      const tail = trimmed.slice(-1);
+      const mid = trimmed.slice(head.length, trimmed.length - 1);
+      const keepMid = Math.max(0, slideCap - head.length - tail.length);
+      trimmed = [...head, ...mid.slice(0, keepMid), ...tail];
+    } else {
+      trimmed = trimmed.slice(0, slideCap);
+    }
   }
 
   const place = String(options.placement || 'front')
@@ -2880,14 +3127,14 @@ export function reshapeReportDocument(
     .toLowerCase();
   const pages =
     place === 'end' || place === 'after' || place === 'back'
-      ? [...kept, ...variantPages]
-      : [...variantPages, ...kept];
+      ? [...kept, ...trimmed]
+      : [...trimmed, ...kept];
 
   return {
     ok: true,
     document: { ...doc, pages },
     variantSection: section,
-    variantPageIds,
+    variantPageIds: trimmed.map(page => page.id),
     keptFull: true,
     kind,
     note: `${section} version added at the ${
