@@ -30,7 +30,10 @@ import { AudiencePanel } from '@/components/flow/audience-panel';
 import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
 import {
   labelChangeLine,
+  labelsImportAppliedNote,
   labelsImportApplyLabel,
+  labelsImportPreviewNote,
+  unmatchedLabelLine,
   type LabelsImportPreview,
 } from '@/lib/label-workbook';
 import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
@@ -399,6 +402,7 @@ export function DetailsScreen({
         flowJson<{
           labels_changed?: number;
           unmatched?: number;
+          unmatched_rows?: LabelsImportPreview['unmatched_rows'];
           code_changed?: number;
           changes?: LabelsImportPreview['changes'];
         }>(`/datasets/${datasetId}/labels/import`, {
@@ -409,14 +413,17 @@ export function DetailsScreen({
             apply: false,
           }),
         }).then(body => {
-          setLabelsPreview({
+          const preview: LabelsImportPreview = {
             filename: file.name,
             content_base64: content,
             labels_changed: Number(body.labels_changed || 0),
             unmatched: Number(body.unmatched || 0),
+            unmatched_rows: Array.isArray(body.unmatched_rows) ? body.unmatched_rows : [],
             code_changed: Number(body.code_changed || 0),
             changes: Array.isArray(body.changes) ? body.changes : [],
-          });
+          };
+          setLabelsPreview(preview);
+          setLabelsNote(labelsImportPreviewNote(preview));
         })
       )
       .catch(err => {
@@ -432,11 +439,12 @@ export function DetailsScreen({
   const applyLabelsImport = () => {
     if (!datasetId || !projectId || !labelsPreview || labelsBusy) return;
     if (labelsPreview.labels_changed < 1) {
-      setLabelsNote('No label changes to apply.');
+      setLabelsNote(labelsImportPreviewNote(labelsPreview));
       return;
     }
     const previousId = datasetId;
     const content = labelsPreview.content_base64;
+    const appliedCount = labelsPreview.labels_changed;
     if (!content) {
       setLabelsNote('Upload the labels file again, then apply.');
       return;
@@ -469,7 +477,7 @@ export function DetailsScreen({
             title: 'Labels saved as a new version',
             onRestored: () => onChanged?.(),
           });
-          setLabelsNote('Labels applied as a new version.');
+          setLabelsNote(labelsImportAppliedNote(appliedCount));
           onChanged?.();
         });
       })
@@ -815,11 +823,20 @@ export function DetailsScreen({
                     ))}
                   </ul>
                 ) : null}
+                {showLabelChanges && labelsPreview.unmatched_rows.length ? (
+                  <ul className="details-labels-changes">
+                    {labelsPreview.unmatched_rows.map((row, index) => (
+                      <li key={`unmatched-${row.name}-${row.code || ''}-${index}`}>
+                        {unmatchedLabelLine(row)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="details-labels-import-actions">
                   <Button
                     type="button"
                     className="flow-btn"
-                    disabled={!labelsPreview.changes.length}
+                    disabled={!labelsPreview.changes.length && !labelsPreview.unmatched_rows.length}
                     onClick={() => setShowLabelChanges(open => !open)}
                   >
                     {showLabelChanges ? 'Hide changes' : 'See changes'}
