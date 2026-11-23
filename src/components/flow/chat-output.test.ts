@@ -307,6 +307,66 @@ describe('chat output panel', () => {
     expect(lead.trim().endsWith('-')).toBe(false);
   });
 
+  it('prefers a labelled structured lead over model prose that quotes codes', () => {
+    const structured =
+      'Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
+    const lead = resultLead('trust_b1 and age_band: Pearson r = -0.001023, p = 0.955.', [
+      { procedure: 'correlation', summary: { line: structured } },
+    ]);
+    expect(lead).toContain('Trust in Global Ledger');
+    expect(lead).toContain('-0.001');
+    expect(lead).not.toContain('trust_b1');
+    expect(lead).not.toContain('-0.001023');
+  });
+
+  it('keeps a funnel lead that already has conversion and high/low figures', () => {
+    const apiLine =
+      'Aware 100.0%, Tried 40.0% (40.0% from the previous stage), Bought 20.0% (50.0% from the previous stage). ' +
+      'By group, United Kingdom 31.3%, Germany 13.8%. United Kingdom is highest at 31.3%; Germany is lowest at 13.8%.';
+    const lead = resultLead(
+      apiLine,
+      [{ procedure: 'funnel', summary: { line: apiLine } }],
+      [
+        {
+          title: 'Funnel',
+          columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+          rows: [
+            ['Aware', '1000', '100.0', ''],
+            ['Tried', '400', '40.0', '40.0'],
+            ['Bought', '200', '20.0', '50.0'],
+          ],
+        },
+        {
+          title: 'Funnel by group',
+          columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+          rows: [
+            ['Bought', 'United Kingdom', '120', '31.3', '40.0'],
+            ['Bought', 'Germany', '40', '13.8', '35.0'],
+          ],
+        },
+      ]
+    );
+    expect(lead).toContain('from the previous stage');
+    expect(lead).toContain('highest at 31.3%');
+    expect(lead).toContain('lowest at 13.8%');
+  });
+
+  it('collapses a repeated Mann-Whitney sentence and trims U trailing zeros', () => {
+    const once =
+      'Trust for Male and Female: U = 1086523.500, p = 0.121, r = -0.033, consistent with chance. Medians: Male 3, Female 3.';
+    const lead = resultLead(`${once} ${once}`, [
+      {
+        procedure: 'mann_whitney_u',
+        summary: { line: once.replace('.500', '.5') },
+      },
+    ]);
+    expect(lead.toLowerCase().split('male and female').length - 1).toBe(1);
+    expect(lead).toContain('U = 1086523.5');
+    expect(lead).not.toContain('1086523.500');
+    expect(lead).toContain('Male');
+    expect(lead).toContain('Female');
+  });
+
   it('drops empty parentheses and clamps long share percents in the lead', () => {
     const lead = resultLead('Heard is 38.062% ( ) in the North.');
     expect(lead).toContain('38.1%');

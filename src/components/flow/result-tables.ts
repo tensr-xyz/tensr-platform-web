@@ -151,6 +151,11 @@ export function formatDecimalText(value: string, places: number, header = ''): s
   let shown = number.toFixed(digits);
   if (kind === 'percent' || kind === 'median')
     shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  // Whole counts keep thousands separators after rounding (1221043.0 → 1,221,043).
+  if (kind === 'whole' && Math.abs(number) >= 1000) {
+    const whole = Number(shown);
+    if (Number.isFinite(whole)) return `${plainNumber(whole)}${match[3] || ''}`;
+  }
   return `${shown}${match[3] || ''}`;
 }
 
@@ -696,29 +701,41 @@ function withoutRepeatedTables(tables: RunTable[]): RunTable[] {
   });
 }
 
-/** Whole-base stage shares, then the highest and lowest group at the last stage. */
+/** Whole-base stage shares with conversions, then the highest and lowest group with figures. */
 export function funnelHeadline(tables: RunTable[]): string {
   const stage = tables.find(isStageFunnel);
   if (!stage) return '';
-  const shareColumn = stage.columns.findIndex(column => column.toLowerCase().includes('% of base'));
+  const headers = stage.columns.map(column => column.toLowerCase());
+  const shareColumn = headers.findIndex(column => column.includes('% of base'));
+  const conversionColumn = headers.findIndex(column => column.includes('conversion'));
   if (shareColumn < 0) return '';
   const parts = stage.rows
-    .map(row => {
+    .map((row, index) => {
       const name = (row[0] || '').trim();
       const share = (row[shareColumn] || '').trim();
       if (!name || !share) return '';
-      return `${name} ${share.includes('%') ? share : `${share}%`}`;
+      let piece = `${name} ${share.includes('%') ? share : `${share}%`}`;
+      if (index > 0 && conversionColumn >= 0) {
+        const conversion = (row[conversionColumn] || '').trim().replace(/%/g, '');
+        if (conversion) {
+          piece = `${piece} (${conversion}% from the previous stage)`;
+        }
+      }
+      return piece;
     })
     .filter(Boolean)
     .slice(0, 6);
   if (!parts.length) return '';
-  let text = `Of the base, ${parts.join(', ')}.`;
+  let text = parts.join(', ');
+  if (!text.endsWith('.')) text = `${text}.`;
   const group = tables.find(isGroupFunnel);
   if (!group) return text;
-  const headers = group.columns.map(column => column.toLowerCase());
-  const stageColumn = headers.indexOf('stage');
-  const groupColumn = headers.findIndex(column => column === 'group' || column.startsWith('group'));
-  const groupedShare = headers.findIndex(column => column.includes('% of base'));
+  const groupHeaders = group.columns.map(column => column.toLowerCase());
+  const stageColumn = groupHeaders.indexOf('stage');
+  const groupColumn = groupHeaders.findIndex(
+    column => column === 'group' || column.startsWith('group')
+  );
+  const groupedShare = groupHeaders.findIndex(column => column.includes('% of base'));
   const last = (stage.rows[stage.rows.length - 1]?.[0] || '').trim().toLowerCase();
   const scored = group.rows
     .filter(row => (row[stageColumn] || '').trim().toLowerCase() === last)
@@ -731,7 +748,9 @@ export function funnelHeadline(tables: RunTable[]): string {
   const high = scored.reduce((best, item) => (item.share > best.share ? item : best));
   const low = scored.reduce((best, item) => (item.share < best.share ? item : best));
   if (high.name === low.name) return text;
-  return `${text} At the last stage, ${high.name} is highest and ${low.name} is lowest.`;
+  const highShare = oneDecimal(high.share);
+  const lowShare = oneDecimal(low.share);
+  return `${text} ${high.name} is highest at ${highShare}%; ${low.name} is lowest at ${lowShare}%.`;
 }
 
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */

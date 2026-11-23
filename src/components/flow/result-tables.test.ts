@@ -1897,7 +1897,7 @@ describe('answer tables', () => {
     const lead = funnelHeadline(view.tables);
     expect(lead).toContain('40.0%');
     expect(lead).toContain('20.0%');
-    expect((lead.match(/%/g) || []).length).toBeLessThan(5);
+    expect(lead).toContain('from the previous stage');
   });
 });
 
@@ -1908,5 +1908,39 @@ describe('counts', () => {
     expect(shownCount('1,054,430')).toBe('1,054,430');
     expect(shownCount('2.67896e+06')).not.toContain('e');
     expect(formatDecimalText('2.67896e+06', 1, 'Count')).not.toContain('e');
+  });
+
+  it('keeps thousands separators on whole counts after rounding decimals', () => {
+    expect(formatDecimalText('1221043.0', 1, 'Count')).toBe('1,221,043');
+    expect(formatDecimalText('183028.4', 1, 'Count')).toBe('183,028');
+    expect(formatDecimalText('1,221,043.0', 1, 'Frequency')).toBe('1,221,043');
+  });
+});
+
+describe('funnelHeadline', () => {
+  it('quotes stage-to-stage conversion and high/low group shares', () => {
+    const lead = funnelHeadline([
+      {
+        title: 'Funnel',
+        columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+        rows: [
+          ['Aware', '1,000', '100.0', ''],
+          ['Tried', '400', '40.0', '40.0'],
+          ['Bought', '200', '20.0', '50.0'],
+        ],
+      },
+      {
+        title: 'Funnel by group',
+        columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+        rows: [
+          ['Bought', 'United Kingdom', '120', '31.3', '40.0'],
+          ['Bought', 'Germany', '40', '13.8', '35.0'],
+        ],
+      },
+    ]);
+    expect(lead).toContain('40.0% from the previous stage');
+    expect(lead).toContain('50.0% from the previous stage');
+    expect(lead).toContain('United Kingdom is highest at 31.3%');
+    expect(lead).toContain('Germany is lowest at 13.8%');
   });
 });

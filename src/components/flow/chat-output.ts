@@ -470,18 +470,46 @@ export function resultLead(
     );
   if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
   const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
+  const hasDigits = (text: string) => /\d/.test(text);
+  // Prefer the structured summary when the model still quotes snake_case codes.
+  const codeHeavy = (text: string) =>
+    /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/.test(text) ||
+    /\bWeight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\b/.test(text);
+  const preferFinding = Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose));
   const text =
-    (hasFigure(prose) ? prose : '') ||
+    (preferFinding ? finding : '') ||
+    (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||
-    (prose && /\d/.test(prose) ? prose : '') ||
+    (finding && hasDigits(finding) && !hasFigure(prose) ? finding : '') ||
+    (prose && hasDigits(prose) ? prose : '') ||
     finding ||
     prose ||
     outputTakeaway(answer);
-  const cleaned = guardUserText(withoutStrayEnding(text));
+  const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(text)));
   const headline = tables ? funnelHeadline(tables) : '';
   const figures = cleaned.match(/%/g)?.length ?? 0;
-  if (headline && (!cleaned || figures > 4)) return headline;
+  const hasFunnelFigures =
+    /from the previous stage/i.test(cleaned) || /highest at\s+-?\d/i.test(cleaned);
+  // A full API funnel line already has conversions and high/low figures; do not replace it.
+  if (headline && (!cleaned || (figures > 4 && !hasFunnelFigures))) return headline;
   return cleaned;
+}
+
+/** Drop a repeated Mann-Whitney / correlation sentence glued onto itself. */
+function collapseRepeatedLead(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  const half = Math.floor(trimmed.length / 2);
+  if (half < 40) return trimmed;
+  const left = trimmed.slice(0, half).trim();
+  const right = trimmed.slice(half).trim();
+  if (left && right && (right.startsWith(left) || left === right)) return left;
+  // Same U/F/t clause twice on one line.
+  const match = trimmed.match(
+    /^(.+?\b(?:U|H|F|t)\s*(?:\([^)]*\))?\s*=\s*-?[\d.,]+.+?)(?:\s+\1)+$/i
+  );
+  if (match?.[1]) return match[1].trim();
+  return trimmed;
 }
 
 /** A funnel output opens that output. Other outputs open the table builder. */
@@ -509,19 +537,34 @@ function withoutStrayEnding(text: string): string {
     if (/^[-*•]\s*$/.test(trimmed)) return false;
     return true;
   });
-  return lines
-    .join('\n')
-    .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
-    .replace(/\s*[\(\[]\s*[\)\]]/g, '')
-    .replace(/(\d+\.\d{2,})%/g, (_all, raw: string) => {
-      const number = Number(raw);
-      if (!Number.isFinite(number)) return `${raw}%`;
-      const shown = number.toFixed(1).replace(/\.0$/, '');
-      return `${shown}%`;
-    })
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return (
+    lines
+      .join('\n')
+      .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+      .replace(/\s+Weight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+      .replace(/\s*[\(\[]\s*[\)\]]/g, '')
+      .replace(/(\d+\.\d{2,})%/g, (_all, raw: string) => {
+        const number = Number(raw);
+        if (!Number.isFinite(number)) return `${raw}%`;
+        const shown = number.toFixed(1).replace(/\.0$/, '');
+        return `${shown}%`;
+      })
+      // U/H half-integers match the Test table: 1086523.500 → 1086523.5
+      .replace(
+        /\b([UH])\s*=\s*(-?\d+)\.(\d{2,})\b/g,
+        (_all, name: string, whole: string, frac: string) => {
+          const trimmed = frac.replace(/0+$/, '');
+          if (!trimmed) return `${name} = ${whole}`;
+          if (trimmed === '5' && frac.replace(/5/, '').replace(/0/g, '') === '') {
+            return `${name} = ${whole}.5`;
+          }
+          return `${name} = ${whole}.${trimmed}`;
+        }
+      )
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  );
 }
 
 function summaryLine(
