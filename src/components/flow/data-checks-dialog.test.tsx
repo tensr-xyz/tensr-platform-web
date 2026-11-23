@@ -62,4 +62,34 @@ describe('DataChecksDialog', () => {
       expect.objectContaining({ column: 'age', count: 3, showLabel: 'Show the 3' })
     );
   });
+
+  it('shows a checking title while the report loads, never all clear', async () => {
+    let resolveReport: (value: unknown) => void = () => undefined;
+    mockedFlowJson.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveReport = resolve;
+        })
+    );
+
+    render(<DataChecksDialog datasetId="ds-1" open onOpenChange={() => undefined} />);
+
+    expect(screen.getByText('Data checks · checking…')).toBeInTheDocument();
+    expect(screen.queryByText('Data checks · all clear')).not.toBeInTheDocument();
+
+    resolveReport({
+      respondents: 2,
+      n_columns: 1,
+      summary: { issues: 0, construction_issues: 0 },
+      construction: [],
+      straightlining: [],
+      summary_tables: [],
+      issue_labels: {},
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Data checks · all clear')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Data checks · checking…')).not.toBeInTheDocument();
+  });
 });

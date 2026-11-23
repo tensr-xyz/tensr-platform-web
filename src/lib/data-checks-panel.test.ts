@@ -68,6 +68,8 @@ describe('data checks panel helpers', () => {
     expect(dataChecksTitle(0)).toBe('Data checks · all clear');
     expect(dataChecksTitle(1)).toBe('Data checks · 1 to look at');
     expect(dataChecksTitle(3)).toBe('Data checks · 3 to look at');
+    expect(dataChecksTitle(0, { loading: true })).toBe('Data checks · checking…');
+    expect(dataChecksTitle(3, { loading: true })).toBe('Data checks · checking…');
   });
 
   it('lists passed checks without naming codes', () => {

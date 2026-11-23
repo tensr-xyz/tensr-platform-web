@@ -55,13 +55,15 @@ export function DataChecksDialog({
 
   const cards = dataCheckCards(report);
   const passed = dataChecksPassedLine(report);
-  const title = dataChecksTitle(cards.length);
+  const title = dataChecksTitle(cards.length, { loading: busy });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="data-checks-dialog" aria-describedby="data-checks-note">
         <DialogTitle className="data-checks-eyebrow">Responses → Check data</DialogTitle>
-        <div className="data-checks-title">{title}</div>
+        <div className="data-checks-title" aria-live="polite">
+          {title}
+        </div>
 
         {busy ? (
           <div className="data-checks-list" aria-busy="true">

@@ -70,7 +70,9 @@ export function dataCheckCards(report: DataChecksReport | null | undefined): Dat
   return cards.slice(0, LOOK_AT_CAP);
 }
 
-export function dataChecksTitle(lookAt: number): string {
+export function dataChecksTitle(lookAt: number, options?: { loading?: boolean }): string {
+  // Never show "all clear" while the request is still in flight (QA TEN-161).
+  if (options?.loading) return 'Data checks · checking…';
   if (lookAt <= 0) return 'Data checks · all clear';
   if (lookAt === 1) return 'Data checks · 1 to look at';
   return `Data checks · ${lookAt.toLocaleString('en-GB')} to look at`;
