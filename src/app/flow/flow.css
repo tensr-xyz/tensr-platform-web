@@ -14727,31 +14727,46 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .wave-refresh {
   width: min(1120px, 94vw);
+  max-width: min(1120px, 94vw) !important;
   max-height: min(860px, 92vh);
-  overflow: auto;
+  overflow: hidden;
+}
+
+/* Paper 8b: share-dialog zeroes padding; restore 28px insets like deck-builder-head. */
+.wave-refresh .deck-builder-head {
+  align-items: center;
 }
 
 .wave-refresh-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wave-refresh-toolbar > .flow-muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: right;
 }
 
 .wave-refresh-steps {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
-  padding: 4px 0 8px;
+  flex-shrink: 0;
+  padding: 12px 28px;
   border-bottom: 1px solid var(--color-line);
   font-size: 13px;
+  line-height: 16px;
   color: var(--color-muted);
 }
 
 .wave-refresh-step.active {
   color: var(--color-ink);
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-step.done {
@@ -14762,15 +14777,22 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 0;
+  padding: 22px 28px 28px;
+}
+
+.wave-refresh-file > p:first-child {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--color-ink);
 }
 
 .wave-refresh-body {
   display: flex;
   gap: 0;
+  flex: 1 1 auto;
   min-height: 320px;
-  border: 1px solid var(--color-line);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -14779,8 +14801,9 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 18px 20px;
+  padding: 22px 28px;
   min-width: 0;
+  overflow: auto;
 }
 
 .wave-refresh-counts {
@@ -14804,7 +14827,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   font-size: 22px;
   line-height: 28px;
   color: var(--color-ink);
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-count-ok {
@@ -14818,7 +14841,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .wave-refresh-needs {
   margin: 4px 0 0;
   font-size: 13px;
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-row {
@@ -14860,7 +14883,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .wave-refresh-pill {
   flex-shrink: 0;
   font-size: 12px;
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-pill.warn {
@@ -14893,23 +14916,24 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .wave-refresh-audience-ok {
   color: var(--color-accent);
   font-size: 12px;
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-movers {
-  flex: 0 0 320px;
+  flex: 0 0 360px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 18px 20px;
+  padding: 22px 24px;
   background: var(--color-well);
   border-left: 1px solid var(--color-line);
+  overflow: auto;
 }
 
 .wave-refresh-movers-title {
   margin: 0;
   font-size: 13px;
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-mover {
@@ -14931,7 +14955,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .wave-refresh-mover-head strong {
   flex-shrink: 0;
-  font-weight: var(--weight-semibold, 600);
+  font-weight: 500;
 }
 
 .wave-refresh-movers-note {
@@ -14942,7 +14966,8 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 8px 0;
+  padding: 22px 28px;
+  overflow: auto;
 }
 
 .wave-refresh-review-list {
@@ -14952,6 +14977,21 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+}
+
+.wave-refresh-foot,
+.wave-refresh-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 12px 28px 18px;
+}
+
+.wave-refresh-error {
+  display: block;
+  padding-bottom: 0;
+  color: var(--color-warn, #a15c12);
 }
 
 @media (max-width: 900px) {
