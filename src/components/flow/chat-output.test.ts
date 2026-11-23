@@ -12,6 +12,7 @@ import {
   keptModelAnswer,
   EMPTY_TURN_ANSWER,
   CONTINUING_TURN_ANSWER,
+  UNFINISHED_TURN_ANSWER,
   visibleTurnAnswer,
   outputTakeaway,
   outputTitle,
@@ -60,6 +61,41 @@ describe('chat output panel', () => {
     ];
     expect(outputTitle(results, answer)).toBe('How much do you like brand A × source file');
     expect(outputKind(results)).toBe('Crosstab');
+    const longCross =
+      'What food and nutrition topics do you keep informed about? × Please select the region you live in.';
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'banner_table',
+            analysis_type: 'banner_table',
+            summary: { title: longCross },
+          },
+        ],
+        UNFINISHED_TURN_ANSWER
+      )
+    ).toMatch(/^What food and nutrition topics do you keep informed about\? × Please select/);
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'banner_table',
+            analysis_type: 'banner_table',
+            summary: { title: longCross },
+          },
+        ],
+        UNFINISHED_TURN_ANSWER
+      )
+    ).not.toBe('Crosstab');
+    expect(
+      resultLead(UNFINISHED_TURN_ANSWER, [
+        {
+          procedure: 'banner_table',
+          summary: { line: 'General health leads at 69.7% overall.' },
+        },
+      ])
+    ).toContain('69.7');
+    expect(resultLead(UNFINISHED_TURN_ANSWER, [])).toBe('');
     expect(
       outputTitle(
         [

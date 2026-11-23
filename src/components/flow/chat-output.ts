@@ -226,6 +226,17 @@ function isLeadSentence(text: string): boolean {
   return text.trim().split(/\s+/).filter(Boolean).length > 14;
 }
 
+/** Crosstab / by titles are card names even when longer than a lead sentence. */
+function isTableCrossTitle(text: string): boolean {
+  return /[×]|(\s+by\s+)/i.test(text);
+}
+
+function cardTitleText(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= 90) return trimmed;
+  return `${trimmed.slice(0, 89).trimEnd()}…`;
+}
+
 /** The question on the column this result is about, when the title is only an answer such as Yes. */
 function questionFromBody(
   body: Record<string, unknown> | undefined,
@@ -352,6 +363,8 @@ export function isBlandAnswer(text: string): boolean {
 /** Plain text when a turn would otherwise leave the chat blank. */
 export const EMPTY_TURN_ANSWER = 'The reply did not finish. Ask again.';
 export const CONTINUING_TURN_ANSWER = 'This turn is still running. Nothing has been reported yet.';
+export const UNFINISHED_TURN_ANSWER =
+  'This turn did not end on a result, a conceptual answer, a question, or an unsupported outcome.';
 
 /** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
 export function visibleTurnAnswer(status: string | undefined, text: string): string {
@@ -462,7 +475,12 @@ export function resultLead(
     answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
   ).trim();
   // A finish stub is not a lead; use the structured result lines instead.
-  if (prose === EMPTY_TURN_ANSWER || prose === CONTINUING_TURN_ANSWER) prose = '';
+  const unfinishedStub =
+    prose === EMPTY_TURN_ANSWER ||
+    prose === CONTINUING_TURN_ANSWER ||
+    prose === UNFINISHED_TURN_ANSWER ||
+    /^this turn did not end on a result/i.test(prose);
+  if (unfinishedStub) prose = '';
   const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
   const deniesTheTable =
     /not returned|was not returned|can.?t give|cannot give|could not (?:give|return|show)|was not run/i.test(
@@ -505,8 +523,8 @@ export function resultLead(
     (finding && hasDigits(finding) && !hasFigure(prose) ? finding : '') ||
     (prose && hasDigits(prose) && !pendingOrFailedProse ? prose : '') ||
     finding ||
-    (pendingOrFailedProse ? '' : prose) ||
-    outputTakeaway(answer);
+    (pendingOrFailedProse || unfinishedStub ? '' : prose) ||
+    (unfinishedStub ? '' : outputTakeaway(answer));
   const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(text)));
   const headline = tables ? funnelHeadline(tables) : '';
   const figures = cleaned.match(/%/g)?.length ?? 0;
@@ -704,7 +722,10 @@ export function outputTitle(
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
     if (typeof title === 'string' && PROCEDURE_TITLE.test(title.trim())) continue;
-    if (typeof title === 'string' && title.trim() && !isLeadSentence(title)) {
+    const keepLongTitle =
+      typeof title === 'string' &&
+      (isTableCrossTitle(title) || procedureOf(item) === 'banner_table');
+    if (typeof title === 'string' && title.trim() && (keepLongTitle || !isLeadSentence(title))) {
       const shown = titledWithQuestion(title, columns);
       const kindName = (
         KIND_LABELS[procedureOf(item)] ||
@@ -714,10 +735,10 @@ export function outputTitle(
       if (kindName && shown.toLowerCase().startsWith(kindName) && shown.split(/\s+/).length > 2) {
         continue;
       }
-      if (isQuestion(shown)) return shown;
+      if (isQuestion(shown) || keepLongTitle) return cardTitleText(shown);
       const fromColumn = questionFromBody(bodyOf(item), columns);
-      if (fromColumn) return fromColumn;
-      if (shown.trim()) return shown;
+      if (fromColumn) return cardTitleText(fromColumn);
+      if (shown.trim()) return cardTitleText(shown);
     }
     const body = bodyOf(item);
     const measure = first(body, [
