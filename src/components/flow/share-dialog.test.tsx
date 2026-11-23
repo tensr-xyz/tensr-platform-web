@@ -28,6 +28,46 @@ describe('ShareDialog', () => {
     expect(screen.getByRole('button', { name: 'Choose' })).toBeInTheDocument();
   });
 
+  it('offers signed-in and anonymous link modes when a project link is on', async () => {
+    const { flowJson } = jest.requireMock('@/lib/flow-api') as {
+      flowJson: jest.Mock;
+    };
+    flowJson.mockImplementation((path: string) => {
+      if (path === '/me') {
+        return Promise.resolve({ active_organization: { id: 'org-1', name: 'Acme' } });
+      }
+      if (path.includes('/members') && path.includes('/projects/')) {
+        return Promise.resolve({ members: [] });
+      }
+      if (path.includes('/organizations/')) {
+        return Promise.resolve({ members: [], invitations: [] });
+      }
+      if (path.includes('/overview')) {
+        return Promise.resolve({ report: { pages: [] } });
+      }
+      if (path.includes('/shares')) {
+        return Promise.resolve({
+          shares: [
+            {
+              id: 'share-1',
+              token: 'tok-abc',
+              kind: 'project_link',
+              access: 'anonymous',
+              password_required: false,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    expect(await screen.findByRole('radiogroup', { name: 'Link access' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Anyone, no sign-in/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Signed-in people in Acme/ })).toBeInTheDocument();
+    expect(screen.getByText(/Expires: never/)).toBeInTheDocument();
+  });
+
   it('offers Asker between Viewer and Editor', async () => {
     render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
     expect(await screen.findByText('Share Brand tracker')).toBeInTheDocument();

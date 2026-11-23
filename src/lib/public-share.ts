@@ -2,13 +2,30 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { readableApiError } from '@/lib/flow-api';
 import type { PublicViewerControl, SavedViewerView } from '@/lib/share-viewer-controls';
 
+export type PublicSharePageObject = {
+  id?: string;
+  kind?: string;
+  text?: string;
+  run_id?: string | null;
+  frame?: { x?: number; y?: number; w?: number; h?: number };
+};
+
+export type PublicShareReportPage = {
+  id?: string;
+  title?: string;
+  objects?: PublicSharePageObject[];
+};
+
 export type PublicSharePayload = {
   password_required?: boolean;
+  sign_in_required?: boolean;
+  viewer_mode?: 'signed_in' | 'anonymous';
   share: {
     id: string;
     token: string;
-    kind: 'project_link' | 'output';
+    kind: 'project_link' | 'output' | 'app';
     role?: string;
+    access?: 'signed_in' | 'anonymous';
     run_id?: string | null;
     title?: string | null;
     password_required?: boolean;
@@ -17,7 +34,15 @@ export type PublicSharePayload = {
     explore_hidden_columns?: string[];
     saved_views?: unknown[];
   };
-  project: { id?: string; name?: string };
+  project: { id?: string; name?: string; updated_at?: string };
+  workspace?: { name?: string };
+  report?: {
+    pages?: PublicShareReportPage[];
+    shared_count?: number;
+    total_count?: number;
+    runs?: Record<string, Record<string, unknown>>;
+    updated_at?: string;
+  };
   run?: Record<string, unknown>;
   viewer?: {
     explore_mode?: boolean;
@@ -146,4 +171,12 @@ export function rememberSharePassword(token: string, password: string): void {
 export function recalledSharePassword(token: string): string {
   if (typeof window === 'undefined') return '';
   return window.sessionStorage.getItem(`${PASSWORD_STORAGE_PREFIX}${token}`) || '';
+}
+
+/** Short date for the public viewer subtitle, e.g. "21 Nov". */
+export function formatShareUpdated(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }

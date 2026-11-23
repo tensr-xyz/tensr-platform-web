@@ -5,11 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Table } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/rest';
-import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
-import { runDocument } from '@/components/flow/run-document';
-import { ShareViewerFilters } from '@/components/flow/share-viewer-filters';
+import { PublicShareViewer } from '@/components/flow/public-share-viewer';
 import { flowJson } from '@/lib/flow-api';
 import {
   fetchPublicShare,
@@ -20,20 +17,9 @@ import {
   unlockPublicShare,
   type PublicSharePayload,
 } from '@/lib/public-share';
-import type { AnalysisReport } from '@/lib/analysis-report-types';
 import type { PublicViewerControl, SavedViewerView } from '@/lib/share-viewer-controls';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import '../../invite/invite.css';
-
-function storedReport(run: Record<string, unknown>): AnalysisReport | null {
-  const report = run.report;
-  if (!report || typeof report !== 'object') return null;
-  const record = report as AnalysisReport;
-  if (!record.meta || typeof record.meta.title !== 'string' || !Array.isArray(record.tables)) {
-    return null;
-  }
-  return record;
-}
 
 function viewerControls(payload: PublicSharePayload | null): PublicViewerControl[] {
   const rows = payload?.viewer?.controls;
@@ -49,7 +35,20 @@ function shareIsLocked(payload: PublicSharePayload | null): boolean {
   return Boolean(payload?.password_required);
 }
 
-/** Shared output or project link. Outside the signed-in shell (Paper has no public board yet). */
+function isAnonymousViewer(payload: PublicSharePayload | null): boolean {
+  if (!payload) return false;
+  if (payload.share.kind === 'output') return true;
+  if (payload.share.kind === 'project_link') {
+    return (
+      payload.viewer_mode === 'anonymous' ||
+      payload.share.access === 'anonymous' ||
+      Boolean(payload.report)
+    );
+  }
+  return false;
+}
+
+/** Shared output or project link. Paper 6m public viewer for anonymous links. */
 export default function PublicSharePage() {
   const params = useParams<{ token: string }>();
   const token = String(params?.token || '');
@@ -96,14 +95,12 @@ export default function PublicSharePage() {
     };
   }, [token]);
 
-  const run = payload?.run;
-  const fullReport = useMemo(() => (run ? storedReport(run) : null), [run]);
-  const document = useMemo(() => (run ? runDocument(run) : null), [run]);
   const controls = useMemo(() => viewerControls(payload), [payload]);
   const savedViews = useMemo(() => viewerSavedViews(payload), [payload]);
 
   useEffect(() => {
     if (phase !== 'ready' || !payload || payload.share.kind !== 'project_link') return;
+    if (isAnonymousViewer(payload)) return;
     const projectId = String(payload.project.id || '');
     if (!projectId) return;
     if (!getStytchBearerForTensrApi()) return;
@@ -241,6 +238,23 @@ export default function PublicSharePage() {
     );
   }
 
+  if (isAnonymousViewer(payload)) {
+    return (
+      <PublicShareViewer
+        token={token}
+        payload={payload}
+        controls={controls}
+        savedViews={savedViews}
+        filterValues={filterValues}
+        filterBusy={filterBusy}
+        filterError={filterError}
+        onFilterChange={applyFilters}
+        onSaveView={saveView}
+        onApplyView={view => applyFilters(view.values || {})}
+      />
+    );
+  }
+
   if (payload.share.kind === 'project_link') {
     const projectId = String(payload.project.id || '');
     const loginHref = `/login?${new URLSearchParams({
@@ -265,62 +279,17 @@ export default function PublicSharePage() {
   }
 
   return (
-    <main className="iv share-public">
-      <div className="iv-card share-public-card">
-        <p className="iv-note">{payload.project.name || 'Shared output'}</p>
-        <h1 className="iv-title">{String(payload.share.title || document?.title || 'Output')}</h1>
-        <ShareViewerFilters
-          controls={controls}
-          savedViews={savedViews}
-          values={filterValues}
-          busy={filterBusy}
-          error={filterError}
-          onChange={applyFilters}
-          onSaveView={saveView}
-          onApplyView={view => applyFilters(view.values || {})}
-        />
-        {fullReport ? (
-          <AnalysisReportView
-            report={fullReport}
-            rawResult={
-              run?.result && typeof run.result === 'object'
-                ? (run.result as Record<string, unknown>)
-                : null
-            }
-            datasetId={String(run?.dataset_id || '')}
-            analysisRunId={String(run?.id || payload.share.run_id || '')}
-          />
-        ) : null}
-        {!fullReport && document?.summary ? <p>{document.summary}</p> : null}
-        {!fullReport
-          ? (document?.tables || []).map(table => (
-              <section key={table.title} className="output-section">
-                <h2>{table.title}</h2>
-                <Table className="flow-table output-grid">
-                  <thead>
-                    <tr>
-                      {table.columns.map(column => (
-                        <th key={column}>{column}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {table.rows.map(row => (
-                      <tr key={row.join('|')}>
-                        {row.map((cell, cellIndex) => (
-                          <td key={`${cell}-${cellIndex}`}>{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </section>
-            ))
-          : null}
-        {!fullReport && !document?.tables.length ? (
-          <p className="flow-muted">This output has nothing to show.</p>
-        ) : null}
-      </div>
-    </main>
+    <PublicShareViewer
+      token={token}
+      payload={payload}
+      controls={controls}
+      savedViews={savedViews}
+      filterValues={filterValues}
+      filterBusy={filterBusy}
+      filterError={filterError}
+      onFilterChange={applyFilters}
+      onSaveView={saveView}
+      onApplyView={view => applyFilters(view.values || {})}
+    />
   );
 }

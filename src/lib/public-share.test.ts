@@ -1,8 +1,19 @@
-import { publicShareEmbedSnippet, publicSharePath, publicShareUrl } from './public-share';
+import {
+  formatShareUpdated,
+  publicShareEmbedSnippet,
+  publicSharePath,
+  publicShareUrl,
+} from './public-share';
 
 describe('publicSharePath', () => {
   it('builds the shared output URL path from the token', () => {
     expect(publicSharePath('abc123')).toBe('/s/abc123');
+  });
+});
+
+describe('formatShareUpdated', () => {
+  it('formats an ISO date as day and short month', () => {
+    expect(formatShareUpdated('2026-11-21T10:00:00+00:00')).toMatch(/21\s+Nov/);
   });
 });
 

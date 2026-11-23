@@ -25,11 +25,14 @@ type Share = {
   token: string;
   kind: 'project_link' | 'output';
   role?: string;
+  access?: 'signed_in' | 'anonymous';
   run_id?: string | null;
   title?: string | null;
   password_required?: boolean;
   viewer_controls?: { label?: string; column?: string }[] | null;
 };
+
+type LinkAccess = 'signed_in' | 'anonymous';
 
 function shareUrl(token: string): string {
   if (typeof window === 'undefined') return '';
@@ -54,6 +57,7 @@ export function ShareDialog({
   const [people, setPeople] = useState<Person[] | null>(null);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [orgId, setOrgId] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('this workspace');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('asker');
   const [error, setError] = useState('');
@@ -66,10 +70,13 @@ export function ShareDialog({
   const [passwordDraft, setPasswordDraft] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [settingsShareId, setSettingsShareId] = useState<string | null>(null);
+  const [pageCounts, setPageCounts] = useState<{ shared: number; total: number } | null>(null);
 
   const projectShare = shares.find(share => share.kind === 'project_link');
   const outputShare = shares.find(share => share.kind === 'output');
   const linkOn = Boolean(projectShare);
+  const linkAccess: LinkAccess =
+    projectShare?.access === 'anonymous' ? 'anonymous' : linkOn ? 'signed_in' : 'signed_in';
   const oneOutput = Boolean(outputShare);
   const link = projectShare ? shareUrl(projectShare.token) : '';
   const outputLink = outputShare ? shareUrl(outputShare.token) : '';
@@ -90,11 +97,12 @@ export function ShareDialog({
       .catch(() => setShares([]));
 
   const load = () => {
-    void flowJson<{ active_organization?: { id?: string } }>('/me')
+    void flowJson<{ active_organization?: { id?: string; name?: string } }>('/me')
       .then(async me => {
         const orgId = me.active_organization?.id || '';
         setOrgId(orgId);
-        const [members, workspace, pending] = await Promise.all([
+        setWorkspaceName(me.active_organization?.name?.trim() || 'this workspace');
+        const [members, workspace, pending, overview] = await Promise.all([
           flowJson<{ members?: { user_id?: string; role?: string }[] }>(
             `/api/projects/${projectId}/members`
           ),
@@ -110,6 +118,16 @@ export function ShareDialog({
                 })
               )
             : Promise.resolve({ invitations: [] }),
+          flowJson<{
+            findings?: unknown[];
+            tables?: unknown[];
+            report?: { pages?: { hide_from_publish?: boolean; hideFromPublish?: boolean }[] };
+          }>(`/api/projects/${projectId}/overview`).catch(
+            () =>
+              ({}) as {
+                report?: { pages?: { hide_from_publish?: boolean; hideFromPublish?: boolean }[] };
+              }
+          ),
           loadShares(),
         ]);
         const byId = new Map(
@@ -133,6 +151,16 @@ export function ShareDialog({
             invite => invite.status === 'pending' || !invite.status
           )
         );
+        const pages = overview.report?.pages;
+        if (Array.isArray(pages) && pages.length) {
+          const total = pages.length;
+          const shared = pages.filter(
+            page => !(page.hide_from_publish ?? page.hideFromPublish)
+          ).length;
+          setPageCounts({ shared, total });
+        } else {
+          setPageCounts(null);
+        }
       })
       .catch(err => {
         setPeople([]);
@@ -182,26 +210,31 @@ export function ShareDialog({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not invite'));
   };
 
-  const setProjectLink = (on: boolean) => {
+  const setProjectLink = (access: LinkAccess | null) => {
     setError('');
     setLinkBusy(true);
-    const work = on
-      ? flowJson<{ share: Share }>(`/api/projects/${projectId}/shares`, {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'project_link', role: 'viewer' }),
-        }).then(async body => {
-          await loadShares();
-          const url = shareUrl(body.share.token);
-          await navigator.clipboard.writeText(url).catch(() => undefined);
-          setNote('Link copied.');
-        })
-      : flowJson(`/api/projects/${projectId}/shares/revoke-kind`, {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'project_link' }),
-        }).then(() => {
-          setNote('Link sharing turned off.');
-          return loadShares();
-        });
+    const work =
+      access === null
+        ? flowJson(`/api/projects/${projectId}/shares/revoke-kind`, {
+            method: 'POST',
+            body: JSON.stringify({ kind: 'project_link' }),
+          }).then(() => {
+            setNote('Link sharing turned off.');
+            return loadShares();
+          })
+        : flowJson<{ share: Share }>(`/api/projects/${projectId}/shares`, {
+            method: 'POST',
+            body: JSON.stringify({ kind: 'project_link', role: 'viewer', access }),
+          }).then(async body => {
+            await loadShares();
+            const url = shareUrl(body.share.token);
+            await navigator.clipboard.writeText(url).catch(() => undefined);
+            setNote(
+              access === 'anonymous'
+                ? 'Public read-only link copied.'
+                : 'Link copied. Signed-in people can open it.'
+            );
+          });
     void work
       .catch(err => setError(err instanceof Error ? err.message : 'Could not update the link'))
       .finally(() => setLinkBusy(false));
@@ -397,16 +430,55 @@ export function ShareDialog({
               <span className="share-icon">⛓</span>
               <span className="share-who">
                 <strong>Anyone with the link</strong>
-                <span>Signed-in people who open the link</span>
+                <span>
+                  {linkOn
+                    ? linkAccess === 'anonymous'
+                      ? 'Anyone, no sign-in (read-only)'
+                      : `Signed-in people in ${workspaceName}`
+                    : 'Choose who can open the link'}
+                </span>
               </span>
               <span className="share-person-role">Can view</span>
               <Checkbox
                 checked={linkOn}
                 disabled={linkBusy}
-                onCheckedChange={value => setProjectLink(value === true)}
+                onCheckedChange={value => setProjectLink(value === true ? 'signed_in' : null)}
                 aria-label="Link sharing"
               />
             </div>
+            {linkOn ? (
+              <div className="share-link-modes" role="radiogroup" aria-label="Link access">
+                <button
+                  type="button"
+                  className="share-link-mode"
+                  data-active={linkAccess === 'signed_in' ? 'true' : 'false'}
+                  aria-checked={linkAccess === 'signed_in'}
+                  role="radio"
+                  disabled={linkBusy}
+                  onClick={() => setProjectLink('signed_in')}
+                >
+                  <strong>Signed-in people in {workspaceName}</strong>
+                </button>
+                <button
+                  type="button"
+                  className="share-link-mode"
+                  data-active={linkAccess === 'anonymous' ? 'true' : 'false'}
+                  aria-checked={linkAccess === 'anonymous'}
+                  role="radio"
+                  disabled={linkBusy}
+                  onClick={() => setProjectLink('anonymous')}
+                >
+                  <strong>Anyone, no sign-in (read-only)</strong>
+                  <span>Opens this viewer. No rows, no chat, no edits.</span>
+                </button>
+                <p className="share-link-meta">
+                  {pageCounts
+                    ? `Pages shared: ${pageCounts.shared} of ${pageCounts.total}`
+                    : 'Pages shared: all publishable pages'}
+                  {' · '}Expires: never · Turn off any time
+                </p>
+              </div>
+            ) : null}
             <div className="share-copy">
               <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
               <Button

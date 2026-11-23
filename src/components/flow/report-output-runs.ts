@@ -15,6 +15,25 @@ export type OutputRun = {
   datasetId?: string;
 };
 
+/**
+ * One short label for pickers. Joined brand lists like
+ * "Read or visited: A, Read or visited: B, …" become the first segment.
+ */
+export function shortOutputTitle(raw: string): string {
+  const cleaned = String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const comma = cleaned.indexOf(', ');
+  if (comma > 24 && cleaned.slice(0, comma).includes(':')) {
+    return cleaned.slice(0, comma).trim();
+  }
+  if (cleaned.length > 90) {
+    return `${cleaned.slice(0, 87).trim()}…`;
+  }
+  return cleaned;
+}
+
 /** "aware_A × region — Unweighted, n = 30" → title, weighting note, and base. */
 export function splitRunTitle(raw: string): {
   title: string;
@@ -81,7 +100,7 @@ export function outputRuns(rows: unknown[]): OutputRun[] {
     const weightedBase = typeof record.weighted_base === 'number' ? record.weighted_base : null;
     runs.push({
       id,
-      title: split.title,
+      title: shortOutputTitle(split.title),
       op,
       created_at: String(record.created_at || ''),
       status: String(record.status || 'complete'),
