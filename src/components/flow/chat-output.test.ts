@@ -507,7 +507,7 @@ describe('chat output panel', () => {
 
   it('leads with Mann-Whitney and correlation when the reply did not finish', () => {
     const mw =
-      'Trust for Men and Women: U = 12.000, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
+      'Trust for Men and Women: U = 12, p = 0.121, r = -0.033, consistent with chance. Medians: Men 3, Women 3.';
     const corr =
       'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance. n = 3000.';
     const lead = resultLead(EMPTY_TURN_ANSWER, [
@@ -515,7 +515,7 @@ describe('chat output panel', () => {
         procedure: 'mann_whitney_u',
         summary: {
           line: mw,
-          statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+          statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
         },
       },
       {
@@ -526,7 +526,7 @@ describe('chat output panel', () => {
         },
       },
     ]);
-    expect(lead).toContain('U = 12.000');
+    expect(lead).toContain('U = 12');
     expect(lead).toContain('Pearson r = 0.012');
     expect(lead.toLowerCase()).not.toContain('did not finish');
     expect(
@@ -535,13 +535,53 @@ describe('chat output panel', () => {
           {
             procedure: 'mann_whitney_u',
             summary: {
-              statistic: 'U = 12.000, p = 0.121, r = -0.033, consistent with chance.',
+              statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
             },
           },
         ],
         EMPTY_TURN_ANSWER
       )
     ).toContain('r = -0.033');
+  });
+
+  it('badges Mann-Whitney even when the summary carries table rows', () => {
+    const results = [
+      {
+        procedure: 'mann_whitney_u',
+        summary: {
+          line: 'Trust for Male and Female: U = 12, p = 0.121, r = -0.033, consistent with chance.',
+          statistic: 'U = 12, p = 0.121, r = -0.033, consistent with chance.',
+          table: [
+            {
+              title: 'Groups',
+              columns: ['Group', 'n', 'Median'],
+              rows: [
+                ['Male', '8', '3'],
+                ['Female', '8', '3'],
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    expect(outputKind(results)).toBe('Mann-Whitney');
+    expect(outputKind(results)).not.toBe('Frequencies');
+    expect(outputStat(results, '')).toContain('r = -0.033');
+  });
+
+  it('badges Correlation and keeps r on the key stat', () => {
+    const results = [
+      {
+        procedure: 'correlation',
+        summary: {
+          line: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
+          statistic: 'Trust and Income: Pearson r = 0.012, p = 0.494, consistent with chance.',
+          table: [{ title: 'Correlations', columns: ['A', 'B'], rows: [['Trust', '0.012']] }],
+        },
+      },
+    ];
+    expect(outputKind(results)).toBe('Correlation');
+    expect(outputStat(results, '')).toContain('r = 0.012');
   });
 
   it('reads a structured report answer when the summary line is missing', () => {
@@ -551,13 +591,12 @@ describe('chat output panel', () => {
         result: {
           report: {
             answer_from_result: true,
-            answer:
-              'Score for Men and Women: U = 18.000, p = 0.040, r = 0.76, unlikely to be chance.',
+            answer: 'Score for Men and Women: U = 18, p = 0.040, r = 0.76, unlikely to be chance.',
           },
         },
       },
     ]);
-    expect(lead).toContain('U = 18.000');
+    expect(lead).toContain('U = 18');
     expect(lead).toContain('r = 0.76');
   });
 

@@ -18,12 +18,17 @@ type ToolResult = {
 
 const KIND_LABELS: Record<string, string> = {
   anova_oneway: 'ANOVA',
+  anova_twoway: 'ANOVA',
   banner_table: 'Crosstab',
   chi_square: 'Chi-square',
   descriptives: 'Descriptives',
   frequencies: 'Frequencies',
   ttest_independent: 't-test',
   ttest_paired: 'Paired t-test',
+  mann_whitney_u: 'Mann-Whitney',
+  kruskal_wallis: 'Kruskal-Wallis',
+  wilcoxon_signed_rank: 'Wilcoxon',
+  friedman: 'Friedman',
   linear_regression: 'Regression',
   logistic_regression: 'Logistic regression',
   multinomial_logit: 'Multinomial logit',
@@ -94,7 +99,10 @@ function hasFrequencyTable(value: unknown): boolean {
 }
 
 function isFrequencyResult(item: ToolResult): boolean {
-  if (procedureOf(item) === 'frequencies') return true;
+  const procedure = procedureOf(item);
+  if (procedure === 'frequencies') return true;
+  // Rank tests and other labelled procedures also carry table.rows — not Frequencies.
+  if (procedure && KIND_LABELS[procedure]) return false;
   const summary = summaryOf(item);
   const text = `${summary.title || ''} ${summary.line || ''}`;
   if (/\bfrequency table\b/i.test(text)) return true;
@@ -108,6 +116,12 @@ export function outputKind(results: ToolResult[] | undefined): string {
   const preferred = preferredProcedure(items);
   const labeled = [preferred, ...names].find(name => name && KIND_LABELS[name]);
   if (labeled) return KIND_LABELS[labeled];
+  // Known analysis names beat the frequency-table heuristic (Mann-Whitney carries rows).
+  for (const name of [preferred, ...names]) {
+    if (!name || name === 'frequencies' || KIND_LABELS[name]) continue;
+    const shown = analysisDisplayName(name);
+    if (shown && shown !== name) return shown;
+  }
   if (items.some(isFrequencyResult)) return 'Frequencies';
   const procedure = procedureOf(items[0] || {});
   if (!procedure) return 'Output';
