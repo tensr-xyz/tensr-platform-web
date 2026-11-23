@@ -1,10 +1,18 @@
 import {
   initialReportView,
   readStoredReportView,
+  REPORT_OVERVIEW_BOOT,
   reportViewFromPaneParam,
   reportViewStorageKey,
   writeStoredReportView,
 } from '@/components/flow/report-view';
+
+describe('REPORT_OVERVIEW_BOOT', () => {
+  it('paints Overview chrome before findings resolve', () => {
+    expect(REPORT_OVERVIEW_BOOT.phase).toBe('ready');
+    expect(REPORT_OVERVIEW_BOOT.findingsPhase).toBe('loading');
+  });
+});
 
 describe('reportViewFromPaneParam', () => {
   it('maps legacy report to overview and keeps slides/outputs', () => {

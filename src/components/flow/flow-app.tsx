@@ -100,6 +100,7 @@ import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import {
   initialReportView,
+  REPORT_OVERVIEW_BOOT,
   writeStoredReportView,
   type ReportView,
 } from '@/components/flow/report-view';
@@ -5284,7 +5285,8 @@ function ReportScreen({
   const queryClient = useQueryClient();
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  // Overview chrome (6a) paints immediately; Key findings keep their own skeleton.
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>(REPORT_OVERVIEW_BOOT.phase);
   const [specs, setSpecs] = useState<
     {
       id: string;
@@ -5302,7 +5304,9 @@ function ReportScreen({
     Record<string, { id: string; filename: string }>
   >({});
   const [findings, setFindings] = useState<ReportFinding[]>([]);
-  const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>(
+    REPORT_OVERVIEW_BOOT.findingsPhase
+  );
   const [findingsError, setFindingsError] = useState('');
   const [segmentId, setSegmentId] = useState<string | null>(null);
   const [rowCut, setRowCut] = useState<RowCut[] | null>(null);
@@ -5391,8 +5395,8 @@ function ReportScreen({
       return;
     }
     let live = true;
-    // Stale-while-revalidate: keep the last report visible when cache already has overview.
-    if (!overviewQuery.data) setPhase('loading');
+    // Keep Deliverables + toolbar visible while overview loads; only findings skeleton.
+    if (!overviewQuery.data) setFindingsPhase('loading');
     setError('');
     const fileIds = reportFileKey ? reportFileKey.split(',') : [];
     // The file list arrives after the first paint. Waiting for it keeps the
@@ -5420,7 +5424,7 @@ function ReportScreen({
           }[];
           findings?: { id: string; title: string; number?: number | null }[];
           runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
-        }>(overviewUrl);
+        }>(overviewUrl, { signal: AbortSignal.timeout(30_000) });
         queryClient.setQueryData(projectQueryKeys.overview(projectId, reportFileKey), first);
         return first;
       });
@@ -6072,26 +6076,6 @@ function ReportScreen({
     );
   }
 
-  if (phase === 'loading') {
-    return (
-      <section className="report-page" aria-busy="true" aria-label="Report">
-        <div className="report-toolbar">
-          <ReportPaneSwitch pane={pane} onChange={setView} />
-        </div>
-        <div className="report-loading">
-          <Skeleton className="h-6 w-72" />
-          <Skeleton className="h-10 w-96" />
-          <div className="report-loading-cards">
-            <Skeleton className="h-40" />
-            <Skeleton className="h-40" />
-            <Skeleton className="h-40" />
-          </div>
-          <Skeleton className="h-24" />
-        </div>
-      </section>
-    );
-  }
-
   if (phase === 'error') {
     return (
       <section className="report-page">
@@ -6104,7 +6088,8 @@ function ReportScreen({
           type="button"
           onClick={() => {
             setError('');
-            setPhase('loading');
+            setFindingsPhase('loading');
+            setPhase('ready');
             setRefreshKey(key => key + 1);
           }}
         >
