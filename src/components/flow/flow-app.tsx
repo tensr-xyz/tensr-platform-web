@@ -98,7 +98,10 @@ import {
   showDatasetVersionUndoToast,
 } from '@/lib/dataset-version-undo';
 import { previewPageUrl } from '@/lib/dataset-open';
-import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
+import {
+  codingDerivedDatasetIdFromToolResults,
+  toolResultsSavedWorkingVersion,
+} from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -2912,6 +2915,43 @@ function ChatScreen({
     onAsked,
     onReportUpdated,
     onFinished: result => {
+      // Coding saves a themes version; put it in use so Tables/Details can see it.
+      const codedId = codingDerivedDatasetIdFromToolResults(result.tool_results);
+      if (codedId && project?.id) {
+        const files = datasets.map(row => ({
+          id: datasetRowId(row),
+          name: datasetFileLabel(row),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          lineageLabel: row.lineage_label,
+          producingOperation: row.producing_operation,
+          parentId: row.parent_dataset_id,
+          originId: row.origin_dataset_id,
+        }));
+        const withNext = [
+          ...files,
+          {
+            id: codedId,
+            name: codedId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lineageLabel: 'coded themes',
+            producingOperation: 'code_open_text',
+          },
+        ];
+        const adopt = shouldAdoptCodingVersion(
+          project.active_dataset_id || datasetId,
+          codedId,
+          withNext
+        );
+        if (adopt) {
+          void flowJson(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ active_dataset_id: codedId }),
+          }).then(() => onChanged?.());
+          return;
+        }
+      }
       // A rake / edit / stack saves a working version. Refresh so Sources lists it.
       if (toolResultsSavedWorkingVersion(result.tool_results)) onChanged?.();
     },

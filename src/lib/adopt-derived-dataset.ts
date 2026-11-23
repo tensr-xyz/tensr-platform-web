@@ -53,6 +53,77 @@ export function toolResultsSavedWorkingVersion(
   return false;
 }
 
+function entryLooksLikeCoding(
+  entry: {
+    name?: string;
+    procedure?: string;
+    producing_operation?: string;
+    args?: Record<string, unknown> | null;
+    result?: Record<string, unknown> | null;
+  } & Record<string, unknown>
+): boolean {
+  const tokens = [
+    entry.name,
+    entry.procedure,
+    entry.producing_operation,
+    entry.args && typeof entry.args === 'object' ? entry.args.analysis_type : '',
+    entry.args && typeof entry.args === 'object' ? entry.args.operation : '',
+    entry.result && typeof entry.result === 'object' ? entry.result.test : '',
+    entry.result && typeof entry.result === 'object' ? entry.result.analysis_type : '',
+    entry.result && typeof entry.result === 'object' ? entry.result.method : '',
+  ]
+    .map(value => String(value || '').toLowerCase())
+    .join(' ');
+  return (
+    tokens.includes('code_open') ||
+    tokens.includes('open_end') ||
+    tokens.includes('keyword_lexicon') ||
+    tokens.includes('coded themes') ||
+    Boolean(
+      entry.result &&
+      typeof entry.result === 'object' &&
+      (entry.result.out_column || entry.result.saved_label || entry.result.code_frequency)
+    )
+  );
+}
+
+/** Coded themes file from this turn — put it in use so Tables can find the themes variable. */
+export function codingDerivedDatasetIdFromToolResults(
+  toolResults:
+    | Array<{
+        name?: string;
+        procedure?: string;
+        producing_operation?: string;
+        args?: Record<string, unknown> | null;
+        result?: Record<string, unknown> | null;
+        derived_dataset_id?: string;
+        saved_dataset_id?: string;
+        dataset_id?: string;
+      }>
+    | undefined
+): string | null {
+  let latest: string | null = null;
+  for (const entry of toolResults ?? []) {
+    const record = entry as typeof entry & Record<string, unknown>;
+    if (!entryLooksLikeCoding(record)) continue;
+    const result = entry.result && typeof entry.result === 'object' ? entry.result : null;
+    const nested =
+      result?.derived && typeof result.derived === 'object'
+        ? (result.derived as Record<string, unknown>)
+        : null;
+    const id = String(
+      result?.derived_dataset_id ||
+        result?.saved_dataset_id ||
+        nested?.dataset_id ||
+        entry.derived_dataset_id ||
+        entry.saved_dataset_id ||
+        ''
+    ).trim();
+    if (id) latest = id;
+  }
+  return latest;
+}
+
 export function derivedDatasetFromToolResults(
   toolResults: Array<{ name?: string; result?: Record<string, unknown> | null }> | undefined
 ): DerivedDatasetPayload | null {
