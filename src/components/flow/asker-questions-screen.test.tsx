@@ -22,6 +22,8 @@ const turns: AskerTurn[] = [
     wave: 'Wave 2',
     source: 'audience_w2.sav',
     test: 'Paired test between titles',
+    table_note: 'Title read × Institutional investors, US',
+    run_id: 'run-reach-1',
     created_at: '2026-11-21T10:42:00Z',
   },
   {
@@ -82,6 +84,10 @@ describe('AskerQuestionsScreen', () => {
     expect(screen.getByText(/Projection weight/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mark as checked' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Flag a problem' })).toBeTruthy();
+    const openTable = screen.getByRole('link', { name: 'Open as table' });
+    expect(openTable.getAttribute('href')).toBe(
+      '/flow/p/study-1/report?pane=outputs&run=run-reach-1'
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark as checked' }));
     await waitFor(() =>

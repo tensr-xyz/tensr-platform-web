@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { analysisReportHref } from '@/components/flow/chat-output';
 import { flowJson } from '@/lib/flow-api';
 
 export type AskerTurn = {
@@ -19,6 +21,7 @@ export type AskerTurn = {
   source?: string;
   test?: string;
   table_note?: string;
+  run_id?: string;
   owner_note?: string;
   created_at?: string;
 };
@@ -273,6 +276,14 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
               >
                 Flag a problem
               </Button>
+              {open.run_id && askerBucket(open) !== 'not_in_data' ? (
+                <Link
+                  className="flow-btn"
+                  href={analysisReportHref(`/flow/p/${projectId}`, open.run_id)}
+                >
+                  Open as table
+                </Link>
+              ) : null}
               <span className="flow-muted">They see the result next to their answer</span>
             </div>
             {error ? <p className="flow-error">{error}</p> : null}

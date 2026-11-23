@@ -1805,12 +1805,22 @@ export function AgentThreadColumn({
                 </>
               ) : (
                 <>
-                  <Link
-                    className="flow-btn primary"
-                    href={analysisReportHref(projectHref, thread.runIds[0])}
-                  >
-                    Open
-                  </Link>
+                  {asker ? (
+                    <Button
+                      className="flow-btn primary"
+                      type="button"
+                      onClick={() => thread.setPanelOpen(true)}
+                    >
+                      Open as table
+                    </Button>
+                  ) : (
+                    <Link
+                      className="flow-btn primary"
+                      href={analysisReportHref(projectHref, thread.runIds[0])}
+                    >
+                      Open
+                    </Link>
+                  )}
                   {asker ? null : (
                     <>
                       <Button
