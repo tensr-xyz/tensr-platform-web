@@ -73,6 +73,7 @@ import {
   codedStub,
   lettersFor,
   formatGroupedNumber,
+  mediaCellLines,
   mediaCellText,
   selectionFromCell,
   themeRead,
@@ -351,6 +352,59 @@ function cellFigures(
   return parts.length ? parts.join(' · ') : '—';
 }
 
+/** Paper 5d: one statistic group per line so multi-stat cells do not collide. */
+function StackedCellFigures({
+  cell,
+  figures,
+  digits,
+  weighted,
+  letter,
+}: {
+  cell: BannerCell | undefined;
+  figures: CellFigure[];
+  digits: number;
+  weighted: boolean;
+  letter?: string;
+}) {
+  const wantsPercent = figures.includes('percent');
+  const hasCount = figures.includes('count');
+  const extras = figures.filter(figure => figure !== 'percent');
+  if (
+    !wantsPercent ||
+    (!cell?.projected_thousands && cell?.index == null && cell?.unweighted_n == null)
+  ) {
+    const text = cellFigures(cell, figures, digits, weighted);
+    return (
+      <>
+        {text}
+        {letter ? <span className="grid-letter"> {letter}</span> : null}
+      </>
+    );
+  }
+  const lines = mediaCellLines(cell, digits, {
+    includeProjected: !hasCount,
+    includeUnweighted: !hasCount,
+  });
+  const extraText = extras
+    .map(figure => cellFigure(cell, figure, digits, weighted, false))
+    .filter(part => part && part !== '—');
+  return (
+    <span className="flow-cell-stack">
+      <span className="flow-cell-stack-primary">
+        {lines.percent}
+        {letter ? <span className="grid-letter"> {letter}</span> : null}
+      </span>
+      {lines.detail ? <span className="flow-cell-stack-muted">{lines.detail}</span> : null}
+      {lines.base ? <span className="flow-cell-stack-muted">{lines.base}</span> : null}
+      {extraText.map(text => (
+        <span key={text} className="flow-cell-stack-muted">
+          {text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {
   const groups: { label: string; span: number }[] = [];
   for (const column of columns) {
@@ -527,6 +581,9 @@ export function BannerGrid({
                 <tr key={row.id}>
                   <th title={row.label}>
                     {row.label}
+                    {row.letter_slot && lettersShown ? (
+                      <span className="grid-slot"> {row.letter_slot}</span>
+                    ) : null}
                     {showQuotes && quotes != null ? (
                       <span className="flow-muted"> {quotes}</span>
                     ) : null}
@@ -537,7 +594,12 @@ export function BannerGrid({
                     if (row.kind === 'not_coded') {
                       return (
                         <td key={column.id} className="flow-muted">
-                          {cellFigures(cell, shownFigures, digits, weighted)}
+                          <StackedCellFigures
+                            cell={cell}
+                            figures={shownFigures}
+                            digits={digits}
+                            weighted={weighted}
+                          />
                         </td>
                       );
                     }
@@ -574,9 +636,14 @@ export function BannerGrid({
                               type="button"
                               data-active={picked === cellKey}
                             >
-                              {cellFigures(cell, shownForRow, digits, weighted)}
+                              <StackedCellFigures
+                                cell={cell}
+                                figures={shownForRow}
+                                digits={digits}
+                                weighted={weighted}
+                                letter={letter || undefined}
+                              />
                               {markLowBase && cell?.low_base ? ' *' : ''}
-                              {letter ? <span className="grid-letter"> {letter}</span> : null}
                               {arrowsShown && !letter
                                 ? (() => {
                                     const arrow = arrowForCell(book, row.id, column.id);

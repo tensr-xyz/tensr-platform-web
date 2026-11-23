@@ -5855,6 +5855,34 @@ button.chat-result-top {
 
 .banner-grid .flow-cell {
   font-variant-numeric: tabular-nums;
+  height: auto;
+  min-height: 28px;
+  align-items: flex-end;
+  white-space: normal;
+}
+
+/* Paper 5d · stacked cell stats (one group per line). */
+.flow-cell-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.flow-cell-stack-primary {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  line-height: 16px;
+}
+
+.flow-cell-stack-muted {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: var(--weight-regular);
 }
 
 /* Paper 9f · number trace popover (portals outside .flow; tokens inherit from body:has(.flow)). */

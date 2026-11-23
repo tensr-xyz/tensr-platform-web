@@ -36,6 +36,8 @@ export type BannerRow = {
   column?: string;
   source_text_column?: string | null;
   kind?: string;
+  /** Stub letter when paired item tests run inside a banner column (TEN-190). */
+  letter_slot?: string;
   cells?: BannerCell[];
 };
 
@@ -154,6 +156,37 @@ export function mediaCellText(
     }
   }
   return shown;
+}
+
+/** Paper 5d stacked cell lines: percent, projected+index, unweighted n. */
+export function mediaCellLines(
+  cell: BannerCell | undefined,
+  digits = 1,
+  options?: { includeProjected?: boolean; includeUnweighted?: boolean }
+): { percent: string; detail: string; base: string } {
+  if (!cell) return { percent: '—', detail: '', base: '' };
+  const percent =
+    cell.percent != null && Number.isFinite(cell.percent)
+      ? `${cell.percent.toFixed(digits)}%`
+      : '—';
+  const parts: string[] = [];
+  const includeProjected = options?.includeProjected !== false;
+  const projected = cell.projected_thousands;
+  if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
+    const rounded = formatGroupedNumber(projected, projected >= 100 ? 0 : 1).replace(/\.0$/, '');
+    parts.push(`${rounded}k`);
+  }
+  const index = cell.index;
+  if (typeof index === 'number' && Number.isFinite(index)) {
+    parts.push(Math.round(index).toLocaleString('en-GB'));
+  }
+  const includeUnweighted = options?.includeUnweighted !== false;
+  const n = cell.unweighted_n;
+  const base =
+    includeUnweighted && typeof n === 'number' && Number.isFinite(n)
+      ? `n ${formatGroupedNumber(n)}`
+      : '';
+  return { percent, detail: parts.join(' · '), base };
 }
 
 export function selectionFromCell(

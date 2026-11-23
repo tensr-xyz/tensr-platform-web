@@ -6,6 +6,7 @@ import {
   chartSignificanceNote,
   codedStub,
   efficiencyPercent,
+  mediaCellLines,
   mediaCellText,
   selectionFromCell,
 } from './flow-survey';
@@ -146,6 +147,22 @@ describe('flow survey grid', () => {
         letters: [{ stub_row_id: 'a:1', banner_id: 'total', letter: 'B' }],
       })
     ).toContain('Paired McNemar test at 95%');
+  });
+
+  it('stacks reach cell lines like Paper 5d (percent, projected+index, n)', () => {
+    expect(
+      mediaCellLines({
+        banner_id: 'total',
+        percent: 42.0,
+        projected_thousands: 1014.2,
+        index: 105,
+        unweighted_n: 212,
+      })
+    ).toEqual({
+      percent: '42.0%',
+      detail: '1,014k · 105',
+      base: 'n 212',
+    });
   });
 
   it('charts the same banner cells as grouped bars, and remaps to line or pie', () => {
