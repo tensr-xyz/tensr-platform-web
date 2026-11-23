@@ -18,6 +18,7 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
@@ -3922,7 +3923,10 @@ export function TablesBuilder({
 
 export async function downloadExport(path: string, filename: string, init?: RequestInit) {
   const response = await flowFetch(path, init);
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(formatApiErrorMessage(new ApiRequestError(response.status, body)));
+  }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
