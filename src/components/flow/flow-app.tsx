@@ -3328,7 +3328,7 @@ function ChatScreen({
                   ) : null}
                 </div>
                 <div className="output-body">
-                  {structuredTables.length || resultCharts.length ? (
+                  {structuredTables.length || resultCharts.length || resultView.duplication ? (
                     <AnalysisResult
                       lead={lead}
                       tables={structuredTables}
@@ -3341,6 +3341,8 @@ function ChatScreen({
                       runId={runIds[0]}
                       datasetId={datasetId || undefined}
                       projectId={chatProjectId || undefined}
+                      duplication={resultView.duplication}
+                      audience={resultView.audience}
                     />
                   ) : (
                     <>

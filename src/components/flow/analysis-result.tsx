@@ -15,6 +15,7 @@ import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
 import { exportSvgElementAsPng } from '@/utils/chart-export';
 import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
+import { DuplicationPanel, type DuplicationPanelData } from '@/components/flow/duplication-panel';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -40,6 +41,8 @@ export function AnalysisResult({
   projectId,
   templateName,
   templateBase64,
+  duplication,
+  audience,
 }: {
   lead?: string;
   tables: RunTable[];
@@ -54,6 +57,8 @@ export function AnalysisResult({
   projectId?: string;
   templateName?: string;
   templateBase64?: string;
+  duplication?: DuplicationPanelData;
+  audience?: string;
 }) {
   const [places, setPlaces] = useState(() =>
     typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
@@ -161,12 +166,22 @@ export function AnalysisResult({
           .filter(Boolean)
           .join('\n')
       : lead;
-  const foot = [footnote, checkNote].filter(Boolean).join(' · ');
-  if (!leadText && !tables.length && !charts.length && !foot) return null;
+  const foot = duplication ? '' : [footnote, checkNote].filter(Boolean).join(' · ');
+  if (!leadText && !tables.length && !charts.length && !foot && !duplication) return null;
   const explainTitle =
+    (duplication ? 'Duplication' : '') ||
     tables.find(table => table.title)?.title ||
     (charts[0] && 'title' in charts[0] ? String(charts[0].title || '') : '') ||
     'This output';
+  const shownTables = duplication ? [] : tables;
+  const splitLead = leadText
+    ? leadText
+        .split(/\n\n+/)
+        .map(part => part.trim())
+        .filter(Boolean)
+    : [];
+  const headline = duplication && splitLead.length > 1 ? splitLead[0] : '';
+  const bodyLead = duplication && splitLead.length > 1 ? splitLead.slice(1).join('\n\n') : leadText;
   return (
     <div className="analysis-result" ref={card}>
       <ExplainThisPanel
@@ -177,7 +192,7 @@ export function AnalysisResult({
         projectId={projectId}
         datasetId={datasetId}
       />
-      {tables.length || charts.length ? (
+      {shownTables.length || charts.length ? (
         <div className="analysis-export">
           <Button type="button" className="flow-btn" onClick={() => setExportOpen(open => !open)}>
             {exportOpen ? 'Close export' : 'Export'}
@@ -254,7 +269,35 @@ export function AnalysisResult({
           ) : null}
         </div>
       ) : null}
-      {leadText ? (
+      {duplication ? (
+        <div className="duplication-output">
+          <div className="duplication-meta">
+            <span className="duplication-badge">Duplication</span>
+            <span className="duplication-meta-line">
+              {[
+                audience?.trim() || 'All respondents',
+                'weighted to people',
+                checkLabel || undefined,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </div>
+          {headline ? <p className="duplication-headline">{headline}</p> : null}
+          {bodyLead ? (
+            <div className="analysis-lead duplication-lead">
+              <FlowMarkdown>{bodyLead}</FlowMarkdown>
+            </div>
+          ) : null}
+          <DuplicationPanel
+            panel={duplication}
+            rCheck={shownCheck}
+            rStatement={shownStatement}
+            audience={audience}
+          />
+        </div>
+      ) : null}
+      {!duplication && leadText ? (
         <div className="analysis-lead">
           <FlowMarkdown>{leadText}</FlowMarkdown>
         </div>
@@ -269,7 +312,7 @@ export function AnalysisResult({
           ))}
         </div>
       ) : null}
-      {tables.map((table, index) => {
+      {shownTables.map((table, index) => {
         const columns = Array.isArray(table.columns) ? table.columns : [];
         const rows = Array.isArray(table.rows) ? table.rows : [];
         if (!columns.length || !rows.length) return null;
@@ -321,7 +364,7 @@ export function AnalysisResult({
         );
       })}
       {foot ? <p className="flow-muted analysis-footnote">{foot}</p> : null}
-      {checks && checks.length ? (
+      {!duplication && checks && checks.length ? (
         <div className="analysis-fold">
           <Button type="button" className="flow-btn" onClick={() => setChecksOpen(open => !open)}>
             {checksOpen ? 'Hide checks' : `Checks (${checks.length})`}

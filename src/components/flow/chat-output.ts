@@ -482,7 +482,23 @@ export function resultLead(
     /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/.test(text) ||
     /\bWeight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\b/.test(text);
   const preferFinding = Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose));
+  // Duplication leads are stamped by the engine (Paper 6n). Prefer them over model prose
+  // so the card does not repeat net reach in two formats.
+  const duplicationFinding =
+    Boolean(finding) &&
+    Array.isArray(results) &&
+    results.some(item => {
+      const nested = item?.result && typeof item.result === 'object' ? item.result : item;
+      const record =
+        nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : {};
+      return (
+        record.kind === 'brand_duplication' ||
+        record.analysis_type === 'brand_duplication' ||
+        record.procedure === 'brand_duplication'
+      );
+    });
   const text =
+    (duplicationFinding ? finding : '') ||
     (preferFinding ? finding : '') ||
     (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||

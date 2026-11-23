@@ -1759,19 +1759,52 @@ describe('answer tables', () => {
       {
         analysis_type: 'brand_duplication',
         result: {
+          kind: 'brand_duplication',
           title: 'Duplication',
-          columns: ['Item', 'Reed', 'Exclusive (000s)'],
+          columns: ['Item', 'Reed', 'Reach', 'Exclusive'],
           rows: [
-            ['Quill', '40.0%', '3.1'],
-            ['Net reach', '', '12.4'],
+            ['Quill', '—', '40.0%\n12.4k', '25.0%\n3.1k'],
+            ['Reed', '31.0%\n3.8k', '—', '20.0%\n2.4k'],
           ],
           audience_label: 'Regular readers',
+          panel: {
+            labels: ['Quill', 'Reed'],
+            rows: [
+              {
+                label: 'Quill',
+                cells: [{ diagonal: true }, { percent: 31, thousands: 3.8 }],
+                reach: { percent: 40, thousands: 12.4 },
+                exclusive: { percent: 25, thousands: 3.1 },
+              },
+            ],
+            subset_nets: [
+              {
+                indexes: [0, 1],
+                labels: ['Quill', 'Reed'],
+                net_percent: 55,
+                net_thousands: 15.5,
+                sum_reach_thousands: 19.3,
+                overlap_thousands: 3.8,
+              },
+            ],
+            default_indexes: [0, 1],
+            checks: [
+              { ok: true, label: 'Net reach ≤ sum of reaches' },
+              { ok: true, label: 'Exclusive + duplicated = reach, every title' },
+            ],
+            net_percent: 55,
+            net_thousands: 15.5,
+            base_thousands: 28,
+            unweighted_n: 80,
+          },
         },
       },
     ]);
     const table = view.tables.find(item => item.title === 'Duplication');
     expect(table?.rows.some(row => row.includes('Quill'))).toBe(true);
-    expect(table?.rows.some(row => row.includes('12.4'))).toBe(true);
+    expect(table?.columns).toEqual(expect.arrayContaining(['Reach', 'Exclusive']));
+    expect(view.duplication?.labels).toEqual(['Quill', 'Reed']);
+    expect(view.duplication?.checks[0]?.ok).toBe(true);
     expect(view.audience).toBe('Regular readers');
     expect(resultFootnote(view, '', '')).toContain('Audience: Regular readers');
     const stated = resultViewFromToolResults([

@@ -1518,7 +1518,9 @@ export function AgentThreadColumn({
                 {thread.answer.replace(/^not in this data\.?\s*/i, '')}
               </p>
             </div>
-          ) : thread.structuredTables.length || thread.resultCharts.length ? (
+          ) : thread.structuredTables.length ||
+            thread.resultCharts.length ||
+            thread.resultView.duplication ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
@@ -1531,6 +1533,8 @@ export function AgentThreadColumn({
               runId={thread.runIds[0]}
               datasetId={thread.datasetId || undefined}
               projectId={thread.projectId || undefined}
+              duplication={thread.resultView.duplication}
+              audience={thread.resultView.audience}
             />
           ) : (
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>

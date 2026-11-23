@@ -1,6 +1,7 @@
 import type { RunTable } from '@/components/flow/run-document';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
+import type { DuplicationPanelData } from '@/components/flow/duplication-panel';
 
 export type ResultView = {
   tables: RunTable[];
@@ -23,6 +24,8 @@ export type ResultView = {
   /** study_brief when the table used the weight named in the brief. */
   weightSource?: string;
   universeThousands?: number;
+  /** Paper 6n structured duplication card when the run is brand_duplication. */
+  duplication?: DuplicationPanelData;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -1602,6 +1605,21 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     base: '',
     letterNote: '',
     weightSource: '',
+    duplication: undefined,
+  };
+
+  const takeDuplicationPanel = (record: Record<string, unknown>) => {
+    if (view.duplication) return;
+    const kind = cell(record.kind);
+    const procedure = procedureOfRecord(record);
+    const panel = record.panel;
+    if (
+      (kind === 'brand_duplication' || procedure === 'brand_duplication') &&
+      panel &&
+      typeof panel === 'object'
+    ) {
+      view.duplication = panel as DuplicationPanelData;
+    }
   };
   const seen = new Set<string>();
   let usedSummary = false;
@@ -1798,6 +1816,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
         ])
       );
     }
+    takeDuplicationPanel(record);
     const mark = record.r_syntax_verification;
     if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };
