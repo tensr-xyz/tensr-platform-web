@@ -73,6 +73,7 @@ import {
   codedStub,
   lettersFor,
   formatGroupedNumber,
+  extraCellStatLines,
   mediaCellLines,
   mediaCellText,
   selectionFromCell,
@@ -88,6 +89,7 @@ import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-v
 import { isTableSourceChanged } from '@/components/flow/stale-table';
 import type { SavedAudience } from '@/components/flow/audience-panel';
 import { BannerAddPicker, bannerChipClass } from '@/components/flow/table-banner-picker';
+import { CellStatsPopover, type SummaryColumnKind } from '@/components/flow/cell-stats-popover';
 import {
   bannerRefLabel,
   bannerRefsFromSpec,
@@ -200,15 +202,40 @@ export function displayedCount(
   return formatGroupedNumber(Number(raw));
 }
 
-/** Weighted tables also ask for projected thousands, index, and the unweighted base. */
-export function tableStatisticsForWeight(selected: string[], weighted: boolean): string[] {
+/**
+ * Weighted tables also ask for index and the unweighted base.
+ * Projected 000s only when the weight projects to a population (Paper 5d).
+ */
+export function tableStatisticsForWeight(
+  selected: string[],
+  weighted: boolean,
+  isProjection = false
+): string[] {
   const stats = selected.filter(Boolean);
   if (!weighted) return stats.length ? stats : ['column_proportion'];
   const out = [...stats];
-  for (const kind of ['projected_thousands', 'index', 'unweighted_base'] as const) {
+  const extras = isProjection
+    ? (['projected_thousands', 'index', 'unweighted_base'] as const)
+    : (['index', 'unweighted_base'] as const);
+  for (const kind of extras) {
     if (!out.includes(kind)) out.push(kind);
   }
+  // Drop Projected 000s when the active weight is a design weight.
+  if (!isProjection) {
+    return out.filter(kind => kind !== 'projected_thousands');
+  }
   return out;
+}
+
+/** Book weight block: projection weights carry is_projection / projection_unit. */
+export function bookIsProjection(
+  book: { weight?: { is_projection?: boolean; projection_unit?: string | null } | null } | null
+): boolean {
+  const weight = book?.weight;
+  if (!weight || typeof weight !== 'object') return false;
+  if (weight.is_projection === true) return true;
+  if (weight.is_projection === false) return false;
+  return Boolean(weight.projection_unit);
 }
 
 /** The footer says Saved only once the open table matches what was stored. */
@@ -378,31 +405,48 @@ function StackedCellFigures({
   digits,
   weighted,
   letter,
+  isProjection = false,
+  statistics = [],
 }: {
   cell: BannerCell | undefined;
   figures: CellFigure[];
   digits: number;
   weighted: boolean;
   letter?: string;
+  isProjection?: boolean;
+  statistics?: string[];
 }) {
   const wantsPercent = figures.includes('percent');
   const hasCount = figures.includes('count');
   const extras = figures.filter(figure => figure !== 'percent');
-  if (
-    !wantsPercent ||
-    (!cell?.projected_thousands && cell?.index == null && cell?.unweighted_n == null)
-  ) {
+  const inferential = extraCellStatLines(cell, statistics, digits);
+  const multi =
+    figures.length > 1 ||
+    Boolean(cell?.projected_thousands) ||
+    cell?.index != null ||
+    inferential.length > 0;
+  // Always stack when more than one figure is on (Row % used to overflow sideways).
+  if (!wantsPercent || !multi) {
     const text = cellFigures(cell, figures, digits, weighted);
     return (
-      <>
-        {text}
-        {letter ? <span className="grid-letter"> {letter}</span> : null}
-      </>
+      <span className="flow-cell-stack">
+        <span className="flow-cell-stack-primary">
+          {text}
+          {letter ? <span className="grid-letter"> {letter}</span> : null}
+        </span>
+        {inferential.map(text => (
+          <span key={text} className="flow-cell-stack-muted">
+            {text}
+          </span>
+        ))}
+      </span>
     );
   }
   const lines = mediaCellLines(cell, digits, {
-    includeProjected: !hasCount,
-    includeUnweighted: !hasCount,
+    includeProjected: isProjection && !hasCount && statistics.includes('projected_thousands'),
+    includeUnweighted:
+      !hasCount &&
+      (statistics.includes('unweighted_base') || statistics.includes('projected_thousands')),
   });
   const extraText = extras
     .map(figure => cellFigure(cell, figure, digits, weighted, false))
@@ -416,6 +460,11 @@ function StackedCellFigures({
       {lines.detail ? <span className="flow-cell-stack-muted">{lines.detail}</span> : null}
       {lines.base ? <span className="flow-cell-stack-muted">{lines.base}</span> : null}
       {extraText.map(text => (
+        <span key={text} className="flow-cell-stack-muted">
+          {text}
+        </span>
+      ))}
+      {inferential.map(text => (
         <span key={text} className="flow-cell-stack-muted">
           {text}
         </span>
@@ -477,6 +526,7 @@ export function BannerGrid({
   showNets = false,
   figure = 'percent',
   figures,
+  statistics = [],
   digits = 1,
   markLowBase = false,
   muted = false,
@@ -491,6 +541,8 @@ export function BannerGrid({
   showNets?: boolean;
   figure?: CellFigure;
   figures?: CellFigure[];
+  /** Full statistic kinds selected in the cell-stats popover. */
+  statistics?: string[];
   digits?: number;
   markLowBase?: boolean;
   muted?: boolean;
@@ -498,6 +550,13 @@ export function BannerGrid({
 }) {
   const shownFigures = figures?.length ? figures : [figure];
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
+  const isProjection = bookIsProjection(book);
+  const cellStatistics =
+    statistics.length > 0
+      ? statistics
+      : Array.isArray((book.spec as { statistics?: string[] } | undefined)?.statistics)
+        ? ((book.spec as { statistics?: string[] }).statistics as string[])
+        : [];
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
@@ -618,6 +677,8 @@ export function BannerGrid({
                             figures={shownFigures}
                             digits={digits}
                             weighted={weighted}
+                            isProjection={isProjection}
+                            statistics={cellStatistics}
                           />
                         </td>
                       );
@@ -660,6 +721,8 @@ export function BannerGrid({
                                 figures={shownForRow}
                                 digits={digits}
                                 weighted={weighted}
+                                isProjection={isProjection}
+                                statistics={cellStatistics}
                                 letter={letter || undefined}
                               />
                               {markLowBase && cell?.low_base ? ' *' : ''}
@@ -2066,6 +2129,10 @@ export function TablesBuilder({
   const [weight, setWeight] = useState('');
   const activeWeightName = useRef('');
   const [statistics, setStatistics] = useState<string[]>(['column_proportion']);
+  const [summaryColumns, setSummaryColumns] = useState<SummaryColumnKind[]>([]);
+  const [cellStatsOpen, setCellStatsOpen] = useState(false);
+  const [selectedSpecIds, setSelectedSpecIds] = useState<string[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [digits, setDigits] = useState(0);
   const [significance, setSignificance] = useState<TableSignificanceSettings>(() => {
     const saved = loadProjectSignificance(projectId);
@@ -2367,14 +2434,17 @@ export function TablesBuilder({
     const refs = bannerRefsFromSpec(spec);
     if (refs.length) setBanners(refs);
     setNest(Boolean(spec?.nest_banners));
-    const showKinds = ['count', 'column_proportion', 'row_proportion', 'total_proportion'] as const;
     const savedStats = Array.isArray(spec?.statistics)
-      ? spec.statistics.filter((kind): kind is (typeof showKinds)[number] =>
-          (showKinds as readonly string[]).includes(String(kind))
-        )
+      ? spec.statistics.map(String).filter(kind => kind && kind !== 'column_mean')
       : [];
     if (savedStats.length) setStatistics(savedStats);
     setMeanOn(Array.isArray(spec?.statistics) && spec.statistics.includes('column_mean'));
+    const savedSummaries = (
+      (spec as { summary_columns?: string[] } | undefined)?.summary_columns || []
+    )
+      .map(String)
+      .filter((kind): kind is SummaryColumnKind => kind === 'average' || kind === 'total');
+    setSummaryColumns(savedSummaries);
     const decimals = spec?.decimals;
     if (decimals && typeof decimals === 'object') {
       const first = Object.values(decimals).find(value => typeof value === 'number');
@@ -2455,6 +2525,121 @@ export function TablesBuilder({
     void runTable(true);
   }
 
+  /** Paper 5d: apply cell stats (and optional summaries) to this table or every saved table. */
+  function applyCellStats(next: {
+    statistics: string[];
+    summaryColumns: SummaryColumnKind[];
+    scope: 'this' | 'all';
+  }) {
+    setStatistics(next.statistics.filter(kind => kind !== 'column_mean'));
+    setMeanOn(next.statistics.includes('column_mean') || meanOn);
+    setSummaryColumns(next.summaryColumns);
+    if (next.scope === 'this') {
+      setDirty(true);
+      return;
+    }
+    const targets =
+      selectedSpecIds.length >= 2
+        ? selectedSpecIds
+        : activeSpecs.map(spec => String(spec.spec_id || spec.id || '')).filter(Boolean);
+    void batchPatchSelected({
+      statistics: tableStatisticsForWeight(
+        next.statistics,
+        Boolean(weight),
+        bookIsProjection(book)
+      ),
+      summary_columns: next.summaryColumns,
+      ...(targets.length ? { onlyIds: targets } : {}),
+    });
+  }
+
+  /** Re-save several tables with shared weight / filter / banner / cell stats. */
+  async function batchPatchSelected(patch: {
+    weight?: string;
+    filter_ref?: { filters: { column: string; op: string; value: string | string[] }[] } | null;
+    banner?: ReturnType<typeof bannerRequestItems>;
+    statistics?: string[];
+    summary_columns?: SummaryColumnKind[];
+    onlyIds?: string[];
+  }) {
+    if (!datasetId) return;
+    const ids = patch.onlyIds?.length ? patch.onlyIds : selectedSpecIds;
+    if (ids.length < 1) return;
+    setBatchBusy(true);
+    setError('');
+    try {
+      for (const id of ids) {
+        const listed = activeSpecs.find(spec => (spec.spec_id || spec.id) === id);
+        const fileId = String(listed?.dataset_id || datasetId);
+        const existing = await flowJson<Record<string, unknown>>(
+          `/datasets/${fileId}/tables/${encodeURIComponent(id)}`
+        ).catch(() => null);
+        const spec = (existing?.spec || {}) as {
+          stubs?: { column?: string; nets?: { label: string; values: string[] }[] }[];
+          banners?: unknown[];
+          statistics?: string[];
+          nest_banners?: boolean;
+          decimals?: Record<string, number>;
+          weight?: { column?: string } | string | null;
+          filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
+          summary_columns?: string[];
+        };
+        const stubColumn = String(spec.stubs?.[0]?.column || stub || '');
+        if (!stubColumn) continue;
+        const bodyWeight =
+          patch.weight !== undefined
+            ? patch.weight
+            : storedWeightColumn(spec.weight) || weight || 'none';
+        await flowJson(`/datasets/${fileId}/tables`, {
+          method: 'POST',
+          body: JSON.stringify({
+            stubs: spec.stubs?.length ? spec.stubs : stubsForRun(stubColumn, []),
+            banner:
+              patch.banner ||
+              bannerRequestItems(bannerRefsFromSpec({ banners: spec.banners as never })),
+            statistics:
+              patch.statistics ||
+              tableStatisticsForWeight(
+                shownStatistics(spec.statistics || statistics, meanOn),
+                Boolean(bodyWeight && bodyWeight !== 'none'),
+                bookIsProjection(existing)
+              ),
+            ...significanceRequestFields(significance),
+            nest_banners: Boolean(spec.nest_banners),
+            low_base_threshold: lowBase ? 30 : 0,
+            suppress_low_base: false,
+            decimals: spec.decimals || shownDecimals(statistics, digits, meanOn),
+            weight: bodyWeight || 'none',
+            ...(patch.summary_columns?.length || spec.summary_columns?.length
+              ? {
+                  summary_columns:
+                    patch.summary_columns ||
+                    (spec.summary_columns || []).filter(
+                      (kind): kind is SummaryColumnKind => kind === 'average' || kind === 'total'
+                    ),
+                }
+              : {}),
+            spec_id: id,
+            ...(patch.filter_ref !== undefined
+              ? patch.filter_ref?.filters?.length
+                ? { filter_ref: patch.filter_ref }
+                : {}
+              : spec.filter?.filters?.length
+                ? { filter_ref: { filters: spec.filter.filters } }
+                : {}),
+            save: true,
+          }),
+        });
+      }
+      setSelectedSpecIds([]);
+      setNote('Saved a new version of each selected table.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the selected tables');
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   const tableRequest = useRef(0);
   async function runTable(save: boolean) {
     const token = ++tableRequest.current;
@@ -2485,7 +2670,8 @@ export function TablesBuilder({
     setError('');
     const selectedStats = tableStatisticsForWeight(
       shownStatistics(statistics, meanOn),
-      Boolean(weight)
+      Boolean(weight),
+      bookIsProjection(book)
     );
     const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
@@ -2500,6 +2686,7 @@ export function TablesBuilder({
         suppress_low_base: false,
         decimals: shownDecimals(statistics, digits, meanOn),
         weight: weight || 'none',
+        ...(summaryColumns.length ? { summary_columns: summaryColumns } : {}),
         ...(openId ? { spec_id: openId } : {}),
         ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
         save,
@@ -2520,11 +2707,14 @@ export function TablesBuilder({
       });
   }
 
+  const projectionFlag = bookIsProjection(book) ? '1' : '0';
   const optionsKey = [
     top2,
     bottom2,
     weight,
     statistics.join(','),
+    summaryColumns.join(','),
+    projectionFlag,
     digits,
     JSON.stringify(significanceRequestFields(significance)),
     nest,
@@ -2795,13 +2985,24 @@ export function TablesBuilder({
         ) : activeSpecs.length ? (
           activeSpecs.map(spec => {
             const id = spec.spec_id || spec.id || '';
+            const multiSelected = selectedSpecIds.includes(id);
             return (
               <Button
                 key={id}
                 className="tables-saved"
                 type="button"
-                data-active={id === specId}
-                onClick={() => openSavedSpec(spec)}
+                data-active={id === specId || multiSelected}
+                data-batch={multiSelected ? 'true' : undefined}
+                onClick={event => {
+                  if (event.shiftKey) {
+                    setSelectedSpecIds(current =>
+                      current.includes(id) ? current.filter(item => item !== id) : [...current, id]
+                    );
+                    return;
+                  }
+                  setSelectedSpecIds([]);
+                  openSavedSpec(spec);
+                }}
               >
                 <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
@@ -2825,6 +3026,52 @@ export function TablesBuilder({
         ) : (
           <p className="flow-muted">No saved tables yet</p>
         )}
+        {selectedSpecIds.length >= 2 ? (
+          <div className="tables-batch-bar" role="status">
+            <p className="tables-batch-count">{selectedSpecIds.length} tables selected</p>
+            <div className="tables-batch-actions">
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy || !weight}
+                onClick={() => void batchPatchSelected({ weight: weight || 'none' })}
+              >
+                Weight
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() =>
+                  void batchPatchSelected({
+                    filter_ref: tableFilter?.filters.length ? tableFilter : null,
+                  })
+                }
+              >
+                Filter
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() => setCellStatsOpen(true)}
+              >
+                Cell stats
+              </Button>
+              <Button
+                type="button"
+                className="tables-batch-chip"
+                disabled={batchBusy}
+                onClick={() => void batchPatchSelected({ banner: bannerRequestItems(banners) })}
+              >
+                Banner
+              </Button>
+            </div>
+            <p className="tables-batch-hint">
+              Shift-click tables in the list to select. Each change saves a new version.
+            </p>
+          </div>
+        ) : null}
         {parkedSpecs.length ? (
           <>
             <div className="tables-rail-head">
@@ -3135,6 +3382,43 @@ export function TablesBuilder({
                       </Button>
                     ))}
                   </div>
+                  <CellStatsPopover
+                    open={cellStatsOpen}
+                    onOpenChange={setCellStatsOpen}
+                    statistics={shownStatistics(statistics, meanOn)}
+                    isProjection={bookIsProjection(book)}
+                    meanOn={meanOn}
+                    summaryColumns={summaryColumns}
+                    tableCount={
+                      selectedSpecIds.length >= 2
+                        ? selectedSpecIds.length
+                        : Math.max(activeSpecs.length, 1)
+                    }
+                    preview={mediaCellLines(
+                      (
+                        ((book?.rows as BannerRow[] | undefined) || []).find(
+                          row => row.kind === 'value' || !row.kind
+                        )?.cells || []
+                      ).find(cell => cell.banner_id === 'total') ||
+                        (((book?.rows as BannerRow[] | undefined) || [])[0]?.cells || [])[0],
+                      Math.max(digits, 0),
+                      {
+                        includeProjected: bookIsProjection(book),
+                        includeUnweighted: true,
+                      }
+                    )}
+                    onApply={applyCellStats}
+                    trigger={
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        data-active={cellStatsOpen}
+                        aria-expanded={cellStatsOpen}
+                      >
+                        In each cell ▾
+                      </Button>
+                    }
+                  />
                   <Button
                     className="flow-btn"
                     type="button"
@@ -3483,6 +3767,11 @@ export function TablesBuilder({
                               )
                             }
                             figures={figures}
+                            statistics={tableStatisticsForWeight(
+                              shownStatistics(statistics, meanOn),
+                              Boolean(weight),
+                              bookIsProjection(book)
+                            )}
                             digits={digits}
                             markLowBase={lowBase}
                             columnLabels={columns.map(column => ({

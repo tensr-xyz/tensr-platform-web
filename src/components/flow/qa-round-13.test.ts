@@ -39,14 +39,17 @@ describe('round 13', () => {
     expect(displayedCount({ count: 2678957, unweighted_n: 2046 }, true)).toBe('2,678,957 (2,046)');
   });
 
-  it('asks for projected thousands and index when a weight is on', () => {
-    expect(tableStatisticsForWeight(['column_proportion', 'count'], true)).toEqual([
+  it('asks for projected thousands only when the weight is a projection', () => {
+    expect(tableStatisticsForWeight(['column_proportion', 'count'], true, true)).toEqual([
       'column_proportion',
       'count',
       'projected_thousands',
       'index',
       'unweighted_base',
     ]);
+    expect(
+      tableStatisticsForWeight(['column_proportion', 'projected_thousands'], true, false)
+    ).toEqual(['column_proportion', 'index', 'unweighted_base']);
     expect(tableStatisticsForWeight(['column_proportion'], false)).toEqual(['column_proportion']);
   });
 

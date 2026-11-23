@@ -23,12 +23,53 @@ export type BannerCell = {
   column_weighted_n?: number;
   unweighted_n?: number;
   weighted_n?: number;
+  effective_base?: number | null;
+  standard_error?: number | null;
+  z_statistic?: number | null;
+  missing_count?: number | null;
+  column_responses_percent?: number | null;
+  ci_low?: number | null;
+  ci_high?: number | null;
   provenance?: {
     row_uid_bitset?: string;
     origin_bitsets?: Record<string, { row_uid_bitset?: string }>;
     provenance_unavailable?: string;
   };
 };
+
+/** Extra stacked lines for statistics beyond the Show chips (Paper 5d). */
+export function extraCellStatLines(
+  cell: BannerCell | undefined,
+  statistics: string[],
+  digits = 1
+): string[] {
+  if (!cell) return [];
+  const kinds = new Set(statistics);
+  const lines: string[] = [];
+  if (kinds.has('z_statistic') && typeof cell.z_statistic === 'number') {
+    lines.push(`z ${cell.z_statistic.toFixed(Math.max(digits, 2))}`);
+  }
+  if (kinds.has('standard_error') && typeof cell.standard_error === 'number') {
+    lines.push(`se ${cell.standard_error.toFixed(Math.max(digits, 3))}`);
+  }
+  if (kinds.has('effective_base') && typeof cell.effective_base === 'number') {
+    lines.push(`eff ${formatGroupedNumber(cell.effective_base, 0)}`);
+  }
+  if (kinds.has('missing_count') && typeof cell.missing_count === 'number') {
+    lines.push(`miss ${formatGroupedNumber(cell.missing_count, 0)}`);
+  }
+  if (
+    kinds.has('confidence_interval') &&
+    typeof cell.ci_low === 'number' &&
+    typeof cell.ci_high === 'number'
+  ) {
+    lines.push(`ci ${cell.ci_low.toFixed(digits)}–${cell.ci_high.toFixed(digits)}%`);
+  }
+  if (kinds.has('column_responses_percent') && typeof cell.column_responses_percent === 'number') {
+    lines.push(`resp ${cell.column_responses_percent.toFixed(digits)}%`);
+  }
+  return lines;
+}
 
 export type BannerRow = {
   id: string;

@@ -6177,6 +6177,176 @@ button.chat-result-top {
   font-weight: var(--weight-regular);
 }
 
+/* Paper 5d · In each cell popover. */
+.cell-stats-popover {
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  box-shadow: 0 12px 32px #1b1c1a24;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cell-stats-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.cell-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cell-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: 4px;
+}
+
+.cell-stats-row.is-on {
+  cursor: grab;
+}
+
+.cell-stats-row-label {
+  flex: 1 1 0%;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.cell-stats-rank {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 14px;
+  flex-shrink: 0;
+}
+
+.cell-stats-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-well);
+}
+
+.cell-stats-preview-stack {
+  align-items: flex-end;
+}
+
+.cell-stats-summaries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-line);
+}
+
+.cell-stats-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cell-stats-chip {
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 16px;
+  padding: 5px 10px;
+  height: auto;
+}
+
+.cell-stats-chip[data-active='true'] {
+  border-color: transparent;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.cell-stats-apply {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.cell-stats-apply-btn {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+  height: auto;
+  padding: 0;
+}
+
+.cell-stats-apply-btn.accent {
+  color: var(--color-accent);
+}
+
+/* Paper 5d · batch edit bar on the tables rail. */
+.tables-batch-bar {
+  margin: 8px 4px 4px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tables-batch-count {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.tables-batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tables-batch-chip {
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff1f;
+  color: #fff;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 5px 9px;
+  height: auto;
+}
+
+.tables-batch-hint {
+  margin: 0;
+  color: #ffffff99;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.tables-saved[data-batch='true'] {
+  background: var(--color-accent-soft);
+}
+
 /* Paper 9f · number trace popover (portals outside .flow; tokens inherit from body:has(.flow)). */
 .number-trace-popover {
   width: 360px;
