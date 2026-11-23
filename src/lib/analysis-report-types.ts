@@ -86,6 +86,8 @@ export type AnalysisReportChart =
       title: string;
       x_label: string;
       bins: { start: number; end: number; count: number }[];
+      /** Value labels for coded/ordinal axes (codes → question labels). */
+      x_tick_labels?: Record<string, string>;
     } & ChartAxisHints)
   | ({
       kind: 'scatter';

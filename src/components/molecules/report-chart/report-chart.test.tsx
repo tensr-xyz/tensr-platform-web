@@ -235,6 +235,25 @@ describe('ReportChart palette kinds', () => {
     expect(histogram.container.querySelector('[data-chart-kind="histogram"]')).toBeTruthy();
     histogram.unmount();
 
+    const labelled = render(
+      <ReportChart
+        chart={{
+          kind: 'histogram',
+          title: 'Distribution of Trust',
+          x_label: 'Trust',
+          bins: [
+            { start: 1, end: 2, count: 2 },
+            { start: 2, end: 3, count: 3 },
+            { start: 3, end: 4, count: 1 },
+          ],
+          x_tick_labels: { '1': 'Strongly distrust', '2': 'Distrust', '3': 'Neither' },
+        }}
+      />
+    );
+    expect(labelled.container.textContent).toContain('Strongly distrust');
+    expect(labelled.container.textContent).not.toMatch(/\bage_band\b/);
+    labelled.unmount();
+
     const box = render(
       <ReportChart
         chart={{
