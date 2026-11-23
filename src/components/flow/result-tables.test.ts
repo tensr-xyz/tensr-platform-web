@@ -1011,9 +1011,23 @@ describe('result tables', () => {
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
     expect(weightChipName('', 'none', [])).toBe('Unweighted');
+    expect(weightChipName('Unweighted', 'Projection weight (people)', [])).toBe('Unweighted');
+    expect(weightChipName('none', 'Projection weight (people)', [])).toBe('Unweighted');
     expect(
       weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
     ).toBe('Design weight');
+    expect(
+      resultViewFromToolResults({
+        result: {
+          method: 'spearman',
+          resolved_weight: 'none',
+          columns: ['a', 'b'],
+          matrix: { a: { a: 1, b: 0.1 }, b: { a: 0.1, b: 1 } },
+          p_values: { a: { b: 0.5 }, b: { a: 0.5 } },
+          n: 40,
+        },
+      }).weight
+    ).toBe('Unweighted');
     expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
       'Weight: Raked weight'
     );

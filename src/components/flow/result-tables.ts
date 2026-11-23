@@ -1455,18 +1455,22 @@ function weightName(record: Record<string, unknown>): string {
       return column;
     }
   }
+  if (typeof record.resolved_weight === 'string') {
+    const resolved = record.resolved_weight.trim();
+    // An explicit none is this run's choice. Do not fall through to the project ledger.
+    if (/^(none|unweighted|null)$/i.test(resolved)) return 'Unweighted';
+    if (resolved) return resolved;
+  }
   const named =
     typeof record.weight_label === 'string' && record.weight_label.trim()
       ? record.weight_label
       : typeof record.weight === 'string'
         ? record.weight
-        : typeof record.resolved_weight === 'string'
-          ? record.resolved_weight
-          : typeof record.weight_column === 'string'
-            ? record.weight_column
-            : typeof record.active_weight_column === 'string'
-              ? record.active_weight_column
-              : '';
+        : typeof record.weight_column === 'string'
+          ? record.weight_column
+          : typeof record.active_weight_column === 'string'
+            ? record.active_weight_column
+            : '';
   return realWeightToken(named);
 }
 
@@ -2013,19 +2017,26 @@ export function shownMetric(label: string, value: string): string {
   return value;
 }
 
-/** The name on the weight chip. A missing weight is Unweighted. The sentinel none is not a name. */
+/** The name on the weight chip. This run's weight wins over the project ledger. */
 export function weightChipName(
   resultWeight: string,
   ledgerWeight: string,
   columns: ColumnLabels[] = []
 ): string {
-  const chosen = [resultWeight, ledgerWeight]
-    .map(item => item.trim())
-    .find(item => item && !/^(none|unweighted|null)$/i.test(item));
-  if (!chosen) return 'Unweighted';
-  const note = weightNote(chosen, columns);
-  if (note === 'Unweighted' || note === 'Weighted') return note;
-  return note.replace(/^Weight:\s*/, '');
+  const result = resultWeight.trim();
+  if (result) {
+    if (/^(none|unweighted|null)$/i.test(result)) return 'Unweighted';
+    const note = weightNote(result, columns);
+    if (note === 'Unweighted' || note === 'Weighted') return note;
+    return note.replace(/^Weight:\s*/, '');
+  }
+  const ledger = ledgerWeight.trim();
+  if (ledger && !/^(none|unweighted|null)$/i.test(ledger)) {
+    const note = weightNote(ledger, columns);
+    if (note === 'Unweighted' || note === 'Weighted') return note;
+    return note.replace(/^Weight:\s*/, '');
+  }
+  return 'Unweighted';
 }
 
 /** The weight's label. The bare column name "weight" is not a label. */
