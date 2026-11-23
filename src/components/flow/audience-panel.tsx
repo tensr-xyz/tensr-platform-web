@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { FlowColumn } from '@/lib/flow-columns';
+import { projectQueryKeys } from '@/lib/project-query-cache';
+import { useDatasetAudiences, type DatasetAudiencesPayload } from '@/hooks/api/use-project-data';
 import {
   answerOptions,
   audienceDefinitionText,
@@ -180,8 +183,14 @@ function ValueChoices({
 
 export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
   const questions = audienceQuestions(columns);
-  const [audiences, setAudiences] = useState<SavedAudience[] | null>(null);
-  const [unmatched, setUnmatched] = useState<string[]>([]);
+  const queryClient = useQueryClient();
+  const audiencesQuery = useDatasetAudiences(datasetId);
+  const audiences = audiencesQuery.isPending
+    ? null
+    : ((audiencesQuery.data?.audiences || []) as SavedAudience[]);
+  const unmatched = (audiencesQuery.data?.unmatched || [])
+    .map(item => String(item || '').trim())
+    .filter(Boolean);
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
@@ -194,35 +203,14 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
   const [sizeFailed, setSizeFailed] = useState(false);
 
   useEffect(() => {
-    if (!datasetId) return;
-    let cancelled = false;
-    setAudiences(null);
-    void fetch(tensrApiUrl(`/datasets/${datasetId}/audiences`), {
-      headers: getTensrApiHeaders(),
-    })
-      .then(async response => {
-        if (!response.ok) throw new Error('Audiences could not be loaded.');
-        return response.json() as Promise<{ audiences?: SavedAudience[]; unmatched?: string[] }>;
-      })
-      .then(page => {
-        if (!cancelled) {
-          setAudiences(page.audiences || []);
-          setUnmatched(
-            (page.unmatched || []).map(item => String(item || '').trim()).filter(Boolean)
-          );
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAudiences([]);
-          setUnmatched([]);
-          setError('Audiences could not be loaded.');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId]);
+    if (audiencesQuery.isError) {
+      setError('Audiences could not be loaded.');
+    }
+  }, [audiencesQuery.isError]);
+
+  const writeAudiencesCache = (page: DatasetAudiencesPayload) => {
+    queryClient.setQueryData(projectQueryKeys.audiences(datasetId), page);
+  };
 
   const filter = audienceFilter(combine, conditions);
   const filterKey = JSON.stringify(filter);
@@ -298,11 +286,11 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
         return response.json() as Promise<SavedAudience>;
       })
       .then(saved => {
-        setAudiences(current => {
-          const rest = (current || []).filter(
-            item => item.name !== saved.name && item.name !== editing
-          );
-          return [
+        const rest = (audiences || []).filter(
+          item => item.name !== saved.name && item.name !== editing
+        );
+        writeAudiencesCache({
+          audiences: [
             ...rest,
             {
               ...saved,
@@ -312,7 +300,8 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
               share: size?.share,
               weighted_share: size?.weighted_share,
             },
-          ];
+          ],
+          unmatched,
         });
         reset();
       })
@@ -329,7 +318,10 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
     })
       .then(response => {
         if (!response.ok) throw new Error('The audience was not deleted.');
-        setAudiences(current => (current || []).filter(item => item.name !== name));
+        writeAudiencesCache({
+          audiences: (audiences || []).filter(item => item.name !== name),
+          unmatched,
+        });
         reset();
       })
       .catch(() => setError('The audience was not deleted.'))

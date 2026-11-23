@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
-import { flowJson } from '@/lib/flow-api';
 import { isAiEnabled } from '@/lib/ai-controls';
+import { projectQueryKeys } from '@/lib/project-query-cache';
+import { useProjectDetail, type ProjectDetailPayload } from '@/hooks/api/use-project-data';
 import {
   COMMENTARY_TONE_OPTIONS,
   normalizeProjectAiSettings,
@@ -23,33 +25,28 @@ export function ProjectAiSettingsPanel({
   /** When the org has AI off, rows stay read-only. */
   lockedByWorkspace?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const detailQuery = useProjectDetail(projectId);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [settings, setSettings] = useState<ProjectAiSettings | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!projectId) return;
-    let live = true;
-    setSettings(null);
+    if (detailQuery.isError) {
+      setError(
+        detailQuery.error instanceof Error
+          ? detailQuery.error.message
+          : 'Could not load AI settings.'
+      );
+      setSettings(normalizeProjectAiSettings({}));
+      return;
+    }
+    if (!detailQuery.data) return;
     setError('');
-    void flowJson<{
-      project?: { ai_enabled?: boolean; ai_settings?: unknown };
-    }>(`/api/projects/${projectId}`)
-      .then(page => {
-        if (!live) return;
-        setAiEnabled(isAiEnabled(page.project?.ai_enabled));
-        setSettings(normalizeProjectAiSettings(page.project?.ai_settings));
-      })
-      .catch(err => {
-        if (!live) return;
-        setError(err instanceof Error ? err.message : 'Could not load AI settings.');
-        setSettings(normalizeProjectAiSettings({}));
-      });
-    return () => {
-      live = false;
-    };
-  }, [projectId]);
+    setAiEnabled(isAiEnabled(detailQuery.data.project?.ai_enabled));
+    setSettings(normalizeProjectAiSettings(detailQuery.data.project?.ai_settings));
+  }, [detailQuery.data, detailQuery.isError, detailQuery.error]);
 
   const save = async (patch: Partial<ProjectAiSettings> & { ai_enabled?: boolean }) => {
     if (lockedByWorkspace) return;
@@ -59,6 +56,17 @@ export function ProjectAiSettingsPanel({
       const next = await updateProjectAiSettings(projectId, patch);
       setAiEnabled(next.ai_enabled);
       setSettings(next.ai_settings);
+      const prior = queryClient.getQueryData<ProjectDetailPayload>(
+        projectQueryKeys.detail(projectId)
+      );
+      queryClient.setQueryData(projectQueryKeys.detail(projectId), {
+        ...prior,
+        project: {
+          ...(prior?.project || {}),
+          ai_enabled: next.ai_enabled,
+          ai_settings: next.ai_settings,
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save AI settings.');
     } finally {

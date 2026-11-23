@@ -39,6 +39,7 @@ export const projectQueryKeys = {
   orgMembers: (orgId: string) => [...projectQueryKeys.root, 'orgMembers', orgId] as const,
   orgDetail: (orgId: string) => [...projectQueryKeys.root, 'orgDetail', orgId] as const,
   preview: (datasetId: string) => [...projectQueryKeys.root, 'preview', datasetId] as const,
+  audiences: (datasetId: string) => [...projectQueryKeys.root, 'audiences', datasetId] as const,
 };
 
 export function matchesProjectId(key: readonly unknown[], projectId: string): boolean {
@@ -63,7 +64,9 @@ export function invalidateProjectData(
         kind === 'columns' ||
         kind === 'reportDocument' ||
         kind === 'tableBook' ||
-        kind === 'pageTable'
+        kind === 'pageTable' ||
+        kind === 'preview' ||
+        kind === 'audiences'
       ) {
         return typeof key[2] === 'string' && datasetSet.has(key[2]);
       }

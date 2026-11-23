@@ -605,6 +605,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [askerTurns, setAskerTurns] = useState<AskerTurn[] | null>(null);
   const prefetchTab = usePrefetchProjectTab();
+  const projectQueryClient = useQueryClient();
   const projectFileKey = datasets
     .filter(row => row.project_id === projectId)
     .map(row => datasetRowId(row))
@@ -621,6 +622,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
     void flowJson<{ project?: FlowProject; datasets?: DatasetRow[] }>(`/api/projects/${projectId}`)
       .then(page => {
         if (cancelled) return;
+        // Seed the shared Details cache so Project AI settings does not refetch.
+        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
         const found = page.project;
         if (found) {
           setProjects(current =>
@@ -669,7 +672,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, projectId]);
+  }, [isAuthenticated, projectId, projectQueryClient]);
   const tabReady = workspacePhase === 'ready' || projectReady === projectId;
   const finishedRun = useAnalysisSetupStore(s => s.lastRun);
   const handledRun = useRef(finishedRun?.nonce || 0);
@@ -754,6 +757,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     }
     void flowJson<{ project?: FlowProject }>(`/api/projects/${projectId}`)
       .then(page => {
+        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
         const found = page.project;
         if (found)
           setProjects(current =>
@@ -761,7 +765,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
           );
       })
       .catch(() => undefined);
-  }, [projectId, projects, workspacePhase]);
+  }, [projectId, projects, workspacePhase, projectQueryClient]);
   const openDataset =
     datasets.find(
       row => row.project_id === project?.id && datasetRowId(row) === project?.active_dataset_id

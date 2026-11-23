@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProjectAiSettingsPanel } from './project-ai-settings';
 
 jest.mock('@/lib/flow-api', () => ({
@@ -8,6 +9,13 @@ jest.mock('@/lib/flow-api', () => ({
 import { flowJson } from '@/lib/flow-api';
 
 const mockedFlowJson = flowJson as jest.MockedFunction<typeof flowJson>;
+
+function renderPanel(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 describe('ProjectAiSettingsPanel', () => {
   beforeEach(() => {
@@ -41,7 +49,7 @@ describe('ProjectAiSettingsPanel', () => {
         },
       });
 
-    render(<ProjectAiSettingsPanel projectId="proj-1" />);
+    renderPanel(<ProjectAiSettingsPanel projectId="proj-1" />);
 
     await waitFor(() => {
       expect(screen.getByText("How Tensr's AI works on this project")).toBeInTheDocument();
