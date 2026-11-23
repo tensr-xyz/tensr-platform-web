@@ -11,6 +11,8 @@ import {
   type TidyMode,
   type TidyScanResult,
   tidyConfirmLabel,
+  tidyNeedsRebuildCount,
+  tidyNeedsRebuildNote,
   tidyReasonRows,
   tidyScanBody,
 } from '@/lib/tidy-tables';
@@ -106,6 +108,8 @@ export function TidyTablesDialog({
   const rows = tidyReasonRows(scan, criteria);
   const nTables = scan?.n_tables ?? 0;
   const nPruned = scan?.n_pruned ?? 0;
+  const nNeedsRebuild = tidyNeedsRebuildCount(scan);
+  const rebuildNote = tidyNeedsRebuildNote(nNeedsRebuild);
   const decisions = (scan?.decisions || []).filter((item): item is TidyDecision =>
     Boolean(item && item.action && item.action !== 'keep')
   );
@@ -135,6 +139,7 @@ export function TidyTablesDialog({
               <span className="tidy-dialog-reason-n">{row.count}</span>
             </div>
           ))}
+          {rebuildNote ? <p className="tidy-dialog-rebuild-note">{rebuildNote}</p> : null}
         </div>
 
         <div className="tidy-dialog-then">

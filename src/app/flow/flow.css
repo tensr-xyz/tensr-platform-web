@@ -6909,6 +6909,13 @@ button.chat-result-top {
   color: var(--color-warn);
 }
 
+.tidy-dialog-rebuild-note {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .tidy-dialog-then {
   display: flex;
   align-items: center;
