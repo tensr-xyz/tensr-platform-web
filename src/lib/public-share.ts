@@ -2,10 +2,17 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { readableApiError } from '@/lib/flow-api';
 import type { PublicViewerControl, SavedViewerView } from '@/lib/share-viewer-controls';
 
+export type PublicShareTextRun = {
+  text?: string;
+  href?: string | null;
+};
+
 export type PublicSharePageObject = {
   id?: string;
   kind?: string;
   text?: string;
+  href?: string | null;
+  runs?: PublicShareTextRun[];
   run_id?: string | null;
   frame?: { x?: number; y?: number; w?: number; h?: number };
 };

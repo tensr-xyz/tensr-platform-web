@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
@@ -12,6 +12,12 @@ import {
   type PublicSharePayload,
   type PublicShareReportPage,
 } from '@/lib/public-share';
+import {
+  evidencePageIdsFromPage,
+  publicTextSegments,
+  type PublicPageLinkTarget,
+  type PublicTextSegment,
+} from '@/lib/public-share-page-links';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import type { PublicViewerControl, SavedViewerView } from '@/lib/share-viewer-controls';
 
@@ -26,12 +32,11 @@ function storedReport(run: Record<string, unknown> | undefined): AnalysisReport 
   return record;
 }
 
-function pageTexts(page: PublicShareReportPage | undefined): string[] {
+function pageTextObjects(page: PublicShareReportPage | undefined) {
   if (!page?.objects?.length) return [];
   return [...page.objects]
-    .filter(obj => obj.kind === 'text' && String(obj.text || '').trim())
-    .sort((a, b) => Number(a.frame?.y || 0) - Number(b.frame?.y || 0))
-    .map(obj => String(obj.text || '').trim());
+    .filter(obj => obj.kind === 'text' && (String(obj.text || '').trim() || obj.runs?.length))
+    .sort((a, b) => Number(a.frame?.y || 0) - Number(b.frame?.y || 0));
 }
 
 function pageRunIds(page: PublicShareReportPage | undefined): string[] {
@@ -94,6 +99,58 @@ function RunBlock({ run }: { run: Record<string, unknown> }) {
   );
 }
 
+function LinkedSegments({
+  segments,
+  className,
+  as: Tag = 'p',
+  onPageLink,
+}: {
+  segments: PublicTextSegment[];
+  className?: string;
+  as?: 'p' | 'h1';
+  onPageLink: (pageId: string) => void;
+}) {
+  if (!segments.length) return null;
+  return (
+    <Tag className={className}>
+      {segments.map((segment, index) => {
+        const key = `${segment.text}-${index}`;
+        if (!segment.target) {
+          return <span key={key}>{segment.text}</span>;
+        }
+        return (
+          <PageLink key={key} target={segment.target} onPageLink={onPageLink}>
+            {segment.text}
+          </PageLink>
+        );
+      })}
+    </Tag>
+  );
+}
+
+function PageLink({
+  target,
+  onPageLink,
+  children,
+}: {
+  target: PublicPageLinkTarget;
+  onPageLink: (pageId: string) => void;
+  children: ReactNode;
+}) {
+  if (target.kind === 'url') {
+    return (
+      <a className="pv-page-link" href={target.url} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button type="button" className="pv-page-link" onClick={() => onPageLink(target.pageId)}>
+      {children}
+    </button>
+  );
+}
+
 export function PublicShareViewer({
   token,
   payload,
@@ -124,14 +181,19 @@ export function PublicShareViewer({
   const loginHref = `/login?${new URLSearchParams({ returnTo: `/s/${token}` })}`;
   const isOutput = payload.share.kind === 'output';
   const pages = payload.report?.pages || [];
+  const sharedPageIds = useMemo(
+    () => new Set(pages.map(page => String(page.id || '')).filter(Boolean)),
+    [pages]
+  );
   const [activePageId, setActivePageId] = useState(pages[0]?.id || '');
   const activePage = useMemo(() => {
     if (!pages.length) return undefined;
     return pages.find(page => page.id === activePageId) || pages[0];
   }, [pages, activePageId]);
-  const texts = pageTexts(activePage);
-  const headline = texts[0] || activePage?.title || payload.share.title || projectName;
-  const insight = texts.slice(1).join('\n\n');
+  const textObjects = pageTextObjects(activePage);
+  const headlineSegments = publicTextSegments(textObjects[0], sharedPageIds);
+  const insightBlocks = textObjects.slice(1).map(obj => publicTextSegments(obj, sharedPageIds));
+  const headlineFallback = activePage?.title || payload.share.title || projectName;
   const runMap = payload.report?.runs || {};
   const pageRuns = pageRunIds(activePage)
     .map(id => runMap[id])
@@ -141,6 +203,14 @@ export function PublicShareViewer({
   const totalCount = payload.report?.total_count ?? pages.length;
   const showPageList = !isOutput && pages.length > 0;
   const appendixHidden = !isOutput && totalCount > sharedCount;
+  const evidenceIds = evidencePageIdsFromPage(activePage, sharedPageIds);
+  const evidencePages = evidenceIds
+    .map(id => pages.find(page => page.id === id))
+    .filter((page): page is PublicShareReportPage => Boolean(page));
+
+  const goToPage = (pageId: string) => {
+    if (sharedPageIds.has(pageId)) setActivePageId(pageId);
+  };
 
   return (
     <div className="pv">
@@ -148,7 +218,9 @@ export function PublicShareViewer({
         <div className="pv-brand">
           <span className="pv-logo" aria-hidden="true" />
           <span className="pv-titles">
-            <strong>{isOutput ? String(payload.share.title || headline) : projectName}</strong>
+            <strong>
+              {isOutput ? String(payload.share.title || headlineFallback) : projectName}
+            </strong>
             <span>
               Shared by {workspace}
               {updated ? ` · updated ${updated}` : ''} · read-only
@@ -216,13 +288,43 @@ export function PublicShareViewer({
               </>
             ) : (
               <>
-                <h1 className="pv-headline">{headline}</h1>
-                {insight ? <p className="pv-insight">{insight}</p> : null}
+                {headlineSegments.length ? (
+                  <LinkedSegments
+                    as="h1"
+                    className="pv-headline"
+                    segments={headlineSegments}
+                    onPageLink={goToPage}
+                  />
+                ) : (
+                  <h1 className="pv-headline">{headlineFallback}</h1>
+                )}
+                {insightBlocks.map((segments, index) => (
+                  <LinkedSegments
+                    key={`insight-${index}`}
+                    className="pv-insight"
+                    segments={segments}
+                    onPageLink={goToPage}
+                  />
+                ))}
                 {pageRuns.map(run => (
                   <RunBlock key={String(run.id)} run={run} />
                 ))}
-                {!pageRuns.length && !insight ? (
+                {!pageRuns.length && !headlineSegments.length && !insightBlocks.length ? (
                   <p className="pv-muted">This page has nothing to show yet.</p>
+                ) : null}
+                {evidencePages.length ? (
+                  <nav className="pv-evidence" aria-label="Evidence pages">
+                    {evidencePages.map(page => (
+                      <Button
+                        key={String(page.id)}
+                        type="button"
+                        className="pv-evidence-link"
+                        onClick={() => goToPage(String(page.id || ''))}
+                      >
+                        {page.title || 'Evidence'}
+                      </Button>
+                    ))}
+                  </nav>
                 ) : null}
                 <p className="pv-base">Click any number to see where it came from.</p>
               </>
