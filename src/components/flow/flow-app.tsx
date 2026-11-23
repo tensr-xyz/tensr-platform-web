@@ -88,7 +88,10 @@ import {
   sourceVersionTitle,
   SourcesScreen,
 } from '@/components/flow/sources-screen';
-import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import {
+  DATASET_VERSION_RESTORED_NOTE,
+  showDatasetVersionUndoToast,
+} from '@/lib/dataset-version-undo';
 import { previewPageUrl } from '@/lib/dataset-open';
 import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
@@ -3793,6 +3796,7 @@ function ResponsesScreen({
         title: note,
         onRestored: id => {
           setChosenId(id);
+          setSheetNote(DATASET_VERSION_RESTORED_NOTE);
           sheetPages.clear();
           onChanged?.();
         },

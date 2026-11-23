@@ -89,6 +89,7 @@ import {
   type NumberedNextStep,
 } from '@/lib/chat-turn-parity';
 import { ChatTurnChangesPanel } from '@/components/flow/chat-turn-changes';
+import { DATASET_VERSION_RESTORED_NOTE } from '@/lib/dataset-version-undo';
 import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
   documentFromPins,
@@ -1509,7 +1510,7 @@ export function AgentThreadColumn({
                   changes={pastChanges}
                   responsesHref={`${projectHref}/responses`}
                   disabled={thread.runBusy || thread.status === 'Thinking…'}
-                  onRestored={() => thread.setStatus('Restored the previous version.')}
+                  onRestored={() => thread.setStatus(DATASET_VERSION_RESTORED_NOTE)}
                 />
               ) : null}
             </div>
@@ -1672,7 +1673,7 @@ export function AgentThreadColumn({
             changes={liveChanges}
             responsesHref={`${projectHref}/responses`}
             disabled={thread.runBusy || thread.status === 'Thinking…'}
-            onRestored={() => thread.setStatus('Restored the previous version.')}
+            onRestored={() => thread.setStatus(DATASET_VERSION_RESTORED_NOTE)}
           />
         ) : null}
         {thread.outputReady ? (
