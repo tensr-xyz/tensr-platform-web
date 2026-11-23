@@ -86,6 +86,17 @@ import {
 import { tableBaseCopy } from '@/components/flow/table-base';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
 import { isTableSourceChanged } from '@/components/flow/stale-table';
+import type { SavedAudience } from '@/components/flow/audience-panel';
+import { BannerAddPicker, bannerChipClass } from '@/components/flow/table-banner-picker';
+import {
+  bannerRefLabel,
+  bannerRefsFromSpec,
+  bannerRequestItems,
+  columnNamesFromBannerRefs,
+  tableBannerKey,
+  tableBannerKeys,
+  type TableBannerRef,
+} from '@/components/flow/table-banner-refs';
 
 type DatasetRow = {
   dataset_id?: string;
@@ -220,6 +231,14 @@ export function savedTableMatches(
     savedBanners.every((name, index) => name === banners[index])
   );
 }
+
+export {
+  audienceBannerSizeLabel,
+  bannerRefsFromSpec,
+  bannerRequestItems,
+  tableBannerKey,
+} from '@/components/flow/table-banner-refs';
+export type { TableBannerRef } from '@/components/flow/table-banner-refs';
 
 const FILE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1776,12 +1795,7 @@ export function columnChoiceLabel(column: { name: string; label: string }): stri
 }
 
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
-  const names: string[] = [];
-  for (const banner of spec?.banners || []) {
-    if (banner.column) names.push(String(banner.column));
-    for (const column of banner.columns || []) names.push(String(column));
-  }
-  return names.filter((name, index) => name && names.indexOf(name) === index);
+  return tableBannerKeys(bannerRefsFromSpec(spec));
 }
 
 /** The banner book an agent turn produced, if any. */
@@ -2045,7 +2059,10 @@ export function TablesBuilder({
   const [specs, setSpecs] = useState<SavedSpec[]>([]);
   const [books, setBooks] = useState<SavedBook[]>([]);
   const [stub, setStub] = useState(initialStub);
-  const [banners, setBanners] = useState<string[]>(initialBanner ? [initialBanner] : []);
+  const [banners, setBanners] = useState<TableBannerRef[]>(
+    initialBanner ? [{ kind: 'column', column: initialBanner }] : []
+  );
+  const [audiences, setAudiences] = useState<SavedAudience[]>([]);
   const [weight, setWeight] = useState('');
   const activeWeightName = useRef('');
   const [statistics, setStatistics] = useState<string[]>(['column_proportion']);
@@ -2218,6 +2235,14 @@ export function TablesBuilder({
         setColumns([]);
         setVariableSets([]);
       });
+    void flowJson<{ audiences?: SavedAudience[] }>(`/datasets/${datasetId}/audiences`)
+      .then(page => {
+        if (!live) return;
+        setAudiences(Array.isArray(page.audiences) ? page.audiences : []);
+      })
+      .catch(() => {
+        if (live) setAudiences([]);
+      });
     return () => {
       live = false;
     };
@@ -2314,7 +2339,14 @@ export function TablesBuilder({
           post_hoc_control?: string;
           filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
           stubs?: { column?: string; nets?: { label?: string; values?: unknown[] }[] }[];
-          banners?: { column?: string; columns?: string[]; nested?: unknown }[];
+          banners?: {
+            column?: string;
+            columns?: string[];
+            nested?: unknown;
+            filter?: { combine?: string; filters?: unknown[] };
+            audience?: string;
+            label?: string;
+          }[];
           weight?: { column?: string } | string | null;
         }
       | undefined;
@@ -2332,8 +2364,8 @@ export function TablesBuilder({
     setCustomNets(userNets(storedNets));
     setTop2(storedNets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
     setBottom2(storedNets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
-    const names = bannerNames(spec);
-    if (names.length) setBanners(names);
+    const refs = bannerRefsFromSpec(spec);
+    if (refs.length) setBanners(refs);
     setNest(Boolean(spec?.nest_banners));
     const showKinds = ['count', 'column_proportion', 'row_proportion', 'total_proportion'] as const;
     const savedStats = Array.isArray(spec?.statistics)
@@ -2460,7 +2492,7 @@ export function TablesBuilder({
       method: 'POST',
       body: JSON.stringify({
         stubs: stubsForRun(stub, nets),
-        banner: banners.map(columnName => ({ column: columnName })),
+        banner: bannerRequestItems(banners),
         statistics: selectedStats,
         ...significanceRequestFields(significance),
         nest_banners: nest,
@@ -2514,7 +2546,7 @@ export function TablesBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionsKey]);
   // Runs after the options effect in the same commit, so the flag covers exactly one update.
-  const shapeKey = `${stub}|${banners.join(',')}`;
+  const shapeKey = `${stub}|${tableBannerKeys(banners).join(',')}`;
   const lastShape = useRef(shapeKey);
   useEffect(() => {
     if (lastShape.current === shapeKey) return;
@@ -2544,7 +2576,13 @@ export function TablesBuilder({
   function matchesSaved(): boolean {
     const spec = currentSpec() as {
       stubs?: { column?: string }[];
-      banners?: { column?: string; columns?: string[] }[];
+      banners?: {
+        column?: string;
+        columns?: string[];
+        filter?: { combine?: string; filters?: unknown[] };
+        audience?: string;
+        label?: string;
+      }[];
     } | null;
     const id = String((book?.spec as { id?: string } | undefined)?.id || '');
     const listed = Boolean(id) && specs.some(item => (item.spec_id || item.id) === id);
@@ -2553,7 +2591,7 @@ export function TablesBuilder({
       String(spec?.stubs?.[0]?.column || ''),
       bannerNames(spec || undefined),
       stub,
-      banners
+      tableBannerKeys(banners)
     );
   }
 
@@ -2719,7 +2757,7 @@ export function TablesBuilder({
   }
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
-        banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
+        banners.length ? ` by ${banners.map(ref => bannerRefLabel(ref, labelFor)).join(', ')}` : ''
       }`
     : 'Save a table';
   const baseCopy = tableBaseCopy(
@@ -2865,16 +2903,20 @@ export function TablesBuilder({
                 onPickQuestion={value => {
                   if (!value) return;
                   setStub(value);
-                  setBanners(current => current.filter(item => item !== value));
+                  setBanners(current =>
+                    current.filter(item => !(item.kind === 'column' && item.column === value))
+                  );
                 }}
-                selectedGroups={banners}
+                selectedGroups={columnNamesFromBannerRefs(banners)}
                 onPickGroup={value => {
                   if (!value || value === stub) return;
-                  setBanners(current =>
-                    current.includes(value)
-                      ? current.filter(item => item !== value)
-                      : [...current, value]
-                  );
+                  setBanners(current => {
+                    const key = tableBannerKey({ kind: 'column', column: value });
+                    if (current.some(item => tableBannerKey(item) === key)) {
+                      return current.filter(item => tableBannerKey(item) !== key);
+                    }
+                    return [...current, { kind: 'column', column: value }];
+                  });
                 }}
                 onAskAgent={() => {
                   const root = document.querySelector(
@@ -3004,52 +3046,71 @@ export function TablesBuilder({
                     options={[
                       { value: '', label: '+ Drop variable' },
                       ...stubOptions
-                        .filter(item => !banners.includes(item.value))
+                        .filter(
+                          item =>
+                            !banners.some(
+                              banner => banner.kind === 'column' && banner.column === item.value
+                            )
+                        )
                         .map(item => ({ value: item.value, label: item.label })),
                     ]}
                   />
                 </div>
                 <div className="tables-line">
                   <span>Banner</span>
-                  {banners.map(name => (
-                    <span key={name} className="tables-chip-wrap">
-                      <VariablePreviewTrigger
-                        datasetId={datasetId}
-                        projectId={projectId}
-                        column={name}
-                        label={labelFor(name)}
-                        fileName={
-                          files.find(file => file.id === datasetId)?.name ||
-                          datasets.find(row => (row.dataset_id || row.id) === datasetId)
-                            ?.original_filename ||
-                          ''
-                        }
-                      />
-                      <Button
-                        className="tables-chip-clear"
-                        type="button"
-                        aria-label={`Remove ${labelFor(name)}`}
-                        onClick={() => setBanners(current => current.filter(item => item !== name))}
-                      >
-                        ×
-                      </Button>
-                    </span>
-                  ))}
-                  <ChoiceSelect
-                    className="flow-input"
-                    aria-label="Add banner"
-                    searchable
-                    value=""
-                    onValueChange={value => {
-                      if (!value || value === stub || banners.includes(value)) return;
-                      setBanners(current => [...current, value]);
+                  {banners.map(ref => {
+                    const key = tableBannerKey(ref);
+                    const label = bannerRefLabel(ref, labelFor);
+                    return (
+                      <span key={key} className={bannerChipClass(ref)}>
+                        {ref.kind === 'column' ? (
+                          <VariablePreviewTrigger
+                            datasetId={datasetId}
+                            projectId={projectId}
+                            column={ref.column}
+                            label={label}
+                            fileName={
+                              files.find(file => file.id === datasetId)?.name ||
+                              datasets.find(row => (row.dataset_id || row.id) === datasetId)
+                                ?.original_filename ||
+                              ''
+                            }
+                          />
+                        ) : (
+                          <span className="tables-chip-label">{label}</span>
+                        )}
+                        <Button
+                          className="tables-chip-clear"
+                          type="button"
+                          aria-label={`Remove ${label}`}
+                          onClick={() =>
+                            setBanners(current =>
+                              current.filter(item => tableBannerKey(item) !== key)
+                            )
+                          }
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    );
+                  })}
+                  <BannerAddPicker
+                    audiences={audiences}
+                    questions={stubOptions.map(item => ({
+                      value: item.value,
+                      label: item.label,
+                    }))}
+                    selected={banners}
+                    stub={stub}
+                    onPick={ref => {
+                      const key = tableBannerKey(ref);
+                      if (ref.kind === 'column' && ref.column === stub) return;
+                      setBanners(current =>
+                        current.some(item => tableBannerKey(item) === key)
+                          ? current
+                          : [...current, ref]
+                      );
                     }}
-                    options={[
-                      { value: '', label: '+' },
-                      ...stubOptions
-                        .filter(item => item.value !== stub && !banners.includes(item.value))
-                        .map(item => ({ value: item.value, label: item.label })),
-                    ]}
                   />
                 </div>
                 <div className="tables-line wrap">
@@ -3456,7 +3517,7 @@ export function TablesBuilder({
               settings={significance}
               onChange={applySignificance}
               onClose={() => setSigPanelOpen(false)}
-              controlOptions={banners.map(column => ({
+              controlOptions={columnNamesFromBannerRefs(banners).map(column => ({
                 value: column,
                 label: labelFor(column),
               }))}
