@@ -1872,6 +1872,21 @@ export function weightOptionLabel(name: string, label: string): string {
   return clean;
 }
 
+/** Sentinel in weight ChoiceSelects: opens WeightPanel instead of selecting a column. */
+export const NEW_WEIGHT_OPTION = '__new_weight__';
+
+/** Append "New weight…" so Tables and Responses can open the weighting screen. */
+export function appendNewWeightOption(
+  options: { value: string; label: string }[]
+): { value: string; label: string }[] {
+  return [...options, { value: NEW_WEIGHT_OPTION, label: 'New weight…' }];
+}
+
+/** True when the select chose "New weight…". */
+export function isNewWeightChoice(value: string): boolean {
+  return value === NEW_WEIGHT_OPTION;
+}
+
 /** The question. A category such as Midlands is not the question's name. */
 export function columnChoiceLabel(column: { name: string; label: string }): string {
   const label = column.label.trim();
@@ -3492,8 +3507,15 @@ export function TablesBuilder({
                     className="flow-input tables-weight"
                     aria-label="Table weight"
                     value={weight}
-                    onValueChange={setWeight}
-                    options={[
+                    onValueChange={value => {
+                      if (isNewWeightChoice(value)) {
+                        setWeightRerake(false);
+                        setWeightOpen(true);
+                        return;
+                      }
+                      setWeight(value);
+                    }}
+                    options={appendNewWeightOption([
                       { value: '', label: 'Unweighted' },
                       ...weightColumns.map(name => {
                         const label = labelFor(name);
@@ -3506,7 +3528,7 @@ export function TablesBuilder({
                               : weightOptionLabel(name, label),
                         };
                       }),
-                    ]}
+                    ])}
                   />
                   <span className="flow-muted">Scale</span>
                   <div className="tables-segment">

@@ -268,17 +268,23 @@ import {
 } from '@/components/flow/variable-lineage';
 import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
 import {
+  appendNewWeightOption,
   datasetRowId,
   downloadExport,
   EvidencePanel,
   fileToBase64,
+  isNewWeightChoice,
+  isTableWeightColumn,
   setSurveyCell,
+  tableWeightChoices,
   useEvidenceSheet,
   TablesBuilder,
   ThemesPanel,
   useSurveyCell,
+  weightOptionLabel,
   WeightPanel,
 } from '@/components/flow/survey-screens';
+import { setActiveWeight } from '@/lib/dataset-data-ops';
 type FlowRecipe = {
   name?: string;
   recipe_id?: string;
@@ -3660,6 +3666,8 @@ function ResponsesScreen({
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [sheetWeight, setSheetWeight] = useState('');
+  const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [mergeSmall, setMergeSmall] = useState<{
     field: string;
     label: string;
@@ -3750,6 +3758,48 @@ function ResponsesScreen({
       cancelled = true;
     };
   }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey, sheetKey]);
+  useEffect(() => {
+    if (!datasetId) {
+      setWeightColumns([]);
+      setSheetWeight('');
+      return;
+    }
+    let cancelled = false;
+    void flowJson<{
+      columns?: { name?: string; label?: string; role?: string | null }[];
+      weight_columns?: string[];
+      active_weight_column?: string | null;
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        if (cancelled) return;
+        const listed = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
+        const fromRole = (meta.columns || [])
+          .filter(
+            (column): column is { name: string; label?: string; role?: string | null } =>
+              Boolean(column.name) &&
+              isTableWeightColumn(
+                { name: column.name || '', label: column.label, role: column.role || undefined },
+                listed
+              )
+          )
+          .map(column => column.name);
+        const choices = tableWeightChoices(
+          [...listed, ...fromRole],
+          meta.active_weight_column || ''
+        );
+        setWeightColumns(choices);
+        const active = meta.active_weight_column || '';
+        setSheetWeight(active && active !== '_weight' ? active : '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeightColumns([]);
+        setSheetWeight('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -4265,6 +4315,41 @@ function ResponsesScreen({
               >
                 Check data
               </Button>
+              <ChoiceSelect
+                className="flow-input tables-weight"
+                aria-label="Sheet weight"
+                value={sheetWeight}
+                disabled={!datasetId}
+                onValueChange={value => {
+                  if (isNewWeightChoice(value)) {
+                    setWeightOpen(true);
+                    return;
+                  }
+                  if (!datasetId) return;
+                  const previous = sheetWeight;
+                  setSheetWeight(value);
+                  void setActiveWeight(datasetId, value || null).catch(() => {
+                    setSheetWeight(previous);
+                    setSheetNote('Could not change the active weight.');
+                  });
+                }}
+                options={appendNewWeightOption([
+                  { value: '', label: 'Unweighted' },
+                  ...weightColumns.map(name => {
+                    const meta = columns.find(column => column.name === name);
+                    const label = String(meta?.label || '').trim() || name;
+                    const shared = weightColumns.filter(other => {
+                      const otherMeta = columns.find(column => column.name === other);
+                      return (String(otherMeta?.label || '').trim() || other) === label;
+                    });
+                    return {
+                      value: name,
+                      label:
+                        shared.length > 1 ? `${label} · ${name}` : weightOptionLabel(name, label),
+                    };
+                  }),
+                ])}
+              />
               {surveyCell ? (
                 <>
                   <Button

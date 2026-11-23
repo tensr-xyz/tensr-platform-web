@@ -3,6 +3,9 @@ import { memberInitials, recentProjects, uniqueFolderName } from './flow-shell';
 import { outputCounts, type OutputRun } from './report-output-runs';
 import { settingsSection } from './settings-screen';
 import {
+  appendNewWeightOption,
+  isNewWeightChoice,
+  NEW_WEIGHT_OPTION,
   scaleCodesFromValues,
   splitColumns,
   tableWeightChoices,
@@ -16,6 +19,17 @@ describe('QA round 4', () => {
     expect(scaleCodesFromValues(['1', '2', '3', '4', '5'], 'top')).toEqual(['4', '5']);
     expect(scaleCodesFromValues(['1', '2', '3', '4', '5'], 'bottom')).toEqual(['1', '2']);
     expect(scaleCodesFromValues(['Yes', 'No'], 'top')).toEqual([]);
+  });
+
+  it('TEN-57: weight menus end with New weight… without selecting that sentinel', () => {
+    const options = appendNewWeightOption([
+      { value: '', label: 'Unweighted' },
+      { value: 'design_wt', label: 'Design weight' },
+    ]);
+    expect(options.at(-1)).toEqual({ value: NEW_WEIGHT_OPTION, label: 'New weight…' });
+    expect(isNewWeightChoice(NEW_WEIGHT_OPTION)).toBe(true);
+    expect(isNewWeightChoice('design_wt')).toBe(false);
+    expect(isNewWeightChoice('')).toBe(false);
   });
 
   it('4: themes sort by count and uncoded answers are their own row', () => {

@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { DropdownMenuItem, Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
-import { datasetRowId } from '@/components/flow/survey-screens';
+import { datasetRowId, WeightPanel } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { StackWaves } from '@/components/flow/stack-waves';
 import { JoinFiles } from '@/components/flow/join-files';
@@ -306,6 +306,7 @@ export function SourcesScreen({
   const [addOpen, setAddOpen] = useState(false);
   const [stackOpen, setStackOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [weightOpen, setWeightOpen] = useState(false);
   const [docName, setDocName] = useState('');
   const [docKind, setDocKind] = useState('brief');
   const [docText, setDocText] = useState('');
@@ -658,28 +659,44 @@ export function SourcesScreen({
               Stacked, weighted or coded copies Tensr made. Export any as .sav with an .sps weight
               file. Your uploads stay unchanged.
             </p>
-            {files.length >= 2 ? (
+            {files.length >= 1 ? (
               <span className="sources-actions">
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    activeBeforeStack.current = activeId;
-                    setJoinOpen(true);
-                  }}
-                >
-                  Join files
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    activeBeforeStack.current = activeId;
-                    setStackOpen(true);
-                  }}
-                >
-                  Stack files
-                </Button>
+                {activeId ? (
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      activeBeforeStack.current = activeId;
+                      setWeightOpen(true);
+                    }}
+                  >
+                    Weight this file
+                  </Button>
+                ) : null}
+                {files.length >= 2 ? (
+                  <>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setJoinOpen(true);
+                      }}
+                    >
+                      Join files
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setStackOpen(true);
+                      }}
+                    >
+                      Stack files
+                    </Button>
+                  </>
+                ) : null}
               </span>
             ) : null}
           </div>
@@ -903,6 +920,34 @@ export function SourcesScreen({
           />
         </DialogContent>
       </Dialog>
+
+      {weightOpen && activeId ? (
+        <WeightPanel
+          datasetId={activeId}
+          datasets={files}
+          onClose={() => setWeightOpen(false)}
+          onAdopted={nextId => {
+            setWeightOpen(false);
+            if (!projectId || !nextId) {
+              onChanged();
+              return;
+            }
+            void flowJson(`/api/projects/${projectId}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ active_dataset_id: nextId }),
+            }).then(() => {
+              showDatasetVersionUndoToast({
+                projectId,
+                previousDatasetId: activeBeforeStack.current,
+                currentDatasetId: nextId,
+                title: 'Weighted as a new version',
+                onRestored: () => onChanged(),
+              });
+              onChanged();
+            });
+          }}
+        />
+      ) : null}
     </section>
   );
 }
