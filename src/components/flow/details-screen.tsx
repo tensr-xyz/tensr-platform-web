@@ -190,17 +190,8 @@ function roleLabel(role?: string): string {
 }
 
 function columnKind(column: FlowColumn): string {
-  const name = column.name;
-  if (name.endsWith('_codes')) return 'open';
-  const type = String(column.type || '').toLowerCase();
-  const labels = Object.keys(column.value_labels || {});
-  if (labels.length >= 5 && labels.every(code => /^\d+(\.0)?$/.test(code))) {
-    return `scale ${Math.min(...labels.map(Number))}-${Math.max(...labels.map(Number))}`;
-  }
-  if (['string', 'text'].includes(type)) return labels.length ? 'single' : 'open';
-  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type))
-    return labels.length ? 'single' : 'numeric';
-  return type || 'single';
+  // Same rules as the outline: labelled nominals stay single, not a rating scale.
+  return questionKind(column, []);
 }
 
 function editedLabel(value?: string): string {

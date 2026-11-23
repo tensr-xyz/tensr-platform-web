@@ -65,6 +65,26 @@ describe('firstRunQuestionTypeLabel', () => {
     expect(firstRunQuestionTypeLabel('single')).toBe('Single choice');
     expect(firstRunQuestionTypeLabel('numeric')).toBe('Number');
   });
+
+  it('shows labelled regions as Single choice on the first-run board', () => {
+    const { questionKind } = jest.requireActual('./flow-columns');
+    const kind = questionKind(
+      {
+        name: 'region',
+        type: 'numeric',
+        measure: 'nominal',
+        value_labels: {
+          '1': 'North',
+          '2': 'South',
+          '3': 'East',
+          '4': 'West',
+          '5': 'Central',
+        },
+      },
+      [1, 2, 3, 4, 5]
+    );
+    expect(firstRunQuestionTypeLabel(kind)).toBe('Single choice');
+  });
 });
 
 describe('firstRunSuggestedQuestions', () => {

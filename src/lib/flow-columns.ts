@@ -1,5 +1,7 @@
 /** Columns the ANOVA dependent list may offer. A numeric companion stays even when the preview type is text. */
 
+import { labelledMeasure, orderedValueLabels } from '@/lib/measure-level';
+
 export type FlowColumn = {
   name: string;
   label?: string | null;
@@ -331,6 +333,33 @@ export function themeColumns(
     });
 }
 
+/** True when a short integer run may be shown as a rating scale pill. */
+function looksLikeRatingScale(
+  column: FlowColumn,
+  min: number,
+  max: number,
+  distinct: number
+): boolean {
+  if (!((min === 0 || min === 1) && (max === 5 || max === 7 || max === 10) && distinct >= 3)) {
+    return false;
+  }
+  const measure = String(column.measure || '').toLowerCase();
+  // Named places and brands are never a rating scale, even on a 1–5 code run.
+  if (measure === 'nominal') return false;
+  const valueLabels = column.value_labels || {};
+  const labelKeys = Object.keys(valueLabels);
+  if (labelKeys.length >= 2) {
+    const map: Record<string, string> = {};
+    for (const key of labelKeys) map[key] = String(valueLabels[key] ?? '');
+    // Unordered labelled codes (Region, profession) stay single choice.
+    if (labelledMeasure(map) === 'nominal') return false;
+    if (measure === 'ordinal' || measure === 'scale') return true;
+    return orderedValueLabels(map);
+  }
+  // Unlabelled short integer runs (trust 1–5) stay a scale.
+  return measure === 'scale' || measure === 'ordinal' || measure === '';
+}
+
 /** The question type for an outline pill: single, multi, scale with its range, numeric, or open. */
 export function questionKind(
   column: FlowColumn & { coded_multi?: boolean },
@@ -347,17 +376,27 @@ export function questionKind(
   const integers = codes.length > 0 && codes.every(value => Number.isInteger(value));
   const distinct = new Set(codes).size;
   const type = String(column.type || '').toLowerCase();
-  if (integers && numbers.length === seen.length) {
+  const measure = String(column.measure || '').toLowerCase();
+  if (integers && (labels.length > 0 || numbers.length === seen.length)) {
     const min = Math.min(...codes);
     const max = Math.max(...codes);
     if ((min === 0 || min === 1) && distinct <= 2 && max <= 1) return 'single';
-    if ((min === 0 || min === 1) && (max === 5 || max === 7 || max === 10) && distinct >= 3) {
+    if (looksLikeRatingScale(column, min, max, distinct)) {
       return `scale ${min}-${max}`;
     }
-    if (distinct <= 12) return 'single';
+    if (labels.length || distinct <= 12) return 'single';
   }
   if (labels.length) return 'single';
-  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type)) return 'numeric';
+  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type)) {
+    // Mistyped open ends (numeric storage, nominal measure, many distinct values).
+    if (measure === 'nominal') {
+      const nUnique = Number(column.n_unique);
+      if (Number.isFinite(nUnique) && nUnique > 12) return 'open';
+      if (seen.length && new Set(seen).size > 12) return 'open';
+      return 'single';
+    }
+    return 'numeric';
+  }
   const unique = new Set(seen).size;
   if (seen.length && unique <= 12 && unique < seen.length / 2) return 'single';
   // Tables metadata often has no sample values. n_unique still marks text categories.

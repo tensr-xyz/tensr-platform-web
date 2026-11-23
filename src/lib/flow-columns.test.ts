@@ -297,6 +297,80 @@ describe('question kind', () => {
     expect(questionKind({ name: 'q5_1', type: 'numeric' }, [1], new Set(['q5_1']))).toBe('multi');
     expect(questionKind({ name: 'weight', type: 'numeric' }, [0.8, 1.2, 1.1])).toBe('numeric');
   });
+
+  it('keeps labelled nominals as single choice, not a rating scale', () => {
+    const { questionKind } = jest.requireActual('./flow-columns');
+    const regionLabels = {
+      '1': 'North',
+      '2': 'South',
+      '3': 'East',
+      '4': 'West',
+      '5': 'Central',
+    };
+    expect(
+      questionKind(
+        {
+          name: 'region',
+          type: 'numeric',
+          measure: 'nominal',
+          value_labels: regionLabels,
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'region',
+          type: 'numeric',
+          measure: 'scale',
+          value_labels: regionLabels,
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'profession',
+          type: 'numeric',
+          value_labels: {
+            '1': 'GP',
+            '2': 'Nurse',
+            '3': 'Pharmacist',
+            '4': 'Dietitian',
+            '5': 'Specialist',
+            '6': 'Other clinician',
+            '7': 'Prefer not to say',
+          },
+        },
+        [1, 2, 3, 4, 5, 6, 7]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'agree',
+          type: 'numeric',
+          measure: 'ordinal',
+          value_labels: {
+            '1': 'Strongly disagree',
+            '2': 'Disagree',
+            '3': 'Neither',
+            '4': 'Agree',
+            '5': 'Strongly agree',
+          },
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('scale 1-5');
+    expect(
+      questionKind(
+        { name: 'why', type: 'numeric', measure: 'nominal', n_unique: 200, n_rows: 300 },
+        []
+      )
+    ).not.toBe('numeric');
+  });
 });
 
 describe('id columns', () => {
