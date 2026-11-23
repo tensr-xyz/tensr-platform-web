@@ -5963,10 +5963,13 @@ button.chat-result-top {
   margin-left: 2px;
 }
 
+/* Paper 9b: fixed 360px right column on the Tables board (replaces the agent while open). */
 .tables-sig-panel {
-  flex-shrink: 0;
   width: 360px;
-  max-width: 100%;
+  min-width: 360px;
+  max-width: 360px;
+  min-height: 0;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -6528,14 +6531,12 @@ button.chat-result-top {
   flex-direction: column;
 }
 
-.tables-main-body.tables-main-with-sig {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-}
-
-.tables-main-body.tables-main-with-sig > .tables-sheet {
-  min-width: 0;
-  min-height: 0;
+/* Keep figure cells readable when the main column is narrow: scroll the sheet
+   instead of letting fixed-layout columns crush nowrap text into neighbours. */
+.tables-sheet .banner-grid {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
 }
 
 .banner-grid tbody tr:last-child th,

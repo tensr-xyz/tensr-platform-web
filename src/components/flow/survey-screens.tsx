@@ -3212,11 +3212,7 @@ export function TablesBuilder({
                     </Button>
                   </p>
                 ) : null}
-                <div
-                  className={
-                    sigPanelOpen ? 'tables-main-body tables-main-with-sig' : 'tables-main-body'
-                  }
-                >
+                <div className="tables-main-body">
                   <div className="tables-sheet">
                     <div className="tables-title">
                       <div>
@@ -3378,16 +3374,6 @@ export function TablesBuilder({
                       </p>
                     )}
                   </div>
-                  {sigPanelOpen ? (
-                    <TableSignificancePanel
-                      settings={significance}
-                      onChange={applySignificance}
-                      controlOptions={banners.map(column => ({
-                        value: column,
-                        label: labelFor(column),
-                      }))}
-                    />
-                  ) : null}
                 </div>
                 <div className="tables-foot">
                   <span>{totalBase}</span>
@@ -3396,54 +3382,68 @@ export function TablesBuilder({
               </>
             ) : null}
           </section>
-          <SidePanel id="tables-agent" defaultWidth={320} className="tables-agent">
-            <div className="tables-agent-head">
-              <span className="tables-dot" />
-              <span>
-                {firstRun ? 'Ask the agent' : book ? title.replace(/^T\d+ · /, '') : 'Table'}
-              </span>
-            </div>
-            <AgentThread
-              projectId={projectId || ''}
-              datasetId={datasetId}
-              columnNames={columns.map(column => column.name)}
-              columnLabels={columns.map(column => ({
-                name: column.name,
-                label: column.label,
-                value_labels: column.labels,
+          {/* Paper 9b: significance is the right column (360px). Hide the agent while it is open
+              so the table is not squeezed between both panels. */}
+          {sigPanelOpen ? (
+            <TableSignificancePanel
+              settings={significance}
+              onChange={applySignificance}
+              onClose={() => setSigPanelOpen(false)}
+              controlOptions={banners.map(column => ({
+                value: column,
+                label: labelFor(column),
               }))}
-              placeholder={
-                firstRun
-                  ? 'Ask, or describe a table to build…'
-                  : 'Ask, or tell it to change the table…'
-              }
-              projectHref={projectId ? `/flow/p/${projectId}` : '/flow'}
-              emptyTitle={
-                firstRun
-                  ? 'Not sure where to start?'
-                  : selectedNumber
-                    ? `Ask about T${selectedNumber}`
-                    : 'Ask about this table'
-              }
-              emptyDescription={
-                firstRun
-                  ? 'Tell the agent what you want to know and it builds the table for you.'
-                  : 'Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it.'
-              }
-              emptySuggestions={agentPrompts}
-              onFinished={result => {
-                const built = bookFromToolResults(result.tool_results);
-                const request = built
-                  ? tableBodyFromAgentBook(built)
-                  : tableBodyFromAgentRun(result.tool_results);
-                if (built) {
-                  setBook(built);
-                  setView('table');
-                }
-                if (request) void adoptAgentTable(request);
-              }}
             />
-          </SidePanel>
+          ) : (
+            <SidePanel id="tables-agent" defaultWidth={320} className="tables-agent">
+              <div className="tables-agent-head">
+                <span className="tables-dot" />
+                <span>
+                  {firstRun ? 'Ask the agent' : book ? title.replace(/^T\d+ · /, '') : 'Table'}
+                </span>
+              </div>
+              <AgentThread
+                projectId={projectId || ''}
+                datasetId={datasetId}
+                columnNames={columns.map(column => column.name)}
+                columnLabels={columns.map(column => ({
+                  name: column.name,
+                  label: column.label,
+                  value_labels: column.labels,
+                }))}
+                placeholder={
+                  firstRun
+                    ? 'Ask, or describe a table to build…'
+                    : 'Ask, or tell it to change the table…'
+                }
+                projectHref={projectId ? `/flow/p/${projectId}` : '/flow'}
+                emptyTitle={
+                  firstRun
+                    ? 'Not sure where to start?'
+                    : selectedNumber
+                      ? `Ask about T${selectedNumber}`
+                      : 'Ask about this table'
+                }
+                emptyDescription={
+                  firstRun
+                    ? 'Tell the agent what you want to know and it builds the table for you.'
+                    : 'Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it.'
+                }
+                emptySuggestions={agentPrompts}
+                onFinished={result => {
+                  const built = bookFromToolResults(result.tool_results);
+                  const request = built
+                    ? tableBodyFromAgentBook(built)
+                    : tableBodyFromAgentRun(result.tool_results);
+                  if (built) {
+                    setBook(built);
+                    setView('table');
+                  }
+                  if (request) void adoptAgentTable(request);
+                }}
+              />
+            </SidePanel>
+          )}
         </>
       )}
       {weightOpen ? (
