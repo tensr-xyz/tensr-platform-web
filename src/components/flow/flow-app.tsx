@@ -221,8 +221,8 @@ import {
   findingFromOverview,
   findingFromStale,
   findingFromTable,
-  findingsWithOutOfDate,
   outOfDateLine,
+  partitionLiveAndStale,
   reportTableFromBook,
   shownPercent,
   titledWithQuestions,
@@ -5472,6 +5472,21 @@ function ReportScreen({
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
+        // Overview titles can still carry codes until tables load; rewrite labels now.
+        setFindings(current =>
+          current.map(finding => ({
+            ...finding,
+            eyebrow: titledWithQuestions(finding.eyebrow, questions),
+            headline: titledWithQuestions(finding.headline, questions),
+            support: titledWithQuestions(finding.support, questions),
+          }))
+        );
+        setStaleTables(current =>
+          current.map(table => ({
+            ...table,
+            label: titledWithQuestions(table.label, questions),
+          }))
+        );
         let openFailed = false;
         const opened = liveRows.length
           ? await flowJson<{
@@ -6470,83 +6485,105 @@ function ReportScreen({
             </p>
           ) : (
             <>
-              {placePins(
-                findingsWithOutOfDate(
-                  findings,
-                  staleTables.map(table => findingFromStale(table))
-                ),
-                reportPins
-              ).map(entry => {
-                if (entry.kind === 'pin') {
-                  return <OutputPin key={entry.item.id} pin={entry.item} />;
-                }
-                const finding = entry.item;
-                const stale = staleTables.find(
-                  table => table.id === finding.id || table.id === finding.tableId
-                );
-                const inUse = versionLabel(datasets, datasetId || '', '');
-                const builtOn = stale
-                  ? versionLabel(datasets, stale.datasetId, stale.filename)
-                  : '';
-                const headline = stale?.label || finding.headline;
-                const support = stale ? outOfDateLine(builtOn, inUse) : finding.support;
-                return (
-                  <article key={finding.id} className="report-finding">
-                    <div className="report-finding-copy">
-                      {finding.eyebrow ? <p className="flow-muted">{finding.eyebrow}</p> : null}
-                      <div className="report-finding-title">
-                        <h3>{headline}</h3>
-                        {stale ? <Badge tone="warn">Out of date</Badge> : null}
+              {(() => {
+                const staleFindings = staleTables.map(table => findingFromStale(table));
+                const { live, outdated } = partitionLiveAndStale(findings, staleFindings);
+                const renderFinding = (
+                  finding: ReportFinding,
+                  stale: (typeof staleTables)[0] | undefined
+                ) => {
+                  const inUse = versionLabel(datasets, datasetId || '', '');
+                  const builtOn = stale
+                    ? versionLabel(datasets, stale.datasetId, stale.filename)
+                    : '';
+                  const headline = stale?.label || finding.headline;
+                  const support = stale ? outOfDateLine(builtOn, inUse) : finding.support;
+                  return (
+                    <article key={finding.id} className="report-finding">
+                      <div className="report-finding-copy">
+                        {finding.eyebrow ? <p className="flow-muted">{finding.eyebrow}</p> : null}
+                        <div className="report-finding-title">
+                          <h3>{headline}</h3>
+                          {stale ? <Badge tone="warn">Out of date</Badge> : null}
+                        </div>
+                        {support ? <p>{support}</p> : null}
+                        {stale && staleErrors[stale.id] ? (
+                          <p className="flow-error">{staleErrors[stale.id]}</p>
+                        ) : null}
+                        <div className="report-chips">
+                          {finding.citation ? (
+                            <span className="report-chip accent">{finding.citation}</span>
+                          ) : null}
+                          {finding.significant ? (
+                            <span className="report-chip">Sig 95%</span>
+                          ) : null}
+                          {finding.lowBase ? (
+                            <span className="report-chip warn">Low base</span>
+                          ) : null}
+                          {stale ? (
+                            <Button
+                              className="report-chip accent"
+                              type="button"
+                              disabled={busy !== ''}
+                              onClick={() => void rebuildStale(stale, rebuildOffers[stale.id]?.id)}
+                            >
+                              {rebuildOffers[stale.id]
+                                ? `Rebuild on ${rebuildOffers[stale.id].filename}`
+                                : staleErrors[stale.id]
+                                  ? 'Retry'
+                                  : 'Rebuild'}
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
-                      {support ? <p>{support}</p> : null}
-                      {stale && staleErrors[stale.id] ? (
-                        <p className="flow-error">{staleErrors[stale.id]}</p>
+                      {finding.bars.length ? (
+                        <div className="report-bars">
+                          {finding.bars.map((bar, barIndex) => (
+                            <div key={`${finding.id}-${barIndex}-${bar.label}`}>
+                              <div className="report-bar-label">
+                                <span>{bar.label}</span>
+                                <span>{shownPercent(bar.percent, finding.decimals)}</span>
+                              </div>
+                              <div className="report-bar-track">
+                                <div
+                                  className="report-bar"
+                                  style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : null}
-                      <div className="report-chips">
-                        {finding.citation ? (
-                          <span className="report-chip accent">{finding.citation}</span>
-                        ) : null}
-                        {finding.significant ? <span className="report-chip">Sig 95%</span> : null}
-                        {finding.lowBase ? (
-                          <span className="report-chip warn">Low base</span>
-                        ) : null}
-                        {stale ? (
-                          <Button
-                            className="report-chip accent"
-                            type="button"
-                            disabled={busy !== ''}
-                            onClick={() => void rebuildStale(stale, rebuildOffers[stale.id]?.id)}
-                          >
-                            {rebuildOffers[stale.id]
-                              ? `Rebuild on ${rebuildOffers[stale.id].filename}`
-                              : staleErrors[stale.id]
-                                ? 'Retry'
-                                : 'Rebuild'}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                    {finding.bars.length ? (
-                      <div className="report-bars">
-                        {finding.bars.map((bar, barIndex) => (
-                          <div key={`${finding.id}-${barIndex}-${bar.label}`}>
-                            <div className="report-bar-label">
-                              <span>{bar.label}</span>
-                              <span>{shownPercent(bar.percent, finding.decimals)}</span>
-                            </div>
-                            <div className="report-bar-track">
-                              <div
-                                className="report-bar"
-                                style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    </article>
+                  );
+                };
+                return (
+                  <>
+                    {placePins(live, reportPins).map(entry => {
+                      if (entry.kind === 'pin') {
+                        return <OutputPin key={entry.item.id} pin={entry.item} />;
+                      }
+                      return renderFinding(entry.item, undefined);
+                    })}
+                    {outdated.length ? (
+                      <details className="report-stale">
+                        <summary>
+                          Needs rebuild · {outdated.length}{' '}
+                          {outdated.length === 1 ? 'table' : 'tables'}
+                        </summary>
+                        <div className="report-stale-list">
+                          {outdated.map(finding => {
+                            const stale = staleTables.find(
+                              table => table.id === finding.id || table.id === finding.tableId
+                            );
+                            return renderFinding(finding, stale);
+                          })}
+                        </div>
+                      </details>
                     ) : null}
-                  </article>
+                  </>
                 );
-              })}
+              })()}
             </>
           )}
         </div>

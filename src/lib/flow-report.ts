@@ -107,27 +107,45 @@ export type ReportFinding = {
 
 type NumberedRow = { row: BannerRow; number: number };
 
-/** Replace variable names in a title with the question label, once, on the original text. */
+/** Replace variable names in a title with the question label. Source_wave reads as Source file. */
 export function titledWithQuestions(
   title: string,
-  columns: { name?: string; label?: string }[]
+  columns: { name?: string; label?: string }[] = []
 ): string {
-  const usable = columns
-    .map(column => ({ name: column.name || '', label: (column.label || '').trim() }))
-    .filter(
-      column =>
-        column.name && column.label && column.label.toLowerCase() !== column.name.toLowerCase()
-    )
-    .sort((left, right) => right.name.length - left.name.length);
+  const labels = new Map<string, string>();
+  for (const column of columns) {
+    const name = String(column.name || '').trim();
+    const label = String(column.label || '').trim();
+    // Keep capitalised labels (Gender) and skip only when the label is the bare code.
+    if (!name || !label || label === name) continue;
+    labels.set(name.toLowerCase(), label);
+  }
+  // Metadata sometimes omits the Source file stamp; titles must still not show the code.
+  const waveInTitle = title.match(/\bsource_wave(?:_\w+)?\b/gi) || [];
+  for (const match of waveInTitle) {
+    const key = match.toLowerCase();
+    if (!labels.has(key)) labels.set(key, 'Source file');
+  }
+  if (!labels.has('source_wave')) labels.set('source_wave', 'Source file');
+  const usable = [...labels.entries()].sort((left, right) => right[0].length - left[0].length);
   if (!usable.length) return title;
-  const labels = new Map(usable.map(column => [column.name.toLowerCase(), column.label]));
-  const pattern = usable
-    .map(column => column.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
+  const pattern = usable.map(([name]) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
   return title.replace(
     new RegExp(`(?<![\\w])(?:${pattern})(?![\\w])`, 'gi'),
     match => labels.get(match.toLowerCase()) || match
   );
+}
+
+/** Live findings first; out-of-date tables are listed separately so the UI can collapse them. */
+export function partitionLiveAndStale<
+  T extends { id: string; tableId: string; citation?: string; eyebrow?: string },
+>(findings: T[], stale: T[]): { live: T[]; outdated: T[] } {
+  const ids = new Set(stale.flatMap(item => [item.id, item.tableId]));
+  const live = findings
+    .filter(item => !ids.has(item.id) && !ids.has(item.tableId))
+    .sort((left, right) => findingNumber(left) - findingNumber(right));
+  const outdated = [...stale].sort((left, right) => findingNumber(left) - findingNumber(right));
+  return { live, outdated };
 }
 
 export function reportTableFromBook(
@@ -545,11 +563,7 @@ function findingNumber(finding: { citation?: string; eyebrow?: string }): number
 export function findingsWithOutOfDate<
   T extends { id: string; tableId: string; citation?: string; eyebrow?: string },
 >(findings: T[], stale: T[]): T[] {
-  const ids = new Set(stale.flatMap(item => [item.id, item.tableId]));
-  const live = findings
-    .filter(item => !ids.has(item.id) && !ids.has(item.tableId))
-    .sort((left, right) => findingNumber(left) - findingNumber(right));
-  const outdated = [...stale].sort((left, right) => findingNumber(left) - findingNumber(right));
+  const { live, outdated } = partitionLiveAndStale(findings, stale);
   return [...live, ...outdated];
 }
 

@@ -1059,6 +1059,55 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   padding-top: 26px;
 }
 
+.report-stale {
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-well);
+  padding: 0;
+}
+
+.report-stale > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 18px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+  color: var(--color-warn, #a15c12);
+}
+
+.report-stale > summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-stale > summary::before {
+  content: '';
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-right: 0.55em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  vertical-align: 0.15em;
+}
+
+.report-stale[open] > summary::before {
+  transform: rotate(45deg);
+  vertical-align: 0.05em;
+}
+
+.report-stale-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.report-stale-list .report-finding {
+  background: var(--color-canvas, #fff);
+}
+
 .report-template {
   display: flex;
   align-items: center;
