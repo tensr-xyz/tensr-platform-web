@@ -60,6 +60,7 @@ import {
   answeredTurnCount,
   restoredChatAnswer,
   savedChatTurn,
+  type StoredChatSession,
   type StoredChatTurn,
 } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
@@ -261,6 +262,8 @@ export function useAgentThread({
   const [mode, setMode] = useState<Mode>('agent');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  /** Composer lock for the whole send/approve flight (status alone clears on first token). */
+  const [runBusy, setRunBusy] = useState(false);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
   const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
   const [approving, setApproving] = useState(false);
@@ -453,10 +456,10 @@ export function useAgentThread({
       const sessionId = sessionRef.current;
       if (!projectId || !sessionId) return null;
       try {
-        const page = await flowJson<{ turns?: StoredChatTurn[] }>(
+        const page = await flowJson<StoredChatSession>(
           `/api/projects/${projectId}/sessions/${sessionId}`
         );
-        const saved = savedChatTurn(page.turns, question, nextMode, alreadyAnswered);
+        const saved = savedChatTurn(page.turns, question, nextMode, alreadyAnswered, page);
         if (saved) saved.session_id = sessionId;
         return saved;
       } catch {
@@ -470,12 +473,13 @@ export function useAgentThread({
     async (rawText: string, nextMode: Mode = modeRef.current) => {
       const resolved = resolveNumberedNextStep(rawText, nextStepsRef.current);
       const text = resolved || rawText;
-      if (!text.trim() || sendingRef.current) return false;
-      const turnToken = ++turnTokenRef.current;
-      if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
-        return false;
+      if (!text.trim() || sendingRef.current || approvingRef.current) return false;
       if (projectId && chatRunInFlight(projectId)) return false;
+      if (statusRef.current === 'Thinking…') return false;
+      // Lock before bumping the turn token so a second Enter cannot slip through.
       sendingRef.current = true;
+      setRunBusy(true);
+      const turnToken = ++turnTokenRef.current;
       ensureChatNotificationPermission();
       const startedAt = Date.now();
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
@@ -777,6 +781,7 @@ export function useAgentThread({
         return true;
       } finally {
         sendingRef.current = false;
+        setRunBusy(false);
       }
     },
     [
@@ -824,10 +829,11 @@ export function useAgentThread({
         : null;
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
     const approvedSession = plan.session_id || sessionRef.current;
-    const turnToken = ++turnTokenRef.current;
-    const startedAt = Date.now();
     approvingRef.current = true;
     setApproving(true);
+    setRunBusy(true);
+    const turnToken = ++turnTokenRef.current;
+    const startedAt = Date.now();
     setStatus('Thinking…');
     setAnswer('');
     setNextSteps([]);
@@ -925,6 +931,7 @@ export function useAgentThread({
           });
         }
         approvingRef.current = false;
+        setRunBusy(false);
       })
       .catch(err => {
         if (turnToken !== turnTokenRef.current) return;
@@ -938,12 +945,14 @@ export function useAgentThread({
           publishLiveChatRun({ ...current!, running: false, status: message });
         }
         approvingRef.current = false;
+        setRunBusy(false);
       });
   };
 
   const clearChat = () => {
     turnTokenRef.current += 1;
     approvingRef.current = false;
+    sendingRef.current = false;
     sessionRef.current = null;
     publishLiveChatRun(null);
     rememberChat(null);
@@ -957,6 +966,7 @@ export function useAgentThread({
     if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
     setApproving(false);
+    setRunBusy(false);
     setTurn(null);
     setSteps([]);
     setDownloads([]);
@@ -994,14 +1004,18 @@ export function useAgentThread({
       openAbort.current = controller;
       sessionRef.current = sessionId;
       rememberChat(sessionId);
-      void flowJson<{
-        turns?: {
-          user?: string;
-          answer?: string;
-          tool_results?: AgentLoopResponse['tool_results'];
-          steps?: { name?: string; message?: string }[];
-        }[];
-      }>(`/api/projects/${projectId}/sessions/${sessionId}`, { signal: controller.signal })
+      void flowJson<
+        {
+          turns?: {
+            user?: string;
+            answer?: string;
+            tool_results?: AgentLoopResponse['tool_results'];
+            steps?: { name?: string; message?: string }[];
+          }[];
+        } & StoredChatSession
+      >(`/api/projects/${projectId}/sessions/${sessionId}`, {
+        signal: controller.signal,
+      })
         .then(page => {
           if (token !== openToken.current) return;
           const exchanges = (page.turns || []).flatMap(item =>
@@ -1018,30 +1032,45 @@ export function useAgentThread({
               : []
           );
           const last = exchanges[exchanges.length - 1];
-          const restoredAnswer = last?.answer || '';
+          const pending =
+            page.status === 'awaiting_approval' && page.pending_approvals
+              ? page.pending_approvals
+              : null;
+          const restoredAnswer = pending
+            ? String(page.answer_markdown || last?.answer || '').trim()
+            : last?.answer || '';
           const restoredTurn: AgentLoopResponse | null = last
             ? {
-                status: 'ok',
+                status: pending ? 'awaiting_approval' : 'ok',
                 mode: 'agent',
                 answer_markdown: restoredAnswer,
                 session_id: sessionId,
                 tool_results: last.toolResults,
+                pending_approvals: pending || undefined,
               }
-            : null;
+            : pending
+              ? {
+                  status: 'awaiting_approval',
+                  mode: 'agent',
+                  answer_markdown: restoredAnswer,
+                  session_id: sessionId,
+                  pending_approvals: pending,
+                }
+              : null;
           shown(() => {
             setPast(last ? exchanges.slice(0, -1) : exchanges);
             setSent(last?.user || '');
             setAttachedNote('');
-            setAnswer(restoredAnswer);
+            setAnswer(pending ? '' : restoredAnswer);
             if (!questionRef.current && projectId) {
               setQuestion(window.sessionStorage.getItem(draftKey(projectId)) || '');
             }
-            setPlan(null);
-            setTurn(restoredTurn);
+            setPlan(pending ? restoredTurn : null);
+            setTurn(pending ? null : restoredTurn);
             setSteps(stepLines(last?.steps));
             setAwayNote(false);
             setNextSteps(
-              restoredTurn
+              restoredTurn && !pending
                 ? nextStepsForResult(restoredTurn, columnLabels, reportPinsRef.current.length > 0)
                 : []
             );
@@ -1049,11 +1078,12 @@ export function useAgentThread({
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
+            setRunBusy(false);
             // Failed tool steps still leave tool_results; only a ready output opens the column.
-            setPanelOpen(outputCardReady(restoredTurn, false));
+            setPanelOpen(outputCardReady(restoredTurn, Boolean(pending)));
           });
           // Resume deck progress polling when reopening a chat mid-build.
-          if (restoredTurn) {
+          if (restoredTurn && !pending) {
             const watchToken = ++turnTokenRef.current;
             startDeckWatch(restoredTurn, watchToken);
           }
@@ -1180,6 +1210,7 @@ export function useAgentThread({
     answer,
     status,
     setStatus,
+    runBusy,
     downloads,
     plan,
     approving,
@@ -1442,7 +1473,7 @@ export function AgentThreadColumn({
                   projectId={thread.projectId}
                   changes={pastChanges}
                   responsesHref={`${projectHref}/responses`}
-                  disabled={thread.status === 'Thinking…'}
+                  disabled={thread.runBusy || thread.status === 'Thinking…'}
                   onRestored={() => thread.setStatus('Restored the previous version.')}
                 />
               ) : null}
@@ -1605,7 +1636,7 @@ export function AgentThreadColumn({
             projectId={thread.projectId}
             changes={liveChanges}
             responsesHref={`${projectHref}/responses`}
-            disabled={thread.status === 'Thinking…'}
+            disabled={thread.runBusy || thread.status === 'Thinking…'}
             onRestored={() => thread.setStatus('Restored the previous version.')}
           />
         ) : null}
@@ -1811,7 +1842,7 @@ export function AgentThreadColumn({
                 key={step.n}
                 className="chat-next-step"
                 type="button"
-                disabled={thread.status === 'Thinking…'}
+                disabled={thread.runBusy || thread.status === 'Thinking…'}
                 onClick={() => thread.send(step.prompt)}
               >
                 {step.n} · {step.label}
@@ -1835,7 +1866,7 @@ export function AgentThreadColumn({
         placeholder={placeholder}
         mode={thread.mode}
         onMode={thread.setMode}
-        busy={thread.status === 'Thinking…'}
+        busy={thread.runBusy || thread.status === 'Thinking…' || thread.approving}
         columns={thread.columnNames}
         attachments={thread.attachments}
         onAttach={thread.attachFiles}

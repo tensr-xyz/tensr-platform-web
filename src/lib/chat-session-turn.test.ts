@@ -44,6 +44,26 @@ describe('savedChatTurn', () => {
   it('does not reuse an answer from a different question', () => {
     expect(savedChatTurn([older], 'Show the weights', 'agent')).toBeNull();
   });
+
+  it('restores awaiting_approval when the session still holds a plan', () => {
+    const saved = savedChatTurn(
+      [{ user: 'Recode profession into two groups', answer: '' }],
+      'Recode profession into two groups',
+      'agent',
+      0,
+      {
+        status: 'awaiting_approval',
+        pending_approvals: { batch: [{ procedure: 'recode' }], mac: 'sig' },
+        answer_markdown: 'Waiting for approval:\nPlan\n1. recode',
+      }
+    );
+    expect(saved?.status).toBe('awaiting_approval');
+    expect(saved?.pending_approvals).toEqual({
+      batch: [{ procedure: 'recode' }],
+      mac: 'sig',
+    });
+    expect(saved?.answer_markdown).toContain('Waiting for approval');
+  });
 });
 
 describe('restoredChatAnswer', () => {

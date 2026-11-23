@@ -180,6 +180,45 @@ export function resolveNumberedNextStep(input: string, steps: NumberedNextStep[]
   return step?.prompt ?? null;
 }
 
+/** Edit procedures that create a working version (v2 name may be the procedure). */
+const EDIT_PROCEDURES = new Set([
+  'data_edit',
+  'recode',
+  'compute',
+  'filter',
+  'filter_apply',
+  'rename',
+  'rename_labels',
+  'set_labels',
+  'merge_small_categories',
+  'set_nets',
+  'set_routing',
+  'confirm_loop',
+  'fix_types',
+]);
+
+function isChatTurnEditEntry(entry: AgentLoopToolResult & Record<string, unknown>): boolean {
+  const name = String(entry.name || entry.procedure || '')
+    .trim()
+    .toLowerCase();
+  if (EDIT_PROCEDURES.has(name)) return true;
+  const args = entry.args && typeof entry.args === 'object' ? entry.args : null;
+  const fromArgs = String(args?.operation || args?.analysis_type || '')
+    .trim()
+    .toLowerCase();
+  if (EDIT_PROCEDURES.has(fromArgs)) return true;
+  // Slim / history payloads may only leave lineage ids.
+  if (String(entry.derived_dataset_id || '').trim()) return true;
+  const result = entry.result;
+  if (!result || typeof result !== 'object') return false;
+  if (String(result.derived_dataset_id || result.saved_dataset_id || '').trim()) return true;
+  const nested =
+    result.derived && typeof result.derived === 'object'
+      ? (result.derived as Record<string, unknown>)
+      : null;
+  return Boolean(String(nested?.dataset_id || '').trim());
+}
+
 /** Dataset edits from this turn, for a change list and undo. */
 export function chatTurnChangesFromToolResults(
   toolResults: AgentLoopToolResult[] | undefined
@@ -187,10 +226,11 @@ export function chatTurnChangesFromToolResults(
   const out: ChatTurnChange[] = [];
   for (const entry of toolResults || []) {
     const entryRecord = entry as AgentLoopToolResult & Record<string, unknown>;
-    const name = String(entry.name || entryRecord.procedure || '').trim();
-    if (name !== 'data_edit') continue;
-    const result = entry.result;
-    if (!result || typeof result !== 'object') continue;
+    if (!isChatTurnEditEntry(entryRecord)) continue;
+    const result =
+      entry.result && typeof entry.result === 'object'
+        ? entry.result
+        : ({} as Record<string, unknown>);
     if (result.ok === false || result.refused === true) continue;
     // Slim stream payloads put ids on the entry; full results keep them nested.
     const nested =
@@ -203,6 +243,7 @@ export function chatTurnChangesFromToolResults(
         : null;
     const currentDatasetId = String(
       result.derived_dataset_id ||
+        result.saved_dataset_id ||
         nested?.dataset_id ||
         result.dataset_id ||
         entryRecord.derived_dataset_id ||
@@ -210,23 +251,34 @@ export function chatTurnChangesFromToolResults(
     ).trim();
     const parentIds = result.parent_dataset_ids;
     const firstParentId = Array.isArray(parentIds) ? String(parentIds[0] || '').trim() : '';
+    const args = entry.args && typeof entry.args === 'object' ? entry.args : null;
     const previousDatasetId = String(
       result.parent_dataset_id ||
         nested?.parent_dataset_id ||
         firstParentId ||
         entryRecord.parent_dataset_id ||
-        entry.args?.dataset_id ||
+        args?.parent_dataset_id ||
         ''
     ).trim();
     const operation = String(
-      result.operation || entry.args?.operation || entryRecord.producing_operation || ''
+      result.operation ||
+        args?.operation ||
+        args?.analysis_type ||
+        entryRecord.procedure ||
+        entryRecord.producing_operation ||
+        ''
     ).trim();
     const fromMarkdown = stripMarkdownBold(
       String(result.answer_markdown || summary?.line || entryRecord.answer_markdown || '').trim()
     );
     const label =
       fromMarkdown || (operation ? humanOperationLabel(operation) : '') || 'Edited the data';
-    if (!currentDatasetId && !previousDatasetId && !label) continue;
+    // Need something the person can undo or at least read.
+    if (!currentDatasetId && !previousDatasetId && !fromMarkdown && !operation) continue;
+    if (currentDatasetId && previousDatasetId && currentDatasetId === previousDatasetId) {
+      // Same id is not a new working version — still list the label when present.
+      if (!fromMarkdown && !operation) continue;
+    }
     const change: ChatTurnChange = {
       label: label.slice(0, 160),
       operation: operation || undefined,

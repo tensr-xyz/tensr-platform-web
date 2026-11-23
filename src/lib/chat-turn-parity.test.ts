@@ -190,6 +190,52 @@ describe('chatTurnChangesFromToolResults', () => {
     expect(changeOffersSeeDropped(changes[0]!)).toBe(true);
   });
 
+  it('lists a v2 recode named by procedure (slim / history shape)', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'recode',
+        procedure: 'recode',
+        derived_dataset_id: 'v1',
+        parent_dataset_id: 'v0',
+        result: {
+          ok: true,
+          executed: true,
+          operation: 'recode',
+          answer_markdown: 'Recoded profession into two groups.',
+          derived_dataset_id: 'v1',
+          parent_dataset_id: 'v0',
+        },
+      } as never,
+    ]);
+    expect(changes).toEqual([
+      {
+        label: 'Recoded profession into two groups.',
+        operation: 'recode',
+        previousDatasetId: 'v0',
+        currentDatasetId: 'v1',
+      },
+    ]);
+  });
+
+  it('lists lineage-only entries when result is missing', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'recode',
+        derived_dataset_id: 'child',
+        parent_dataset_id: 'parent',
+        args: { analysis_type: 'recode', operation: 'recode' },
+      } as never,
+    ]);
+    expect(changes).toEqual([
+      {
+        label: 'Recode',
+        operation: 'recode',
+        previousDatasetId: 'parent',
+        currentDatasetId: 'child',
+      },
+    ]);
+  });
+
   it('skips refused edits', () => {
     expect(
       chatTurnChangesFromToolResults([

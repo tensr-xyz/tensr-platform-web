@@ -8,6 +8,15 @@ export type StoredChatTurn = {
   steps?: { name?: string; message?: string }[];
 };
 
+/** Session GET may include a held plan when the stream went quiet mid-approval. */
+export type StoredChatSession = {
+  session_id?: string;
+  turns?: StoredChatTurn[];
+  status?: string;
+  pending_approvals?: AgentLoopResponse['pending_approvals'];
+  answer_markdown?: string;
+};
+
 function turnHasAnswer(turn: StoredChatTurn): boolean {
   return Boolean((turn.answer || '').trim() || turn.tool_results?.length);
 }
@@ -42,21 +51,51 @@ export function savedChatTurn(
   turns: StoredChatTurn[] | undefined,
   question: string,
   mode: AgentLoopResponse['mode'],
-  alreadyAnswered = 0
+  alreadyAnswered = 0,
+  session?: Pick<StoredChatSession, 'status' | 'pending_approvals' | 'answer_markdown'> | null
 ): AgentLoopResponse | null {
   const asked = question.trim();
   if (!asked) return null;
   const answered = (turns || []).filter(
     turn => (turn.user || '').trim() === asked && turnHasAnswer(turn)
   );
+  const pending =
+    session?.status === 'awaiting_approval' && session.pending_approvals
+      ? session.pending_approvals
+      : null;
+  // A held plan may have no finished assistant answer yet — still recover Approve.
+  if (pending && answered.length <= alreadyAnswered) {
+    const lastAsk = (turns || []).filter(turn => (turn.user || '').trim() === asked).at(-1);
+    if (lastAsk || alreadyAnswered === 0) {
+      return {
+        status: 'awaiting_approval',
+        mode,
+        answer_markdown: String(session?.answer_markdown || '').trim(),
+        session_id: undefined,
+        pending_approvals: pending,
+        tool_results: lastAsk?.tool_results,
+      };
+    }
+  }
   if (answered.length <= alreadyAnswered) return null;
-  const match = answered[answered.length - 1];
+  const match = answered[answered.length - 1]!;
   const results = match.tool_results;
   const steps = (match.steps || []).flatMap(step => {
     const name = step.name || '';
     const message = step.message || '';
     return name || message ? [{ name, message }] : [];
   });
+  if (pending) {
+    return {
+      status: 'awaiting_approval',
+      mode,
+      answer_markdown: String(session?.answer_markdown || restoredChatAnswer(match)).trim(),
+      session_id: undefined,
+      pending_approvals: pending,
+      tool_results: results,
+      tool_trace: steps,
+    };
+  }
   return {
     status: 'ok',
     mode,
