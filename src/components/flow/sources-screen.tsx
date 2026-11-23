@@ -235,6 +235,28 @@ export function fileMark(name: string): string {
   return 'FILE';
 }
 
+/** Kind badge for a Sources row. A raked copy keeps the parent's .sav mark, not FILE. */
+export function sourceFileMark(file: SourceFile, datasets: SourceFile[] = []): string {
+  for (const name of [file.original_filename, ...(file.source_filenames || [])]) {
+    const text = String(name || '').trim();
+    if (!text) continue;
+    const mark = fileMark(text);
+    if (mark !== 'FILE') return mark;
+  }
+  const parent = datasets.find(row => datasetRowId(row) === file.parent_dataset_id);
+  if (parent) {
+    for (const name of [parent.original_filename, ...(parent.source_filenames || [])]) {
+      const text = String(name || '').trim();
+      if (!text) continue;
+      const mark = fileMark(text);
+      if (mark !== 'FILE') return mark;
+    }
+    const fromParent = fileMark(sourceFileName(parent));
+    if (fromParent !== 'FILE') return fromParent;
+  }
+  return fileMark(sourceFileName(file));
+}
+
 export function contextMark(kind?: string): string {
   const value = (kind || '').toLowerCase();
   if (value === 'questionnaire' || value === 'pdf') return 'PDF';
@@ -433,7 +455,7 @@ export function SourcesScreen({
     const stem = exportStem(sourceFileName(file));
     return (
       <div key={id} className="sources-dataset" data-active={inUse}>
-        <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
+        <span className="sources-kind">{sourceFileMark(file, datasets)}</span>
         <span>
           <span className="sources-file-name">{sourceVersionTitle(file)}</span>
           <span className="flow-muted">{note}</span>

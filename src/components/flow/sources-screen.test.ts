@@ -3,6 +3,7 @@ import {
   fileMark,
   filesInProject,
   resolveStackedSource,
+  sourceFileMark,
   sourceFileNote,
   sourceRowCount,
   orderedVersionGroup,
@@ -184,6 +185,23 @@ describe('sources screen', () => {
     expect(fileMark('wave.zsav')).toBe('SAV');
     expect(fileMark('extra.csv')).toBe('CSV');
     expect(fileMark('panel.tsv')).toBe('TSV');
+  });
+
+  it('keeps the parent SAV mark on a raked working version', () => {
+    const parent = {
+      id: 'parent',
+      dataset_id: 'parent',
+      original_filename: 'coffee_tracker_demo.sav',
+    };
+    const raked = {
+      id: 'raked',
+      dataset_id: 'raked',
+      parent_dataset_id: 'parent',
+      original_filename: 'fa975e35-6c23-4a11-8abc-1234567890ab.sav',
+      lineage_label: 'Raked to region, gender · 23 Nov 12:52:42',
+    };
+    expect(sourceFileMark(raked, [parent, raked])).toBe('SAV');
+    expect(sourceFileMark(parent, [parent, raked])).toBe('SAV');
   });
 
   it('shows the file name and never the id', () => {

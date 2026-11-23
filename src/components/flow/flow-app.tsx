@@ -101,6 +101,7 @@ import { previewPageUrl } from '@/lib/dataset-open';
 import {
   codingDerivedDatasetIdFromToolResults,
   toolResultsSavedWorkingVersion,
+  weightingDerivedDatasetIdFromToolResults,
 } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
@@ -2948,6 +2949,43 @@ function ChatScreen({
           void flowJson(`/api/projects/${project.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ active_dataset_id: codedId }),
+          }).then(() => onChanged?.());
+          return;
+        }
+      }
+      // A rake / post-stratify saves a weighted version; put it in use for the next ask.
+      const weightedId = weightingDerivedDatasetIdFromToolResults(result.tool_results);
+      if (weightedId && project?.id) {
+        const files = datasets.map(row => ({
+          id: datasetRowId(row),
+          name: datasetFileLabel(row),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          lineageLabel: row.lineage_label,
+          producingOperation: row.producing_operation,
+          parentId: row.parent_dataset_id,
+          originId: row.origin_dataset_id,
+        }));
+        const withNext = [
+          ...files,
+          {
+            id: weightedId,
+            name: weightedId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lineageLabel: 'raked',
+            producingOperation: 'rake',
+          },
+        ];
+        const adopt = shouldAdoptCodingVersion(
+          project.active_dataset_id || datasetId,
+          weightedId,
+          withNext
+        );
+        if (adopt) {
+          void flowJson(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ active_dataset_id: weightedId }),
           }).then(() => onChanged?.());
           return;
         }

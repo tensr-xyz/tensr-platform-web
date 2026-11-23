@@ -23,6 +23,8 @@ const KIND_LABELS: Record<string, string> = {
   chi_square: 'Chi-square',
   descriptives: 'Descriptives',
   frequencies: 'Frequencies',
+  rake: 'Weighting',
+  poststratify: 'Weighting',
   ttest_independent: 't-test',
   ttest_paired: 'Paired t-test',
   mann_whitney_u: 'Mann-Whitney',
@@ -777,6 +779,15 @@ export function outputTitle(
     return `${shared} and ${questions.length - 1} more`;
   }
   const preferred = preferredProcedure(items);
+  if (preferred === 'rake' || preferred === 'poststratify') {
+    for (const item of items) {
+      if (procedureOf(item) !== preferred) continue;
+      const title = summaryOf(item).title;
+      if (typeof title === 'string' && title.trim() && !isLeadSentence(title)) {
+        return cardTitleText(title.trim());
+      }
+    }
+  }
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;
     const fromResult = subjectFromStructuredAnswer(structuredAnswerOnResult(item));
