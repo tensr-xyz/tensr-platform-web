@@ -31,6 +31,7 @@ import {
 } from '@/lib/upload-dataset';
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
+import { ResponseQualityPanel } from '@/components/flow/response-quality-panel';
 import { ConnectQualtricsDialog } from '@/components/flow/connect-qualtrics-dialog';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { showDatasetVersionUndoToast, useDatasetVersion } from '@/lib/dataset-version-undo';
@@ -307,6 +308,7 @@ export function SourcesScreen({
   const [stackOpen, setStackOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
   const [docName, setDocName] = useState('');
   const [docKind, setDocKind] = useState('brief');
   const [docText, setDocText] = useState('');
@@ -319,6 +321,7 @@ export function SourcesScreen({
   const activeId = project?.active_dataset_id || '';
   const skippedPrep = useRef<Set<string>>(new Set());
   const activeBeforeStack = useRef(activeId);
+  const activeFile = files.find(row => datasetRowId(row) === activeId);
 
   useEffect(() => {
     if (!activeId || proposal || skippedPrep.current.has(activeId)) return;
@@ -504,6 +507,55 @@ export function SourcesScreen({
     );
   };
 
+  if (qualityOpen && activeId) {
+    return (
+      <section className="sources-page">
+        <div className="sources-wrap sources-wrap-wide">
+          <ResponseQualityPanel
+            datasetId={activeId}
+            projectName={project?.name || ''}
+            fileLabel={activeFile ? sourceFileName(activeFile) : rememberedFileName(activeId)}
+            completes={activeFile?.n_rows}
+            onClose={() => setQualityOpen(false)}
+            onUploadNewer={() => fileInput.current?.click()}
+            onApplied={nextId => {
+              setQualityOpen(false);
+              if (!projectId || !nextId) {
+                onChanged();
+                return;
+              }
+              void flowJson(`/api/projects/${projectId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ active_dataset_id: nextId }),
+              }).then(() => {
+                showDatasetVersionUndoToast({
+                  projectId,
+                  previousDatasetId: activeId,
+                  currentDatasetId: nextId,
+                  title: 'Quality-cleaned as a new version',
+                  onRestored: () => onChanged(),
+                });
+                onChanged();
+              });
+            }}
+          />
+          <Input
+            ref={fileInput}
+            className="sources-file-input"
+            type="file"
+            accept={ACCEPTED_UPLOAD_ACCEPT}
+            aria-label="Upload file"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) upload(file);
+            }}
+          />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="sources-page">
       <div className="sources-wrap">
@@ -662,16 +714,21 @@ export function SourcesScreen({
             {files.length >= 1 ? (
               <span className="sources-actions">
                 {activeId ? (
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => {
-                      activeBeforeStack.current = activeId;
-                      setWeightOpen(true);
-                    }}
-                  >
-                    Weight this file
-                  </Button>
+                  <>
+                    <Button className="flow-btn" type="button" onClick={() => setQualityOpen(true)}>
+                      Response quality
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setWeightOpen(true);
+                      }}
+                    >
+                      Weight this file
+                    </Button>
+                  </>
                 ) : null}
                 {files.length >= 2 ? (
                   <>

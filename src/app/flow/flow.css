@@ -4617,6 +4617,248 @@ button.chat-result-top {
   padding: 36px 0 48px;
 }
 
+.sources-wrap-wide {
+  width: min(1390px, 100%);
+  padding-top: 24px;
+}
+
+/* Sources · Response quality (Paper 10a / TEN-157) */
+.rq-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.rq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.rq-crumb {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.rq-title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: var(--weight-semibold, 600);
+  color: var(--color-ink);
+}
+
+.rq-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rq-meta {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.rq-status {
+  padding: 18px 28px;
+}
+
+.rq-checks {
+  display: flex;
+  gap: 12px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.rq-check {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.rq-check strong {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: var(--weight-semibold, 600);
+  color: var(--color-warn, #a15c12);
+}
+
+.rq-check span {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.rq-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 28px 20px;
+}
+
+.rq-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.rq-tab {
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: transparent;
+  padding: 5px 11px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.rq-tab[data-active='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.rq-table-head,
+.rq-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 11px 12px;
+}
+
+.rq-table-head {
+  background: var(--color-well, #f6f6f3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: var(--weight-semibold, 600);
+  line-height: 16px;
+}
+
+.rq-row {
+  border-bottom: 1px solid var(--color-line);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-ink);
+}
+
+.rq-table-head > span:nth-child(1),
+.rq-id {
+  flex: 0 0 110px;
+  width: 110px;
+}
+
+.rq-table-head > span:nth-child(2),
+.rq-score {
+  flex: 0 0 90px;
+  width: 90px;
+}
+
+.rq-score[data-warn='true'] {
+  color: var(--color-warn, #a15c12);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.rq-table-head > span:nth-child(3),
+.rq-why {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.rq-table-head > span:nth-child(4) {
+  flex: 0 0 220px;
+  width: 220px;
+  text-align: right;
+}
+
+.rq-decide {
+  display: flex;
+  flex: 0 0 220px;
+  width: 220px;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.rq-choice {
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: transparent;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.rq-choice[data-active='true'][data-tone='keep'] {
+  border-color: transparent;
+  background: var(--color-accent-soft, #e8f1ed);
+  color: var(--color-accent, #1e6b58);
+  font-weight: 500;
+}
+
+.rq-choice[data-active='true'][data-tone='remove'] {
+  border-color: transparent;
+  background: #f3e6d8;
+  color: var(--color-warn, #a15c12);
+  font-weight: 500;
+}
+
+.rq-rows {
+  max-height: min(420px, 50vh);
+  overflow: auto;
+}
+
+.rq-empty {
+  padding: 16px 12px;
+}
+
+.rq-note {
+  margin: 12px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.rq-apply {
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .rq-checks {
+    flex-wrap: wrap;
+  }
+
+  .rq-check {
+    flex: 1 1 40%;
+  }
+
+  .rq-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .sources-head,
 .sources-block-head,
 .sources-fielding,
