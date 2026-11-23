@@ -10,11 +10,14 @@ export type PageLayoutMaster = {
 };
 
 export type ReportTheme = {
+  name: string;
   fontFamily: string;
+  headingFontFamily: string;
   primaryColour: string;
   secondaryColour: string;
   chartPalette: string[];
   logoUrl: string | null;
+  logoName: string | null;
 };
 
 export type PptxTemplateInspection = {
@@ -36,21 +39,37 @@ export const DEFAULT_CHART_PALETTE = [
 ] as const;
 
 export const DEFAULT_REPORT_THEME: ReportTheme = {
+  name: 'Team theme',
   fontFamily: 'Inter',
+  headingFontFamily: 'Inter',
   primaryColour: '#1E6B58',
   secondaryColour: '#1B1C1A',
   chartPalette: [...DEFAULT_CHART_PALETTE],
   logoUrl: null,
+  logoName: null,
 };
 
-/** Protected page masters — defaults cannot be deleted. */
+/** Order shown in the Add page / Change layout picker (Paper 6l). */
+export const PAGE_LAYOUT_PICKER_ORDER = [
+  'title_page',
+  'title_and_content',
+  'content_and_text',
+  'two_content',
+  'title_only',
+  'blank',
+] as const;
+
+/** Protected page masters — defaults cannot be deleted. Labels match the report editor picker. */
 export const PAGE_LAYOUT_MASTERS: readonly PageLayoutMaster[] = [
   { id: 'blank', label: 'Blank', protected: true, slots: [] },
   {
     id: 'title_only',
-    label: 'Title only',
+    label: 'Headline + table',
     protected: true,
-    slots: [{ id: 'title', label: 'Title' }],
+    slots: [
+      { id: 'title', label: 'Title' },
+      { id: 'content', label: 'Content' },
+    ],
   },
   {
     id: 'title_page',
@@ -63,7 +82,7 @@ export const PAGE_LAYOUT_MASTERS: readonly PageLayoutMaster[] = [
   },
   {
     id: 'title_and_content',
-    label: 'Title and content',
+    label: 'Headline + chart',
     protected: true,
     slots: [
       { id: 'title', label: 'Title' },
@@ -72,7 +91,7 @@ export const PAGE_LAYOUT_MASTERS: readonly PageLayoutMaster[] = [
   },
   {
     id: 'content_and_text',
-    label: 'Content and text',
+    label: 'Chart + commentary',
     protected: true,
     slots: [
       { id: 'content', label: 'Content' },
@@ -81,7 +100,7 @@ export const PAGE_LAYOUT_MASTERS: readonly PageLayoutMaster[] = [
   },
   {
     id: 'two_content',
-    label: 'Two content',
+    label: 'Two charts',
     protected: true,
     slots: [
       { id: 'content_left', label: 'Left content' },
@@ -98,6 +117,20 @@ export function listPageLayouts(): PageLayoutMaster[] {
     ...item,
     slots: item.slots.map(slot => ({ ...slot })),
   }));
+}
+
+/** Built-in masters in the Add page picker order. */
+export function listPageLayoutsForPicker(): PageLayoutMaster[] {
+  const byId = new Map(listPageLayouts().map(item => [item.id, item]));
+  const ordered: PageLayoutMaster[] = [];
+  for (const id of PAGE_LAYOUT_PICKER_ORDER) {
+    const item = byId.get(id);
+    if (item) ordered.push(item);
+  }
+  for (const item of byId.values()) {
+    if (!ordered.some(existing => existing.id === item.id)) ordered.push(item);
+  }
+  return ordered;
 }
 
 export function getPageLayout(layoutId: string): PageLayoutMaster | null {
@@ -129,8 +162,21 @@ function coercePalette(value: unknown): string[] {
 export function normalizeReportTheme(raw: unknown): ReportTheme {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const font =
-    String(source.fontFamily ?? source.font_family ?? DEFAULT_REPORT_THEME.fontFamily).trim() ||
-    DEFAULT_REPORT_THEME.fontFamily;
+    String(
+      source.fontFamily ??
+        source.font_family ??
+        source.bodyFontFamily ??
+        source.body_font_family ??
+        DEFAULT_REPORT_THEME.fontFamily
+    ).trim() || DEFAULT_REPORT_THEME.fontFamily;
+  const heading =
+    String(
+      source.headingFontFamily ??
+        source.heading_font_family ??
+        source.headingFont ??
+        source.heading_font ??
+        font
+    ).trim() || font;
   const primary =
     coerceHex(source.primaryColour ?? source.primary_colour) ?? DEFAULT_REPORT_THEME.primaryColour;
   const secondary =
@@ -138,12 +184,38 @@ export function normalizeReportTheme(raw: unknown): ReportTheme {
     DEFAULT_REPORT_THEME.secondaryColour;
   const logoRaw = source.logoUrl ?? source.logo_url;
   const logoUrl = logoRaw ? String(logoRaw).trim() || null : null;
+  const logoNameRaw = source.logoName ?? source.logo_name;
+  const logoName = logoNameRaw
+    ? String(logoNameRaw).trim() || null
+    : logoUrl
+      ? logoUrl.split('/').pop() || null
+      : null;
+  const name =
+    String(source.name ?? source.label ?? DEFAULT_REPORT_THEME.name).trim() ||
+    DEFAULT_REPORT_THEME.name;
   return {
+    name,
     fontFamily: font,
+    headingFontFamily: heading,
     primaryColour: primary,
     secondaryColour: secondary,
     chartPalette: coercePalette(source.chartPalette ?? source.chart_palette ?? source.palette),
     logoUrl,
+    logoName,
+  };
+}
+
+export function reportThemeForApi(theme: ReportTheme | unknown): Record<string, unknown> {
+  const normalised = normalizeReportTheme(theme);
+  return {
+    name: normalised.name,
+    font_family: normalised.fontFamily,
+    heading_font_family: normalised.headingFontFamily,
+    primary_colour: normalised.primaryColour,
+    secondary_colour: normalised.secondaryColour,
+    chart_palette: [...normalised.chartPalette],
+    logo_url: normalised.logoUrl,
+    logo_name: normalised.logoName,
   };
 }
 

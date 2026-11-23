@@ -1,6 +1,11 @@
 /** Report document: pages with positioned live objects (slide editor engine). */
 
-import { getPageLayout } from '@/lib/report-theme';
+import {
+  getPageLayout,
+  normalizeReportTheme,
+  reportThemeForApi,
+  type ReportTheme,
+} from '@/lib/report-theme';
 import {
   applyTablePresentation,
   normalizeTableEdits,
@@ -116,11 +121,23 @@ export type ReportPage = {
   hideFromPublish: boolean;
 };
 
+export type SavedPageTemplate = {
+  id: string;
+  name: string;
+  kind: 'page';
+  layoutId: string;
+  title: string | null;
+  section: string | null;
+  objects: Array<Record<string, unknown>>;
+};
+
 export type ReportDocument = {
   pageWidthIn: number;
   pageHeightIn: number;
   aspect: typeof PAGE_ASPECT;
   defaultLabels: DefaultLabels;
+  theme: ReportTheme;
+  pageTemplates: SavedPageTemplate[];
   pages: ReportPage[];
 };
 
@@ -162,7 +179,8 @@ const HEX3 = /^[0-9A-Fa-f]{3}$/;
 
 const SLOT_FRAMES: Record<string, Record<string, ReportFrame>> = {
   title_only: {
-    title: { x: 0.08, y: 0.38, w: 0.84, h: 0.2 },
+    title: { x: 0.06, y: 0.06, w: 0.88, h: 0.12 },
+    content: { x: 0.06, y: 0.22, w: 0.88, h: 0.68 },
   },
   title_page: {
     title: { x: 0.08, y: 0.28, w: 0.84, h: 0.18 },
@@ -972,18 +990,64 @@ function normalizePage(raw: unknown): ReportPage | null {
   };
 }
 
+function normalizeSavedPageTemplate(raw: unknown): SavedPageTemplate | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const template = pageAsTemplate(source);
+  const name =
+    String(source.name || source.label || template.title || '').trim() || 'Page template';
+  return {
+    ...template,
+    id: String(source.id || '').trim() || newId('tpl'),
+    name,
+  };
+}
+
 export function normalizeReportDocument(raw: unknown): ReportDocument {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const pages = (Array.isArray(source.pages) ? source.pages : [])
     .map(normalizePage)
     .filter((page): page is ReportPage => Boolean(page));
+  const templatesRaw = source.page_templates ?? source.pageTemplates ?? [];
+  const pageTemplates = (Array.isArray(templatesRaw) ? templatesRaw : [])
+    .map(normalizeSavedPageTemplate)
+    .filter((item): item is SavedPageTemplate => Boolean(item));
   return {
     pageWidthIn: PAGE_WIDTH_IN,
     pageHeightIn: PAGE_HEIGHT_IN,
     aspect: PAGE_ASPECT,
     defaultLabels: normalizeDefaultLabels(source.default_labels || source.defaultLabels),
+    theme: normalizeReportTheme(source.theme ?? source.reportTheme ?? source.report_theme),
+    pageTemplates,
     pages,
   };
+}
+
+export function setDocumentTheme(
+  document: ReportDocument | unknown,
+  theme: ReportTheme | unknown
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return { ...doc, theme: normalizeReportTheme(theme) };
+}
+
+export function savePageAsTemplate(
+  document: ReportDocument | unknown,
+  pageId: string,
+  name?: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const page = doc.pages.find(item => item.id === String(pageId));
+  if (!page) return doc;
+  const template = pageAsTemplate(page);
+  const label = String(name || page.title || '').trim() || 'Page template';
+  const saved: SavedPageTemplate = {
+    ...template,
+    id: newId('tpl'),
+    name: label,
+    title: label,
+  };
+  return { ...doc, pageTemplates: [...doc.pageTemplates, saved] };
 }
 
 export type PinLike = {
@@ -2849,6 +2913,16 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
       net: doc.defaultLabels.net,
       total: doc.defaultLabels.total,
     },
+    theme: reportThemeForApi(doc.theme),
+    page_templates: doc.pageTemplates.map(template => ({
+      id: template.id,
+      name: template.name,
+      kind: template.kind,
+      layout_id: template.layoutId,
+      title: template.title,
+      section: template.section,
+      objects: template.objects,
+    })),
     pages: doc.pages.map(page => ({
       id: page.id,
       title: page.title,

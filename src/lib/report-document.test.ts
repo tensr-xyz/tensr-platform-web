@@ -55,7 +55,9 @@ import {
   resizeObject,
   resolveTextHref,
   searchPages,
+  savePageAsTemplate,
   setDefaultLabels,
+  setDocumentTheme,
   setObjectHidden,
   setObjectText,
   setObjectTextStyle,
@@ -172,6 +174,23 @@ describe('report document page model', () => {
     expect(applied.pages.at(-1)?.layoutId).toBe('two_content');
     expect(applied.pages.at(-1)?.objects).toHaveLength(template.objects.length);
     expect(applied.pages.at(-1)?.id).not.toBe(remounted.pages[0]?.id);
+
+    const saved = savePageAsTemplate(remounted, remounted.pages[0]!.id, 'Audience profile page');
+    expect(saved.pageTemplates).toHaveLength(1);
+    expect(saved.pageTemplates[0]?.name).toBe('Audience profile page');
+    expect(saved.theme.name).toBeTruthy();
+    const themed = setDocumentTheme(saved, {
+      name: 'Team theme · Test',
+      fontFamily: 'Georgia',
+      headingFontFamily: 'Inter',
+      primaryColour: '#112233',
+      chartPalette: ['#112233', '#445566'],
+    });
+    expect(themed.theme.fontFamily).toBe('Georgia');
+    expect(themed.theme.headingFontFamily).toBe('Inter');
+    const api = reportDocumentForApi(themed);
+    expect((api.theme as { font_family: string }).font_family).toBe('Georgia');
+    expect((api.page_templates as { name: string }[])[0]?.name).toBe('Audience profile page');
 
     const style = objectAsStyleTemplate(
       remounted.pages[0]!.objects.find(obj => obj.id === chart.id)!

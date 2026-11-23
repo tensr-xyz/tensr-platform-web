@@ -17,10 +17,12 @@ import { invalidateReportDocument, projectQueryKeys } from '@/lib/project-query-
 import {
   addPage,
   applyDefaultLabels,
+  applyPageTemplate,
   copyStyles,
   cssFontStack,
   deletePage,
   documentFromPins,
+  duplicatePage,
   fitDocumentTextFrames,
   fitPageTextFrames,
   hideTableRow,
@@ -38,10 +40,14 @@ import {
   reorderTableRows,
   reportDocumentForApi,
   resolveTextHref,
+  savePageAsTemplate,
   setDefaultLabels,
+  setDocumentTheme,
   setObjectBinding,
   setObjectText,
   setObjectTextStyle,
+  setPageHidden,
+  setPageLayout,
   setTableRules,
   setTableStyle,
   tablePreviewFootnote,
@@ -65,6 +71,11 @@ import {
   type TableRule,
   type TableStylePreset,
 } from '@/lib/table-presentation';
+import { ReportLayoutPicker } from '@/components/flow/report-layout-picker';
+import { ReportThemePanel } from '@/components/flow/report-theme-panel';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/rest';
+import { Segmented } from '@/components/ui/segmented';
+import { getPageLayout } from '@/lib/report-theme';
 
 const STYLE_PRESETS: { id: string; label: string; style: Partial<TextBoxStyle> }[] = [
   { id: 'headline', label: 'Headline', style: { fontFamily: 'Inter', fontSizePt: 22, bold: true } },
@@ -476,6 +487,10 @@ export function ReportEditor({
     storedDocument.data || !datasetId ? 'ready' : 'loading'
   );
   const [saveNote, setSaveNote] = useState('');
+  const [inspectorTab, setInspectorTab] = useState<'page' | 'theme'>('page');
+  const [addPageOpen, setAddPageOpen] = useState(false);
+  const [layoutPickerMode, setLayoutPickerMode] = useState<'add' | 'change'>('add');
+  const [pageMenu, setPageMenu] = useState<{ pageId: string; x: number; y: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fitRestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipSave = useRef(true);
@@ -660,7 +675,54 @@ export function ReportEditor({
     setSelectedId(objectId);
     setSelectedRowIds([]);
     setAddingRule(false);
+    setInspectorTab('page');
   };
+
+  const createPageWithLayout = (layoutId: string, title?: string) => {
+    const next = addPage(document, {
+      title: title || `Page ${document.pages.length + 1}`,
+      layoutId,
+      afterPageId: page?.id,
+    });
+    const created = next.pages.find(
+      item => !document.pages.some(existing => existing.id === item.id)
+    );
+    commit(next);
+    if (created) setPageId(created.id);
+    setSelectedId(null);
+    setAddPageOpen(false);
+    setLayoutPickerMode('add');
+  };
+
+  const applySavedTemplate = (templateId: string) => {
+    const template = document.pageTemplates.find(item => item.id === templateId);
+    if (!template) return;
+    const next = applyPageTemplate(document, template, {
+      title: template.name,
+      afterPageId: page?.id,
+    });
+    const created = next.pages.find(
+      item => !document.pages.some(existing => existing.id === item.id)
+    );
+    commit(next);
+    if (created) setPageId(created.id);
+    setSelectedId(null);
+    setAddPageOpen(false);
+  };
+
+  useEffect(() => {
+    if (!pageMenu) return;
+    const close = () => setPageMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pageMenu]);
 
   const addText = () => {
     if (!page) return;
@@ -1110,6 +1172,13 @@ export function ReportEditor({
                 setPageId(item.id);
                 setSelectedId(null);
                 setPaintSourceId(null);
+                setInspectorTab('page');
+              }}
+              onContextMenu={event => {
+                event.preventDefault();
+                setPageId(item.id);
+                setSelectedId(null);
+                setPageMenu({ pageId: item.id, x: event.clientX, y: event.clientY });
               }}
               aria-label={`Page ${index + 1}${item.hideFromExport ? ', hidden from export' : ''}${
                 item.title ? `: ${item.title}` : ''
@@ -1125,39 +1194,43 @@ export function ReportEditor({
               export
             </p>
           ) : null}
-          <Button
-            type="button"
-            className="flow-btn report-editor-add-page"
-            onClick={() => {
-              const next = addPage(document, {
-                title: `Page ${document.pages.length + 1}`,
-                afterPageId: page?.id,
-              });
-              const created = next.pages.find(
-                item => !document.pages.some(existing => existing.id === item.id)
-              );
-              commit(next);
-              if (created) setPageId(created.id);
-              setSelectedId(null);
+          <Popover
+            open={addPageOpen}
+            onOpenChange={open => {
+              setAddPageOpen(open);
+              if (open) setLayoutPickerMode('add');
             }}
           >
-            Add page
-          </Button>
-          {page && document.pages.length > 1 ? (
-            <Button
-              type="button"
-              className="flow-btn report-editor-add-page"
-              onClick={() => {
-                const next = deletePage(document, page.id);
-                if (!next.pages.length) return;
-                commit(next);
-                setPageId(next.pages[0]?.id || '');
-                setSelectedId(null);
-              }}
-            >
-              Remove page
-            </Button>
-          ) : null}
+            <PopoverTrigger asChild>
+              <Button type="button" className="flow-btn report-editor-add-page">
+                Add page
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="right" className="report-layout-popover">
+              <ReportLayoutPicker
+                title={layoutPickerMode === 'change' ? 'Change layout' : 'Add a page'}
+                afterLabel={
+                  page
+                    ? layoutPickerMode === 'change'
+                      ? page.title || 'This page'
+                      : `After slide ${Math.max(1, document.pages.findIndex(item => item.id === page.id) + 1)}`
+                    : undefined
+                }
+                selectedLayoutId={layoutPickerMode === 'change' ? page?.layoutId : null}
+                templates={document.pageTemplates}
+                onPickLayout={layout => {
+                  if (layoutPickerMode === 'change' && page) {
+                    commit(setPageLayout(document, page.id, layout.id));
+                    setAddPageOpen(false);
+                    setLayoutPickerMode('add');
+                    return;
+                  }
+                  createPageWithLayout(layout.id);
+                }}
+                onPickTemplate={template => applySavedTemplate(template.id)}
+              />
+            </PopoverContent>
+          </Popover>
         </aside>
 
         <div
@@ -1178,21 +1251,26 @@ export function ReportEditor({
                 className="flow-btn primary"
                 onClick={event => {
                   event.stopPropagation();
-                  const next = addPage(document, {
-                    title: 'Page 1',
-                    layoutId: 'title_and_content',
-                  });
-                  const created = next.pages[0];
-                  commit(next);
-                  if (created) setPageId(created.id);
-                  setSelectedId(null);
+                  setLayoutPickerMode('add');
+                  setAddPageOpen(true);
                 }}
               >
                 Add page
               </Button>
             </div>
           ) : (
-            <div className="report-editor-page" aria-label={page?.title || 'Page'}>
+            <div
+              className="report-editor-page"
+              aria-label={page?.title || 'Page'}
+              style={{
+                fontFamily: cssFontStack(document.theme.fontFamily),
+                color: document.theme.secondaryColour,
+              }}
+            >
+              {document.theme.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="report-editor-page-logo" src={document.theme.logoUrl} alt="" />
+              ) : null}
               {(page?.objects || [])
                 .filter(obj => !obj.hidden)
                 .slice()
@@ -1213,7 +1291,32 @@ export function ReportEditor({
         </div>
 
         <aside className="report-editor-inspector" aria-label="Object inspector">
-          {selectedTable ? (
+          <Segmented
+            className="report-inspector-tabs"
+            aria-label="Inspector"
+            value={inspectorTab}
+            onValueChange={value => setInspectorTab(value)}
+            options={[
+              { value: 'page', label: 'Page' },
+              { value: 'theme', label: 'Report theme' },
+            ]}
+          />
+          {inspectorTab === 'theme' ? (
+            <ReportThemePanel
+              theme={document.theme}
+              onChange={theme => commit(setDocumentTheme(document, theme))}
+              onSaveTeamTheme={() => {
+                const named = {
+                  ...document.theme,
+                  name: document.theme.name.startsWith('Team theme')
+                    ? document.theme.name
+                    : `Team theme · ${document.theme.name}`,
+                };
+                commit(setDocumentTheme(document, named));
+                setSaveNote('Team theme saved on this report');
+              }}
+            />
+          ) : selectedTable ? (
             <>
               <h3>Table style</h3>
               <div className="report-editor-style-grid">
@@ -1670,22 +1773,118 @@ export function ReportEditor({
                   Add table
                 </Button>
               </div>
+              {page ? (
+                <p className="flow-muted">
+                  Layout: {getPageLayout(page.layoutId)?.label || 'Blank'} · Hidden from export:{' '}
+                  {page.hideFromExport ? 'on' : 'off'}
+                </p>
+              ) : null}
             </>
           )}
 
-          <div className="report-editor-divider" />
-          <h3>Default labels</h3>
-          <p className="flow-muted">Rename NET and Total everywhere in this report.</p>
-          <DefaultLabelsEditor
-            labels={document.defaultLabels}
-            onChange={labels => commit(setDefaultLabels(document, labels))}
-          />
-          <p className="report-editor-preview flow-muted">
-            Preview: {applyDefaultLabels('NET', document.defaultLabels)} ·{' '}
-            {applyDefaultLabels('Total', document.defaultLabels)}
-          </p>
+          {inspectorTab === 'page' ? (
+            <>
+              <div className="report-editor-divider" />
+              <h3>Default labels</h3>
+              <p className="flow-muted">Rename NET and Total everywhere in this report.</p>
+              <DefaultLabelsEditor
+                labels={document.defaultLabels}
+                onChange={labels => commit(setDefaultLabels(document, labels))}
+              />
+              <p className="report-editor-preview flow-muted">
+                Preview: {applyDefaultLabels('NET', document.defaultLabels)} ·{' '}
+                {applyDefaultLabels('Total', document.defaultLabels)}
+              </p>
+            </>
+          ) : null}
         </aside>
       </div>
+
+      {pageMenu ? (
+        <div
+          className="report-page-menu"
+          style={{ left: pageMenu.x, top: pageMenu.y }}
+          role="menu"
+          aria-label="Page actions"
+          onClick={event => event.stopPropagation()}
+        >
+          <Button
+            type="button"
+            role="menuitem"
+            className="report-page-menu-item"
+            onClick={() => {
+              const next = duplicatePage(document, pageMenu.pageId);
+              const created = next.pages.find(
+                item => !document.pages.some(existing => existing.id === item.id)
+              );
+              commit(next);
+              if (created) setPageId(created.id);
+              setPageMenu(null);
+            }}
+          >
+            Duplicate page
+          </Button>
+          <Button
+            type="button"
+            role="menuitem"
+            className="report-page-menu-item"
+            onClick={() => {
+              setPageId(pageMenu.pageId);
+              setLayoutPickerMode('change');
+              setAddPageOpen(true);
+              setPageMenu(null);
+            }}
+          >
+            Change layout…
+          </Button>
+          <Button
+            type="button"
+            role="menuitem"
+            className="report-page-menu-item"
+            onClick={() => {
+              commit(savePageAsTemplate(document, pageMenu.pageId));
+              setSaveNote('Page saved as template');
+              setPageMenu(null);
+            }}
+          >
+            Save page as template
+          </Button>
+          <Button
+            type="button"
+            role="menuitem"
+            className="report-page-menu-item"
+            onClick={() => {
+              const target = document.pages.find(item => item.id === pageMenu.pageId);
+              if (!target) return;
+              commit(
+                setPageHidden(document, pageMenu.pageId, {
+                  hideFromExport: !target.hideFromExport,
+                })
+              );
+              setPageMenu(null);
+            }}
+          >
+            Hide from export
+          </Button>
+          <Button
+            type="button"
+            role="menuitem"
+            className="report-page-menu-item danger"
+            disabled={document.pages.length <= 1}
+            onClick={() => {
+              if (document.pages.length <= 1) return;
+              const next = deletePage(document, pageMenu.pageId);
+              if (!next.pages.length) return;
+              commit(next);
+              setPageId(next.pages[0]?.id || '');
+              setSelectedId(null);
+              setPageMenu(null);
+            }}
+          >
+            Remove page
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
