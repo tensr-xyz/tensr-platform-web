@@ -177,7 +177,7 @@ function first(body: Record<string, unknown>, keys: string[]): string {
 }
 
 const BASE_SENTENCE =
-  /^(the weighted base for this table is|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$)/i;
+  /^(the weighted base for this table is|weighted base\b|unweighted base\b|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$|[a-z0-9 _/-]+:\s*(un)?weighted\.?$)/i;
 const FILE_LINE = /^(excel workbook|spss syntax|r syntax):/i;
 
 function proseLines(answer: string): string[] {
@@ -792,6 +792,8 @@ export function outputTitle(
   const items = analysisItems(results);
   if (preferredProcedure(items) === 'funnel') return 'Funnel';
   if (preferredProcedure(items) === 'brand_duplication') return 'Duplication';
+  // Share tables for skipped categoricals must not rename a descriptives card.
+  if (preferredProcedure(items) === 'descriptives') return 'Descriptives';
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );

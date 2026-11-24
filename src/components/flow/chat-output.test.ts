@@ -169,6 +169,37 @@ describe('chat output panel', () => {
     expect(outputTitle(results, results[0].summary.line)).toBe('Raked to region and gender');
   });
 
+  it('titles a descriptives card Descriptives even when share tables name Region', () => {
+    const results = [
+      {
+        procedure: 'descriptives',
+        analysis_type: 'descriptives',
+        request_body: { columns: ['region', 'sat'] },
+        summary: {
+          line: 'Satisfaction averages 3.4 (SD 1.1, median 3, n = 800). Region is categorical, so here are its shares instead.',
+          table: [
+            {
+              title: 'Descriptives',
+              rows: [{ label: 'Satisfaction', mean: '3.4', sd: '1.1', median: '3', n: '800' }],
+            },
+            {
+              title: 'Region',
+              rows: [{ value: 'North', frequency: 400, percent: 50 }],
+            },
+          ],
+        },
+        result: {
+          frequency_tables: [{ title: 'Frequency Table: Region', rows: [['North', '400', '50']] }],
+        },
+      },
+    ];
+    expect(outputTitle(results, results[0].summary.line)).toBe('Descriptives');
+    expect(outputKind(results)).toBe('Descriptives');
+    const lead = resultLead(results[0].summary.line, results);
+    expect(lead).toContain('Satisfaction averages');
+    expect(lead.toLowerCase()).not.toContain('weighted base');
+  });
+
   it('titles a frequency card with the question and badges Frequencies', () => {
     const results = [
       {
