@@ -1,5 +1,6 @@
 import {
   contentTypeForDatasetUpload,
+  pendingUploadPrep,
   rememberedDatasetId,
   resolveUploadTarget,
   waitForFinishedUpload,
@@ -84,6 +85,44 @@ describe('waitForFinishedUpload', () => {
       message
     );
     expect(urls.every(url => url.includes('/upload-status'))).toBe(true);
+  });
+});
+
+describe('pendingUploadPrep', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps asking while finish is still writing the proposal', async () => {
+    const urls: string[] = [];
+    jest.spyOn(global, 'fetch').mockImplementation(async input => {
+      urls.push(String(input));
+      if (urls.length < 3) {
+        return { ok: true, json: async () => ({ status: 'running' }) } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          status: 'ready',
+          prep: { weight: 'w', weight_label: 'Weight', variable_sets: [{ label: 'Heard of' }] },
+        }),
+      } as Response;
+    });
+    const prep = await pendingUploadPrep('file-9', 'token', 5, 0);
+    expect(prep).toEqual({
+      weight: 'w',
+      weight_label: 'Weight',
+      variable_sets: [{ label: 'Heard of' }],
+    });
+    expect(urls).toHaveLength(3);
+  });
+
+  it('returns null when the file is ready with no pending proposal', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'ready' }),
+    } as Response);
+    await expect(pendingUploadPrep('file-9', 'token', 2, 0)).resolves.toBeNull();
   });
 });
 

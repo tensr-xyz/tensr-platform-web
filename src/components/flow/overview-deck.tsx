@@ -821,8 +821,8 @@ export function WaveRefresh({
 
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="share-dialog deck-builder wave-refresh">
-        <div className="deck-builder-head">
+      <DialogContent className="share-dialog deck-builder wave-refresh flow-modal">
+        <div className="deck-builder-head flow-modal-head">
           <DialogHeader className="deck-builder-titles">
             <DialogDescription>{reportLine}</DialogDescription>
             <DialogTitle>Refresh with a new wave</DialogTitle>
@@ -884,7 +884,7 @@ export function WaveRefresh({
           </div>
         ) : null}
         {step === 'matches' ? (
-          <div className="wave-refresh-body">
+          <div className="wave-refresh-body flow-modal-body">
             <div className="wave-refresh-matches">
               <div className="wave-refresh-counts">
                 <div className="wave-refresh-count">

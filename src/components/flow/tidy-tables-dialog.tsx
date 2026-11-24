@@ -117,69 +117,71 @@ export function TidyTablesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="tidy-dialog" aria-describedby="tidy-tables-copy">
-        <div className="tidy-dialog-head">
+      <DialogContent className="tidy-dialog flow-modal" aria-describedby="tidy-tables-copy">
+        <div className="tidy-dialog-head flow-modal-head">
           <DialogTitle className="tidy-dialog-title">Tidy tables</DialogTitle>
           <span className="tidy-dialog-count">
             {busy && !scan ? '…' : `${nTables} ${nTables === 1 ? 'table' : 'tables'}`}
           </span>
         </div>
-        <DialogDescription id="tidy-tables-copy" className="tidy-dialog-copy">
-          Find tables that aren&apos;t worth keeping. Nothing is deleted until you choose.
-        </DialogDescription>
+        <div className="flow-modal-body">
+          <DialogDescription id="tidy-tables-copy" className="tidy-dialog-copy">
+            Find tables that aren&apos;t worth keeping. Nothing is deleted until you choose.
+          </DialogDescription>
 
-        <div className="tidy-dialog-reasons" aria-busy={busy}>
-          {rows.map(row => (
-            <div
-              key={row.reason}
-              className="tidy-dialog-reason"
-              data-warn={row.reason === 'broken' && row.count > 0 ? 'true' : undefined}
-            >
-              <span>{row.label}</span>
-              <span className="tidy-dialog-reason-n">{row.count}</span>
-            </div>
-          ))}
-          {rebuildNote ? <p className="tidy-dialog-rebuild-note">{rebuildNote}</p> : null}
-        </div>
-
-        <div className="tidy-dialog-then">
-          <span>Then</span>
-          <div className="tidy-dialog-modes" role="group" aria-label="What to do">
-            {MODES.map(mode => (
-              <Button
-                key={mode.value}
-                type="button"
-                className="tidy-dialog-mode"
-                data-active={criteria.mode === mode.value}
-                data-warn={mode.warn ? 'true' : undefined}
-                aria-pressed={criteria.mode === mode.value}
-                disabled={busy}
-                onClick={() => void rescan({ ...criteria, mode: mode.value })}
+          <div className="tidy-dialog-reasons" aria-busy={busy}>
+            {rows.map(row => (
+              <div
+                key={row.reason}
+                className="tidy-dialog-reason"
+                data-warn={row.reason === 'broken' && row.count > 0 ? 'true' : undefined}
               >
-                {mode.label}
-              </Button>
+                <span>{row.label}</span>
+                <span className="tidy-dialog-reason-n">{row.count}</span>
+              </div>
             ))}
+            {rebuildNote ? <p className="tidy-dialog-rebuild-note">{rebuildNote}</p> : null}
           </div>
+
+          <div className="tidy-dialog-then">
+            <span>Then</span>
+            <div className="tidy-dialog-modes" role="group" aria-label="What to do">
+              {MODES.map(mode => (
+                <Button
+                  key={mode.value}
+                  type="button"
+                  className="tidy-dialog-mode"
+                  data-active={criteria.mode === mode.value}
+                  data-warn={mode.warn ? 'true' : undefined}
+                  aria-pressed={criteria.mode === mode.value}
+                  disabled={busy}
+                  onClick={() => void rescan({ ...criteria, mode: mode.value })}
+                >
+                  {mode.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {review ? (
+            <ul className="tidy-dialog-list">
+              {decisions.length ? (
+                decisions.map(item => (
+                  <li key={String(item.id || item.label)}>
+                    <span>{item.label || item.id || 'Table'}</span>
+                    <span className="tidy-dialog-list-reason">{item.detail || item.reason}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="tidy-dialog-empty">Nothing matches these checks.</li>
+              )}
+            </ul>
+          ) : null}
+
+          {error ? <p className="tidy-dialog-error">{error}</p> : null}
         </div>
 
-        {review ? (
-          <ul className="tidy-dialog-list">
-            {decisions.length ? (
-              decisions.map(item => (
-                <li key={String(item.id || item.label)}>
-                  <span>{item.label || item.id || 'Table'}</span>
-                  <span className="tidy-dialog-list-reason">{item.detail || item.reason}</span>
-                </li>
-              ))
-            ) : (
-              <li className="tidy-dialog-empty">Nothing matches these checks.</li>
-            )}
-          </ul>
-        ) : null}
-
-        {error ? <p className="tidy-dialog-error">{error}</p> : null}
-
-        <div className="tidy-dialog-foot">
+        <div className="tidy-dialog-foot flow-modal-foot">
           <Button
             type="button"
             className="tidy-dialog-secondary"

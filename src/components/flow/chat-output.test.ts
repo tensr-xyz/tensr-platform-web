@@ -169,6 +169,37 @@ describe('chat output panel', () => {
     expect(outputTitle(results, results[0].summary.line)).toBe('Raked to region and gender');
   });
 
+  it('titles a descriptives card Descriptives even when share tables name Region', () => {
+    const results = [
+      {
+        procedure: 'descriptives',
+        analysis_type: 'descriptives',
+        request_body: { columns: ['region', 'sat'] },
+        summary: {
+          line: 'Satisfaction averages 3.4 (SD 1.1, median 3, n = 800). Region is categorical, so here are its shares instead.',
+          table: [
+            {
+              title: 'Descriptives',
+              rows: [{ label: 'Satisfaction', mean: '3.4', sd: '1.1', median: '3', n: '800' }],
+            },
+            {
+              title: 'Region',
+              rows: [{ value: 'North', frequency: 400, percent: 50 }],
+            },
+          ],
+        },
+        result: {
+          frequency_tables: [{ title: 'Frequency Table: Region', rows: [['North', '400', '50']] }],
+        },
+      },
+    ];
+    expect(outputTitle(results, results[0].summary.line)).toBe('Descriptives');
+    expect(outputKind(results)).toBe('Descriptives');
+    const lead = resultLead(results[0].summary.line, results);
+    expect(lead).toContain('Satisfaction averages');
+    expect(lead.toLowerCase()).not.toContain('weighted base');
+  });
+
   it('titles a frequency card with the question and badges Frequencies', () => {
     const results = [
       {
@@ -400,7 +431,7 @@ describe('chat output panel', () => {
 
   it('prefers a labelled structured lead over model prose that quotes codes', () => {
     const structured =
-      'Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
+      'No real link between Trust in Global Ledger and Age band. Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
     const lead = resultLead('trust_b1 and age_band: Pearson r = -0.001023, p = 0.955.', [
       { procedure: 'correlation', summary: { line: structured } },
     ]);
@@ -408,6 +439,26 @@ describe('chat output panel', () => {
     expect(lead).toContain('-0.001');
     expect(lead).not.toContain('trust_b1');
     expect(lead).not.toContain('-0.001023');
+  });
+
+  it('TEN-40: collapses a code-named correlation when the labelled pair is present', () => {
+    const glued =
+      'sat_a and usage_a: Spearman ρ = -0.055, p = 0.315, consistent with chance. ' +
+      'How satisfied are you with Brand A overall? and How often do you visit Brand A?: ' +
+      'Spearman ρ = -0.055, p = 0.315, consistent with chance.';
+    const lead = resultLead(glued, [
+      {
+        procedure: 'correlation',
+        summary: {
+          line:
+            'No real link between How satisfied are you with Brand A overall? and How often do you visit Brand A?. ' +
+            'How satisfied are you with Brand A overall? and How often do you visit Brand A?: Spearman ρ = -0.055, p = 0.315, consistent with chance.',
+        },
+      },
+    ]);
+    expect(lead).not.toMatch(/sat_a/);
+    expect(lead.toLowerCase().split('spearman').length - 1).toBe(1);
+    expect(lead).toMatch(/how satisfied are you with brand a overall/i);
   });
 
   it('keeps a funnel lead that already has conversion and high/low figures', () => {

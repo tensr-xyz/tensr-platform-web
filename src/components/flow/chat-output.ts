@@ -177,7 +177,7 @@ function first(body: Record<string, unknown>, keys: string[]): string {
 }
 
 const BASE_SENTENCE =
-  /^(the weighted base for this table is|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$)/i;
+  /^(the weighted base for this table is|weighted base\b|unweighted base\b|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$|[a-z0-9 _/-]+:\s*(un)?weighted\.?$)/i;
 const FILE_LINE = /^(excel workbook|spss syntax|r syntax):/i;
 
 function proseLines(answer: string): string[] {
@@ -584,6 +584,20 @@ function looksLikeBareStatLead(sentence: string): boolean {
   return false;
 }
 
+function looksLikeCorrelationPair(sentence: string): boolean {
+  const low = sentence.trim().toLowerCase();
+  if (!/(?:spearman\s*ρ|pearson\s*r|kendall\s*τ|\bρ\b|\br\s*=|\bτ\b)/.test(low)) return false;
+  return low.includes('p =') || low.includes('p <') || low.includes('p-value');
+}
+
+function correlationFigureKey(sentence: string): string {
+  const low = sentence.trim().toLowerCase();
+  const coeff = low.match(/(?:spearman\s*ρ|pearson\s*r|kendall\s*τ|ρ|r|τ)\s*=\s*(-?[\d.]+)/);
+  const p = low.match(/p\s*(?:value)?\s*[=<>]\s*([\d.]+)/);
+  if (!coeff || !p) return '';
+  return `${coeff[1]}|${p[1]}`;
+}
+
 /** Drop a bare U/F/t … p = … and keep each labelled sentence once. */
 function collapseSubsumedStatSentences(line: string): string {
   const parts = leadSentenceParts(line);
@@ -597,6 +611,20 @@ function collapseSubsumedStatSentences(line: string): string {
         other !== index && longer.length > short.length + 4 && longer.includes(short)
     );
     if (subsumed) drop.add(index);
+  });
+  // Correlation: same ρ/p under codes vs labels → keep the labelled sentence (TEN-40).
+  norms.forEach((short, index) => {
+    if (drop.has(index) || !looksLikeCorrelationPair(short)) return;
+    const figures = correlationFigureKey(short);
+    if (!figures) return;
+    const codeHeavy = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/.test(short);
+    norms.forEach((other, otherIndex) => {
+      if (otherIndex === index || drop.has(otherIndex) || !looksLikeCorrelationPair(other)) return;
+      if (correlationFigureKey(other) !== figures) return;
+      const otherCodes = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/.test(other);
+      if (codeHeavy && !otherCodes) drop.add(index);
+      else if (codeHeavy === otherCodes && short.length < other.length) drop.add(index);
+    });
   });
   const kept: string[] = [];
   const seen = new Set<string>();
@@ -764,6 +792,8 @@ export function outputTitle(
   const items = analysisItems(results);
   if (preferredProcedure(items) === 'funnel') return 'Funnel';
   if (preferredProcedure(items) === 'brand_duplication') return 'Duplication';
+  // Share tables for skipped categoricals must not rename a descriptives card.
+  if (preferredProcedure(items) === 'descriptives') return 'Descriptives';
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );
