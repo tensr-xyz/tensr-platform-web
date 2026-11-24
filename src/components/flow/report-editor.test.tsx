@@ -256,6 +256,12 @@ describe('ReportEditor formatting', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Headline \+ chart/i }));
     await waitFor(() => expect(screen.getByLabelText('Page 2: Page 2')).toBeTruthy());
+    // Layout mounts headline + empty chart placeholders (not a blank page).
+    const slide = screen.getByLabelText(/^Page 2$/);
+    expect(within(slide).getByText('Page 2')).toBeTruthy();
+    expect(within(slide).getByText('Chart')).toBeTruthy();
+    expect(slide.querySelector('.report-editor-object[data-kind="chart"]')).toBeTruthy();
+    expect(slide.querySelector('.report-editor-object[data-kind="text"]')).toBeTruthy();
 
     const inspector = screen.getByLabelText('Object inspector');
     fireEvent.click(within(inspector).getByRole('button', { name: 'Report theme' }));

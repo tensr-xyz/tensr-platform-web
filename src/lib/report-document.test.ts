@@ -25,6 +25,8 @@ import {
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
+  kindForLayoutSlot,
+  placeholderObjectsForLayout,
   hideTableRow,
   insertDynamicText,
   insertImage,
@@ -110,6 +112,38 @@ describe('report document page model', () => {
     expect(title && content && title.y < content.y).toBe(true);
     expect(frameForSlot('blank', 'title')).toBeNull();
     expect(inchesFrame(title!).w).toBeGreaterThan(1);
+  });
+
+  it('seeds headline and chart placeholders when adding a layout page', () => {
+    expect(kindForLayoutSlot('title_and_content', 'content')).toBe('chart');
+    expect(kindForLayoutSlot('title_only', 'content')).toBe('table');
+    const seeded = placeholderObjectsForLayout('title_and_content', { title: 'Finding A' });
+    expect(seeded.map(obj => [obj.slotId, obj.kind])).toEqual([
+      ['title', 'text'],
+      ['content', 'chart'],
+    ]);
+    expect(seeded[0]?.text).toBe('Finding A');
+    expect(seeded[0]?.frame).toEqual(frameForSlot('title_and_content', 'title'));
+    expect(seeded[1]?.frame).toEqual(frameForSlot('title_and_content', 'content'));
+
+    const doc = addPage(normalizeReportDocument({ pages: [] }), {
+      title: 'Finding A',
+      layoutId: 'title_and_content',
+    });
+    expect(doc.pages[0]?.objects.map(obj => obj.kind)).toEqual(['text', 'chart']);
+    expect(doc.pages[0]?.objects.map(obj => obj.slotId)).toEqual(['title', 'content']);
+
+    const blank = addPage(doc, { title: 'Empty', layoutId: 'blank' });
+    expect(blank.pages.at(-1)?.objects).toEqual([]);
+
+    const switched = setPageLayout(doc, doc.pages[0]!.id, 'two_content');
+    expect(switched.pages[0]?.layoutId).toBe('two_content');
+    expect(switched.pages[0]?.objects.filter(obj => obj.slotId === 'title')).toHaveLength(0);
+    expect(
+      switched.pages[0]?.objects
+        .filter(obj => obj.slotId === 'content_left' || obj.slotId === 'content_right')
+        .map(obj => obj.kind)
+    ).toEqual(['chart', 'chart']);
   });
 
   it('builds live pages from pins and hides deck:false from export', () => {

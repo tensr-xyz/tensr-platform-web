@@ -16882,7 +16882,9 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  height: 72px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
   padding: 10px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);

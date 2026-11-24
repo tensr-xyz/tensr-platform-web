@@ -273,6 +273,73 @@ export function frameForSlot(layoutId: string, slotId: string): ReportFrame | nu
   return found ? { ...found } : null;
 }
 
+/** Object kind for a layout master slot (headline text, empty chart/table, commentary). */
+export function kindForLayoutSlot(layoutId: string, slotId: string): ReportObjectKind {
+  const layout = String(layoutId || '').trim() || 'blank';
+  const slot = String(slotId || '').trim();
+  if (slot === 'title' || slot === 'subtitle' || slot === 'text') return 'text';
+  if (slot === 'content' && layout === 'title_only') return 'table';
+  if (slot === 'content' || slot === 'content_left' || slot === 'content_right') return 'chart';
+  return 'text';
+}
+
+function placeholderTextForSlot(slotId: string, pageTitle: string): string {
+  const slot = String(slotId || '').trim();
+  if (slot === 'title') return String(pageTitle || '').trim() || 'Headline';
+  if (slot === 'subtitle') return 'Subtitle';
+  if (slot === 'text') return 'Add commentary';
+  return '';
+}
+
+/** Empty slotted objects for a page master so Add page / Change layout show placeholders. */
+export function placeholderObjectsForLayout(
+  layoutId: string,
+  options?: { title?: string; occupiedSlotIds?: Iterable<string> }
+): ReportObject[] {
+  const layout = getPageLayout(String(layoutId || '').trim() || 'blank');
+  if (!layout) return [];
+  const occupied = new Set(
+    [...(options?.occupiedSlotIds || [])].map(id => String(id || '').trim()).filter(Boolean)
+  );
+  const pageTitle = String(options?.title || '').trim();
+  const objects: ReportObject[] = [];
+  let zIndex = 1;
+  for (const slot of layout.slots) {
+    if (occupied.has(slot.id)) continue;
+    const frame = frameForSlot(layout.id, slot.id);
+    if (!frame) continue;
+    const kind = kindForLayoutSlot(layout.id, slot.id);
+    const textStyle =
+      slot.id === 'title'
+        ? { ...DEFAULT_TEXT_STYLE, fontSizePt: layout.id === 'title_page' ? 32 : 28, bold: true }
+        : slot.id === 'subtitle'
+          ? { ...DEFAULT_TEXT_STYLE, fontSizePt: 18 }
+          : { ...DEFAULT_TEXT_STYLE };
+    objects.push({
+      id: newId('obj'),
+      kind,
+      frame,
+      zIndex: zIndex++,
+      hidden: false,
+      slotId: slot.id,
+      text: kind === 'text' ? placeholderTextForSlot(slot.id, pageTitle) : '',
+      textStyle,
+      runs: [],
+      binding: null,
+      shapeType: null,
+      imageUrl: null,
+      runId: null,
+      pinId: null,
+      tableSpecId: null,
+      tableStyle: normalizeTableStyle({}),
+      tableRules: [],
+      tableEdits: normalizeTableEdits({}),
+      keepLive: true,
+    });
+  }
+  return objects;
+}
+
 export function inchesFrame(frame: ReportFrame): ReportFrame {
   const box = normalizeFrame(frame);
   return {
@@ -1353,6 +1420,14 @@ export function resizeObject(
   };
 }
 
+function isEmptySlotPlaceholder(obj: ReportObject): boolean {
+  if (obj.runId || obj.pinId || obj.tableSpecId) return false;
+  if (obj.kind === 'chart' || obj.kind === 'table') return true;
+  if (obj.kind !== 'text') return false;
+  const text = String(obj.text || '').trim();
+  return !text || text === 'Headline' || text === 'Subtitle' || text === 'Add commentary';
+}
+
 export function placeObjectInSlot(
   document: ReportDocument | unknown,
   pageId: string,
@@ -1360,20 +1435,32 @@ export function placeObjectInSlot(
   slotId: string
 ): ReportDocument {
   const doc = normalizeReportDocument(document);
+  const wantedSlot = String(slotId).trim();
   return {
     ...doc,
     pages: doc.pages.map(page => {
       if (page.id !== String(pageId)) return page;
-      const box = frameForSlot(page.layoutId, slotId);
+      const box = frameForSlot(page.layoutId, wantedSlot);
       if (!box) {
-        throw new Error(`Unknown slot ${slotId} for layout ${page.layoutId}.`);
+        throw new Error(`Unknown slot ${wantedSlot} for layout ${page.layoutId}.`);
       }
-      return {
-        ...page,
-        objects: page.objects.map(obj =>
-          obj.id === String(objectId) ? { ...obj, slotId: String(slotId).trim(), frame: box } : obj
-        ),
-      };
+      const objects = page.objects
+        .filter(obj => {
+          if (obj.id === String(objectId)) return true;
+          if (obj.slotId !== wantedSlot) return true;
+          // Drop empty placeholders so the slot holds one real object.
+          return !isEmptySlotPlaceholder(obj);
+        })
+        .map(obj => {
+          if (obj.id === String(objectId)) {
+            return { ...obj, slotId: wantedSlot, frame: box };
+          }
+          if (obj.slotId === wantedSlot) {
+            return { ...obj, slotId: null };
+          }
+          return obj;
+        });
+      return { ...page, objects };
     }),
   };
 }
@@ -1392,16 +1479,37 @@ export function setPageLayout(
     ...doc,
     pages: doc.pages.map(page => {
       if (page.id !== String(pageId)) return page;
+      const remounted: ReportObject[] = [];
+      for (const obj of page.objects) {
+        const slot = obj.slotId ? String(obj.slotId).trim() : null;
+        if (!slot) {
+          remounted.push(obj);
+          continue;
+        }
+        const box = frameForSlot(layout, slot);
+        if (box) {
+          remounted.push({ ...obj, frame: box });
+          continue;
+        }
+        // Drop empty placeholders that no longer belong on this master.
+        if (isEmptySlotPlaceholder(obj)) continue;
+        remounted.push({ ...obj, slotId: null });
+      }
+      const occupied = remounted
+        .map(obj => obj.slotId)
+        .filter((slot): slot is string => Boolean(slot));
+      const fillers = placeholderObjectsForLayout(layout, {
+        title: page.title,
+        occupiedSlotIds: occupied,
+      });
+      const topZ = remounted.reduce((max, obj) => Math.max(max, obj.zIndex), 0);
+      const seeded = fillers.map((obj, index) => ({ ...obj, zIndex: topZ + index + 1 }));
       return {
         ...page,
         layoutId: layout,
-        objects: page.objects.map(obj => {
-          const slot = obj.slotId ? String(obj.slotId).trim() : null;
-          if (!slot) return obj;
-          const box = frameForSlot(layout, slot);
-          if (!box) return { ...obj, slotId: null };
-          return { ...obj, frame: box };
-        }),
+        objects: [...remounted, ...seeded].sort(
+          (a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+        ),
       };
     }),
   };
@@ -2519,12 +2627,13 @@ export function addPage(
   const doc = normalizeReportDocument(document);
   let layoutId = String(options?.layoutId || 'blank').trim() || 'blank';
   if (!getPageLayout(layoutId)) layoutId = 'title_and_content';
+  const title = String(options?.title || '').trim() || 'Untitled page';
   const page: ReportPage = {
     id: newId('page'),
-    title: String(options?.title || '').trim() || 'Untitled page',
+    title,
     layoutId,
     section: options?.section ? String(options.section).trim() || null : null,
-    objects: [],
+    objects: placeholderObjectsForLayout(layoutId, { title }),
     hideFromExport: false,
     hideFromPublish: false,
   };
