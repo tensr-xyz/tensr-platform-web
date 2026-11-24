@@ -175,7 +175,7 @@ export function isOtherSpecifyField(name: string, label = ''): boolean {
   return OTHER_SPECIFY_RE.test(name) || OTHER_SPECIFY_RE.test(label);
 }
 
-/** Split "Question - Option" / "Question: Option" labels into stem and option. */
+/** Split "Question - Option" / "Question: Option" labels into left and right. */
 export function labelAxisParts(label: string): [string, string] | null {
   const text = String(label || '')
     .trim()
@@ -187,6 +187,41 @@ export function labelAxisParts(label: string): [string, string] | null {
     if (left && right) return [left, right];
   }
   return null;
+}
+
+/** Shared left = Qualtrics stem; shared right = brand-prefix question. */
+export type AxisOrientation = 'left_stem' | 'right_stem';
+
+export function axisOrientation(labels: string[]): AxisOrientation | null {
+  const parts = labels.map(label => labelAxisParts(label));
+  if (parts.length < 2 || parts.some(part => part == null)) return null;
+  const lefts = new Set(parts.map(part => part![0].toLowerCase()));
+  const rights = new Set(parts.map(part => part![1].toLowerCase()));
+  if (lefts.size === 1 && rights.size > 1) return 'left_stem';
+  if (rights.size === 1 && lefts.size > 1) return 'right_stem';
+  return null;
+}
+
+export function orientedStemItem(
+  label: string,
+  orientation: AxisOrientation | null = null
+): [string, string] | null {
+  const parts = labelAxisParts(label);
+  if (!parts) return null;
+  if (orientation === 'right_stem') return [parts[1], parts[0]];
+  return parts;
+}
+
+export function sharedAxisStem(labels: string[]): string {
+  const orientation = axisOrientation(labels);
+  const stems = labels
+    .map(label => orientedStemItem(label, orientation))
+    .filter((part): part is [string, string] => part != null)
+    .map(part => part[0]);
+  if (!orientation || stems.length < 2) return '';
+  const first = stems[0];
+  if (!stems.every(stem => stem.toLowerCase() === first.toLowerCase())) return '';
+  return first;
 }
 
 export function pickerColumns<
@@ -240,21 +275,61 @@ function outlineSetKind(
   return kinds[members[0]] || 'multi';
 }
 
-/** Infer multi-select / grid groups from shared "Question - Option" labels when sets are missing. */
+/** Infer multi-select / grid groups from shared stem labels when sets are missing. */
 function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
-  const buckets = new Map<string, { stem: string; members: string[] }>();
+  const candidates: { name: string; label: string; parts: [string, string] }[] = [];
   for (const column of columns) {
     const label = String(column.label || column.name || '');
     if (isOtherSpecifyField(column.name, label)) continue;
     const parts = labelAxisParts(label);
-    if (!parts || parts[0].length < 12) continue;
+    if (!parts) continue;
     // Numbered form boxes ("Question - 1") are open-end slots, not tick-box options.
     if (/^\d+$/.test(parts[1])) continue;
-    const key = parts[0].toLowerCase();
-    const bucket = buckets.get(key);
-    if (bucket) bucket.members.push(column.name);
-    else buckets.set(key, { stem: parts[0], members: [column.name] });
+    candidates.push({ name: column.name, label, parts });
   }
+
+  const buckets = new Map<string, { stem: string; members: string[] }>();
+  const claimed = new Set<string>();
+
+  // Qualtrics: shared left stem (long enough to be question text).
+  const leftGroups = new Map<string, typeof candidates>();
+  for (const entry of candidates) {
+    if (entry.parts[0].length < 12) continue;
+    const key = entry.parts[0].toLowerCase();
+    const group = leftGroups.get(key) || [];
+    group.push(entry);
+    leftGroups.set(key, group);
+  }
+  for (const group of leftGroups.values()) {
+    const rights = new Set(group.map(entry => entry.parts[1].toLowerCase()));
+    if (group.length < 2 || rights.size <= 1) continue;
+    const stem = group[0].parts[0];
+    buckets.set(`left:${stem.toLowerCase()}`, {
+      stem,
+      members: group.map(entry => entry.name),
+    });
+    for (const entry of group) claimed.add(entry.name);
+  }
+
+  // Brand-prefix: shared right question, distinct brand on the left.
+  const rightGroups = new Map<string, typeof candidates>();
+  for (const entry of candidates) {
+    if (claimed.has(entry.name) || entry.parts[1].length < 12) continue;
+    const key = entry.parts[1].toLowerCase();
+    const group = rightGroups.get(key) || [];
+    group.push(entry);
+    rightGroups.set(key, group);
+  }
+  for (const group of rightGroups.values()) {
+    const lefts = new Set(group.map(entry => entry.parts[0].toLowerCase()));
+    if (group.length < 2 || lefts.size <= 1) continue;
+    const stem = group[0].parts[1];
+    buckets.set(`right:${stem.toLowerCase()}`, {
+      stem,
+      members: group.map(entry => entry.name),
+    });
+  }
+
   const sets: OutlineSetWithStructure[] = [];
   for (const bucket of buckets.values()) {
     const members = [...new Set(bucket.members)];

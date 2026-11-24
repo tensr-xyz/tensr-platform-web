@@ -500,4 +500,29 @@ describe('outline linked other-choice and full stems', () => {
     ]);
     expect(outline[1].kind).toBe('multi');
   });
+
+  it('infers brand-prefix grids from the shared question suffix, not each brand', () => {
+    const {
+      axisOrientation,
+      sharedAxisStem,
+      questionnaireOutline: outlineFn,
+    } = jest.requireActual('./flow-columns') as typeof import('./flow-columns');
+    const shared = 'read or used in the last 30 days (any platform)';
+    const labels = [`Alpha Brand: ${shared}`, `Beta Brand: ${shared}`, `Gamma Brand: ${shared}`];
+    expect(axisOrientation(labels)).toBe('right_stem');
+    expect(sharedAxisStem(labels)).toBe(shared);
+    const outline = outlineFn(
+      [
+        { name: 'read_alpha', label: labels[0] },
+        { name: 'read_beta', label: labels[1] },
+        { name: 'read_gamma', label: labels[2] },
+        { name: 'region', label: 'Region' },
+      ],
+      [],
+      { kinds: { region: 'single' } }
+    );
+    expect(outline.map(item => item.label)).toEqual([shared, 'Region']);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].columns).toEqual(['read_alpha', 'read_beta', 'read_gamma']);
+  });
 });
