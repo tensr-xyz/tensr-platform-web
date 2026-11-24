@@ -22,17 +22,32 @@ function activeOrgIdFromStorage(): string | null {
   return localStorage.getItem('activeOrganizationId');
 }
 
+/** Pending keep/skip proposal for Sources. Retries while finish is still writing it. */
 export async function pendingUploadPrep(
   datasetId: string,
-  token: string
+  token: string,
+  attempts = 8,
+  delayMs = 750
 ): Promise<Record<string, unknown> | null> {
   const orgId = activeOrgIdFromStorage();
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (orgId && orgId !== PERSONAL_ACCOUNT_KEY) headers['X-Organization-Id'] = orgId;
-  const response = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), { headers });
-  if (!response.ok) return null;
-  const body = (await response.json()) as { prep?: Record<string, unknown> };
-  return body.prep && typeof body.prep === 'object' ? body.prep : null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), { headers });
+    if (!response.ok) return null;
+    const body = (await response.json()) as {
+      status?: string;
+      prep?: Record<string, unknown>;
+    };
+    if (body.prep && typeof body.prep === 'object') return body.prep;
+    // Commit can land before finalize stores the proposal; keep asking briefly.
+    if (body.status === 'running' && attempt + 1 < attempts) {
+      if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
+      continue;
+    }
+    return null;
+  }
+  return null;
 }
 
 export async function skipUploadPrep(datasetId: string, token: string): Promise<void> {
