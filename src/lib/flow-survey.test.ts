@@ -118,6 +118,17 @@ describe('flow survey grid', () => {
     ).toBe('Member role');
   });
 
+  it('names a bare code-1 banner column by the variable label', () => {
+    expect(
+      bannerHeading({
+        id: 'inv=1',
+        label: '1',
+        column_label: 'Institutional investor',
+        letter_slot: 'A',
+      })
+    ).toBe('Institutional investor');
+  });
+
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
   });
