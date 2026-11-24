@@ -501,7 +501,14 @@ export function resultLead(
   const codeHeavy = (text: string) =>
     /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/.test(text) ||
     /\bWeight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\b/.test(text);
-  const preferFinding = Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose));
+  // Bare Key-stat glued ahead of a plain reading, or the same clause twice.
+  const repeatedContract =
+    prose.toLowerCase().split('consistent with chance').length - 1 >= 2 ||
+    prose.toLowerCase().split('spearman').length - 1 >= 2 ||
+    (/^(?:spearman\s*ρ|pearson\s*r|kendall\s*τ)\s*=/i.test(prose.trim()) &&
+      /no real link|move together|move in opposite/i.test(finding));
+  const preferFinding =
+    Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose) || repeatedContract);
   // Duplication leads are stamped by the engine (Paper 6n). Prefer them over model prose
   // so the card does not repeat net reach in two formats.
   const duplicationFinding =
@@ -527,7 +534,18 @@ export function resultLead(
     finding ||
     (pendingOrFailedProse || unfinishedStub ? '' : prose) ||
     (unfinishedStub ? '' : outputTakeaway(answer));
-  const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(text)));
+  // TEN-40: a tool name or progress stub is never the card lead.
+  const stubLead =
+    /^(?:banner_table|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations)\b/i.test(
+      text.trim()
+    ) || /building the (?:table|deck)/i.test(text);
+  const usable =
+    stubLead && finding && !/building the (?:table|deck)/i.test(finding)
+      ? finding
+      : stubLead
+        ? ''
+        : text;
+  const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(usable)));
   const headline = tables ? funnelHeadline(tables) : '';
   const figures = cleaned.match(/%/g)?.length ?? 0;
   const hasFunnelFigures =
@@ -566,12 +584,12 @@ function collapseRepeatedLead(text: string): string {
 function leadSentenceParts(line: string): string[] {
   const parts = line
     .trim()
-    .split(/\.(?:\s+|$)/)
+    .split(/(?<!\.)\.(?:\s+|$)/)
     .map(part => part.trim())
     .filter(Boolean);
-  return parts.map(part =>
-    part.endsWith('.') || part.endsWith('!') || part.endsWith('?') ? part : `${part}.`
-  );
+  // A trailing "?" is a question-label mark, not a finished sentence — the
+  // splitter already consumed the real "." so put it back (TEN-40).
+  return parts.map(part => (part.endsWith('.') || part.endsWith('!') ? part : `${part}.`));
 }
 
 function looksLikeBareStatLead(sentence: string): boolean {
@@ -579,6 +597,10 @@ function looksLikeBareStatLead(sentence: string): boolean {
   if (
     /^(?:welch'?s\s+)?(?:survey\s+)?(?:pearson\s+chi-square|u|h|f|t|z|χ²|chi-square)\b/.test(low)
   ) {
+    return low.includes('p =') || low.includes('p <') || low.includes('p-value');
+  }
+  // Bare Key-stat for a correlation pair (no subject labels before the coeff).
+  if (/^(?:spearman\s*ρ|pearson\s*r|kendall\s*τ)\s*=/.test(low)) {
     return low.includes('p =') || low.includes('p <') || low.includes('p-value');
   }
   return false;
@@ -596,6 +618,15 @@ function correlationFigureKey(sentence: string): string {
   const p = low.match(/p\s*(?:value)?\s*[=<>]\s*([\d.]+)/);
   if (!coeff || !p) return '';
   return `${coeff[1]}|${p[1]}`;
+}
+
+function looksLikeCorrelationReading(sentence: string): boolean {
+  const low = sentence.trim().toLowerCase();
+  return (
+    low.startsWith('no real link between ') ||
+    low.includes(' move together') ||
+    low.includes(' move in opposite')
+  );
 }
 
 /** Drop a bare U/F/t … p = … and keep each labelled sentence once. */
@@ -626,6 +657,29 @@ function collapseSubsumedStatSentences(line: string): string {
       else if (codeHeavy === otherCodes && short.length < other.length) drop.add(index);
     });
   });
+  // Plain reading first: at most one bare Key-stat, after the reading (TEN-40).
+  const readingIndexes = norms
+    .map((short, index) => ({ short, index }))
+    .filter(({ short, index }) => !drop.has(index) && looksLikeCorrelationReading(short))
+    .map(({ index }) => index);
+  const bareCoeffIndexes = norms
+    .map((short, index) => ({ short, index }))
+    .filter(
+      ({ short, index }) =>
+        !drop.has(index) && looksLikeBareStatLead(short) && looksLikeCorrelationPair(short)
+    )
+    .map(({ index }) => index);
+  if (readingIndexes.length && bareCoeffIndexes.length) {
+    const firstReading = Math.min(...readingIndexes);
+    const before = bareCoeffIndexes.filter(index => index < firstReading);
+    const after = bareCoeffIndexes.filter(index => index >= firstReading);
+    if (after.length) {
+      before.forEach(index => drop.add(index));
+      after.slice(1).forEach(index => drop.add(index));
+    } else {
+      before.slice(0, -1).forEach(index => drop.add(index));
+    }
+  }
   const kept: string[] = [];
   const seen = new Set<string>();
   parts.forEach((part, index) => {
@@ -635,9 +689,17 @@ function collapseSubsumedStatSentences(line: string): string {
     seen.add(key);
     kept.push(part);
   });
+  const readingPos = kept.findIndex(part => looksLikeCorrelationReading(part));
+  const barePos = kept.findIndex(
+    part => looksLikeBareStatLead(part) && looksLikeCorrelationPair(part)
+  );
+  if (readingPos >= 0 && barePos >= 0 && barePos < readingPos) {
+    const swap = kept[barePos];
+    kept[barePos] = kept[readingPos];
+    kept[readingPos] = swap;
+  }
   return kept.join(' ').trim();
 }
-
 /** A funnel output opens that output. Other outputs open the table builder. */
 export function outputOpenHref(projectHref: string, kind: string, runId: string): string {
   if (kind === 'Funnel' && runId) {

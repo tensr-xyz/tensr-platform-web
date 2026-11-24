@@ -431,7 +431,7 @@ describe('chat output panel', () => {
 
   it('prefers a labelled structured lead over model prose that quotes codes', () => {
     const structured =
-      'No real link between Trust in Global Ledger and Age band. Trust in Global Ledger and Age band: Pearson r = -0.001, p = 0.955, consistent with chance.';
+      'No real link between Trust in Global Ledger and Age band. Pearson r = -0.001, p = 0.955, consistent with chance.';
     const lead = resultLead('trust_b1 and age_band: Pearson r = -0.001023, p = 0.955.', [
       { procedure: 'correlation', summary: { line: structured } },
     ]);
@@ -446,19 +446,46 @@ describe('chat output panel', () => {
       'sat_a and usage_a: Spearman ρ = -0.055, p = 0.315, consistent with chance. ' +
       'How satisfied are you with Brand A overall? and How often do you visit Brand A?: ' +
       'Spearman ρ = -0.055, p = 0.315, consistent with chance.';
+    const structured =
+      'No real link between How satisfied are you with Brand A overall? and How often do you visit Brand A?. ' +
+      'Spearman ρ = -0.055, p = 0.315, consistent with chance.';
     const lead = resultLead(glued, [
       {
         procedure: 'correlation',
-        summary: {
-          line:
-            'No real link between How satisfied are you with Brand A overall? and How often do you visit Brand A?. ' +
-            'How satisfied are you with Brand A overall? and How often do you visit Brand A?: Spearman ρ = -0.055, p = 0.315, consistent with chance.',
-        },
+        summary: { line: structured },
       },
     ]);
     expect(lead).not.toMatch(/sat_a/);
     expect(lead.toLowerCase().split('spearman').length - 1).toBe(1);
     expect(lead).toMatch(/how satisfied are you with brand a overall/i);
+  });
+
+  it('TEN-40: bare Spearman ahead of a question-label reading collapses plain-first', () => {
+    const glued =
+      'Spearman ρ = -0.055, p = 0.315, consistent with chance. ' +
+      'No real link between How satisfied are you with Brew & Co overall? and How often do you visit Brew & Co?. ' +
+      'Spearman ρ = -0.055, p = 0.315, consistent with chance.';
+    const structured =
+      'No real link between How satisfied are you with Brew & Co overall? and How often do you visit Brew & Co?. ' +
+      'Spearman ρ = -0.055, p = 0.315, consistent with chance.';
+    const lead = resultLead(glued, [{ procedure: 'correlation', summary: { line: structured } }]);
+    expect(lead.toLowerCase().startsWith('no real link')).toBe(true);
+    expect(lead.toLowerCase().split('spearman').length - 1).toBe(1);
+    expect(lead).not.toMatch(/overall\? How often/);
+    expect(lead.indexOf('No real link')).toBeLessThan(lead.toLowerCase().indexOf('spearman'));
+  });
+
+  it('TEN-40: rejects banner_table and Building the table as the card lead', () => {
+    expect(resultLead('banner_table', [])).toBe('');
+    expect(
+      resultLead('Building the table.', [
+        { procedure: 'banner_table', summary: { line: 'Building the table.', pending: true } },
+      ])
+    ).toBe('');
+    const finding = 'Brand Alpha leads at 71.1%, ahead of Brand Beta 58.3%.';
+    expect(
+      resultLead('banner_table', [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('leads');
   });
 
   it('keeps a funnel lead that already has conversion and high/low figures', () => {
