@@ -1523,14 +1523,17 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
   const summary = record.summary;
   if (summary && typeof summary === 'object') {
     const block = summary as { table?: unknown; screen?: unknown; title?: unknown };
-    // Banner runs put the readable grid on screen; table may be markdown only.
+    // Banner runs put the lettered grid on screen. Prefer that one copy (TEN-40).
     const screen = asTable(block.screen);
-    if (screen) found.push(screen);
-    found.push(...summaryTables(block.table, cell(block.title)));
-    if (Array.isArray(block.table)) {
-      for (const item of block.table) {
-        const grid = asTable(item);
-        if (grid) found.push(grid);
+    if (screen) {
+      found.push(screen);
+    } else {
+      found.push(...summaryTables(block.table, cell(block.title)));
+      if (Array.isArray(block.table)) {
+        for (const item of block.table) {
+          const grid = asTable(item);
+          if (grid) found.push(grid);
+        }
       }
     }
   }
@@ -1730,8 +1733,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       const letter = cell(block.letter_test);
       if (letter && !view.letterNote) view.letterNote = letter;
       const screen = asTable((block as { screen?: unknown }).screen);
-      if (screen) add(screen, 'summary');
-      for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
+      // One lettered banner: screen wins over an unlettered summary.table (TEN-40).
+      if (screen) {
+        add(screen, 'summary');
+      } else {
+        for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
+      }
     }
     notes(record.notes);
     if (!view.script && typeof record.r_syntax === 'string' && record.r_syntax.trim()) {
