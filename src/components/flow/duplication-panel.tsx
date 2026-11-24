@@ -41,6 +41,8 @@ export type DuplicationPanelData = {
   net_percent: number;
   base_thousands: number;
   unweighted_n: number;
+  /** Named audience for this run's base; preferred over the prop fallback. */
+  audience_label?: string;
 };
 
 /** Projected thousands the way Paper 6n shows them (289k, 1,221k). */
@@ -128,7 +130,7 @@ export function DuplicationPanel({
           ? { ok: false, label: 'R mismatch · The check did not match' }
           : { ok: false, label: 'R check unavailable' },
   ];
-  const baseLabel = audience?.trim() || 'all respondents';
+  const baseLabel = panel.audience_label?.trim() || audience?.trim() || 'all respondents';
   const basePeople =
     typeof panel.base_thousands === 'number' && Number.isFinite(panel.base_thousands)
       ? formatProjectedK(panel.base_thousands)

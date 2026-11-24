@@ -111,14 +111,28 @@ export function bannerHeading(column: BannerColumn): string {
   const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
   const generic = value.trim().toLowerCase();
   const variable = (column.column_label || '').trim();
+  // Affirmative 0/1 codes ("1", Selected, Yes) show the item label, not the code.
+  const affirmative =
+    generic === 'selected' ||
+    generic === 'yes' ||
+    generic === 'y' ||
+    generic === 'true' ||
+    generic === '1';
+  const negative =
+    generic === 'not selected' ||
+    generic === 'no' ||
+    generic === 'n' ||
+    generic === 'false' ||
+    generic === '0';
   if (
-    (generic === 'selected' || generic === 'not selected') &&
+    (affirmative || negative) &&
     variable &&
+    variable.toLowerCase() !== generic &&
     variable.toLowerCase() !== 'selected' &&
     variable.toLowerCase() !== 'not selected'
   ) {
     const item = variable.includes(':') ? variable.split(':').slice(1).join(':').trim() : variable;
-    return generic === 'not selected' ? `Not ${item || variable}` : item || variable;
+    return negative ? `Not ${item || variable}` : item || variable;
   }
   const label = value;
   if (label && label !== column.id) {

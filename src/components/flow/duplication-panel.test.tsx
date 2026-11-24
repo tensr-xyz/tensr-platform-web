@@ -86,4 +86,15 @@ describe('DuplicationPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /\+ Add title/i }));
     expect(screen.getByText('60.1%')).toBeInTheDocument();
   });
+
+  it('names the audience on the base line from the panel', () => {
+    render(
+      <DuplicationPanel
+        panel={{ ...panel, audience_label: 'US institutional investors' }}
+        rCheck="verified"
+      />
+    );
+    expect(screen.getByText(/Base: US institutional investors/)).toBeInTheDocument();
+    expect(screen.queryByText(/Base: all respondents/)).not.toBeInTheDocument();
+  });
 });
