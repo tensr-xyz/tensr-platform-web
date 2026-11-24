@@ -131,6 +131,20 @@ describe('LoginTemplate', () => {
     expect(screen.getByRole('button', { name: /email me a code/i })).toBeInTheDocument();
   });
 
+  it('prefills the email field from ?email= (signup redirect query)', () => {
+    searchParams = new URLSearchParams('email=a%40b.com');
+    render(<LoginTemplate />);
+    expect(screen.getByLabelText(/email/i)).toHaveValue('a@b.com');
+  });
+
+  it('points the free-trial link at /login, not a dead signup path', () => {
+    render(<LoginTemplate />);
+    expect(screen.getByRole('link', { name: /start a 30-day free trial/i })).toHaveAttribute(
+      'href',
+      '/login'
+    );
+  });
+
   describe('OAuth start', () => {
     it.each([
       ['Google', mockGoogleStart],

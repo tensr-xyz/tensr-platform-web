@@ -9,7 +9,7 @@ import {
   EmptyTitle,
 } from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
@@ -42,7 +42,13 @@ import {
 } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
-import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import {
+  isCodedOpenEndColumn,
+  isIdColumn,
+  isInternalColumn,
+  sourceTextColumnFor,
+  type FlowColumn,
+} from '@/lib/flow-columns';
 import {
   formatSheetCellDisplay,
   sheetColumnHint,
@@ -53,7 +59,12 @@ import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
 import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
+import {
+  analysisReportHref,
+  baseCount,
+  outputOpenHref,
+  outputTableTabLabel,
+} from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 import { DetailsScreen } from '@/components/flow/details-screen';
@@ -93,7 +104,11 @@ import {
   showDatasetVersionUndoToast,
 } from '@/lib/dataset-version-undo';
 import { previewPageUrl } from '@/lib/dataset-open';
-import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
+import {
+  codingDerivedDatasetIdFromToolResults,
+  toolResultsSavedWorkingVersion,
+  weightingDerivedDatasetIdFromToolResults,
+} from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -103,7 +118,9 @@ import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import {
   initialReportView,
+  readStoredReportView,
   REPORT_OVERVIEW_BOOT,
+  reportViewFromPaneParam,
   writeStoredReportView,
   type ReportView,
 } from '@/components/flow/report-view';
@@ -122,11 +139,11 @@ import {
   type RunTable,
 } from '@/components/flow/run-document';
 import {
+  applyServerPins,
   deliverableOutputs,
   pinsFromRuns,
   rememberReportRuns,
   savePin,
-  setProjectPins,
   shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
@@ -261,17 +278,23 @@ import {
 } from '@/components/flow/variable-lineage';
 import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
 import {
+  appendNewWeightOption,
   datasetRowId,
   downloadExport,
   EvidencePanel,
   fileToBase64,
+  isNewWeightChoice,
+  isTableWeightColumn,
   setSurveyCell,
+  tableWeightChoices,
   useEvidenceSheet,
   TablesBuilder,
   ThemesPanel,
   useSurveyCell,
+  weightOptionLabel,
   WeightPanel,
 } from '@/components/flow/survey-screens';
+import { setActiveWeight } from '@/lib/dataset-data-ops';
 type FlowRecipe = {
   name?: string;
   recipe_id?: string;
@@ -598,6 +621,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [askerTurns, setAskerTurns] = useState<AskerTurn[] | null>(null);
   const prefetchTab = usePrefetchProjectTab();
+  const projectQueryClient = useQueryClient();
   const projectFileKey = datasets
     .filter(row => row.project_id === projectId)
     .map(row => datasetRowId(row))
@@ -614,6 +638,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
     void flowJson<{ project?: FlowProject; datasets?: DatasetRow[] }>(`/api/projects/${projectId}`)
       .then(page => {
         if (cancelled) return;
+        // Seed the shared Details cache so Project AI settings does not refetch.
+        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
         const found = page.project;
         if (found) {
           setProjects(current =>
@@ -662,7 +688,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, projectId]);
+  }, [isAuthenticated, projectId, projectQueryClient]);
   const tabReady = workspacePhase === 'ready' || projectReady === projectId;
   const finishedRun = useAnalysisSetupStore(s => s.lastRun);
   const handledRun = useRef(finishedRun?.nonce || 0);
@@ -670,9 +696,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (!finishedRun || finishedRun.nonce === handledRun.current) return;
     handledRun.current = finishedRun.nonce;
     if (projectId && section !== 'report') {
-      router.push(
-        `/flow/p/${projectId}/report?pane=outputs&run=${encodeURIComponent(finishedRun.runId)}`
-      );
+      router.push(analysisReportHref(`/flow/p/${projectId}`, finishedRun.runId));
     }
   }, [finishedRun, projectId, section, router]);
   const page = visibleProjectSection(section);
@@ -749,6 +773,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     }
     void flowJson<{ project?: FlowProject }>(`/api/projects/${projectId}`)
       .then(page => {
+        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
         const found = page.project;
         if (found)
           setProjects(current =>
@@ -756,7 +781,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
           );
       })
       .catch(() => undefined);
-  }, [projectId, projects, workspacePhase]);
+  }, [projectId, projects, workspacePhase, projectQueryClient]);
   const openDataset =
     datasets.find(
       row => row.project_id === project?.id && datasetRowId(row) === project?.active_dataset_id
@@ -2859,6 +2884,7 @@ function ChatScreen({
   onChanged?: () => void;
   onReportUpdated?: () => void;
 }) {
+  const router = useRouter();
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const columnsQuery = useDatasetColumns(datasetId);
@@ -2896,6 +2922,80 @@ function ChatScreen({
     onAsked,
     onReportUpdated,
     onFinished: result => {
+      // Coding saves a themes version; put it in use so Tables/Details can see it.
+      const codedId = codingDerivedDatasetIdFromToolResults(result.tool_results);
+      if (codedId && project?.id) {
+        const files = datasets.map(row => ({
+          id: datasetRowId(row),
+          name: datasetFileLabel(row),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          lineageLabel: row.lineage_label,
+          producingOperation: row.producing_operation,
+          parentId: row.parent_dataset_id,
+          originId: row.origin_dataset_id,
+        }));
+        const withNext = [
+          ...files,
+          {
+            id: codedId,
+            name: codedId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lineageLabel: 'coded themes',
+            producingOperation: 'code_open_text',
+          },
+        ];
+        const adopt = shouldAdoptCodingVersion(
+          project.active_dataset_id || datasetId,
+          codedId,
+          withNext
+        );
+        if (adopt) {
+          void flowJson(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ active_dataset_id: codedId }),
+          }).then(() => onChanged?.());
+          return;
+        }
+      }
+      // A rake / post-stratify saves a weighted version; put it in use for the next ask.
+      const weightedId = weightingDerivedDatasetIdFromToolResults(result.tool_results);
+      if (weightedId && project?.id) {
+        const files = datasets.map(row => ({
+          id: datasetRowId(row),
+          name: datasetFileLabel(row),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          lineageLabel: row.lineage_label,
+          producingOperation: row.producing_operation,
+          parentId: row.parent_dataset_id,
+          originId: row.origin_dataset_id,
+        }));
+        const withNext = [
+          ...files,
+          {
+            id: weightedId,
+            name: weightedId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lineageLabel: 'raked',
+            producingOperation: 'rake',
+          },
+        ];
+        const adopt = shouldAdoptCodingVersion(
+          project.active_dataset_id || datasetId,
+          weightedId,
+          withNext
+        );
+        if (adopt) {
+          void flowJson(`/api/projects/${project.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ active_dataset_id: weightedId }),
+          }).then(() => onChanged?.());
+          return;
+        }
+      }
       // A rake / edit / stack saves a working version. Refresh so Sources lists it.
       if (toolResultsSavedWorkingVersion(result.tool_results)) onChanged?.();
     },
@@ -2963,6 +3063,7 @@ function ChatScreen({
       .then(() => {
         setReportedRun(runId);
         setStatus('Added to the report.');
+        router.push(analysisReportHref(projectHref, runId));
       })
       .catch(() => setStatus('That result could not be added to the report.'));
   };
@@ -3195,7 +3296,7 @@ function ChatScreen({
           >
             {recipeNote.text}{' '}
             {recipeNote.outputs ? (
-              <Link href={`${projectHref}/report?pane=outputs`}>Open Outputs</Link>
+              <Link href={analysisReportHref(projectHref)}>Open Outputs</Link>
             ) : null}
           </p>
         ) : null}
@@ -3381,8 +3482,8 @@ function ChatScreen({
                       className="flow-btn primary"
                       href={
                         runIds[0]
-                          ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
-                          : `${projectHref}/report?pane=outputs`
+                          ? analysisReportHref(projectHref, runIds[0])
+                          : analysisReportHref(projectHref)
                       }
                     >
                       Open
@@ -3649,6 +3750,8 @@ function ResponsesScreen({
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [sheetWeight, setSheetWeight] = useState('');
+  const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [mergeSmall, setMergeSmall] = useState<{
     field: string;
     label: string;
@@ -3739,6 +3842,48 @@ function ResponsesScreen({
       cancelled = true;
     };
   }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey, sheetKey]);
+  useEffect(() => {
+    if (!datasetId) {
+      setWeightColumns([]);
+      setSheetWeight('');
+      return;
+    }
+    let cancelled = false;
+    void flowJson<{
+      columns?: { name?: string; label?: string; role?: string | null }[];
+      weight_columns?: string[];
+      active_weight_column?: string | null;
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        if (cancelled) return;
+        const listed = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
+        const fromRole = (meta.columns || [])
+          .filter(
+            (column): column is { name: string; label?: string; role?: string | null } =>
+              Boolean(column.name) &&
+              isTableWeightColumn(
+                { name: column.name || '', label: column.label, role: column.role || undefined },
+                listed
+              )
+          )
+          .map(column => column.name);
+        const choices = tableWeightChoices(
+          [...listed, ...fromRole],
+          meta.active_weight_column || ''
+        );
+        setWeightColumns(choices);
+        const active = meta.active_weight_column || '';
+        setSheetWeight(active && active !== '_weight' ? active : '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeightColumns([]);
+        setSheetWeight('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -3941,16 +4086,18 @@ function ResponsesScreen({
     });
     return () => setPaletteColumnContext(null);
   }, [datasetId, sheetPhase, activeLabel, activeType]);
-  const isCoded = (column: FlowColumn) =>
-    column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
   const codedColumn =
     (frameName
-      ? columns.find(column => column.name === frameName && isCoded(column))
+      ? columns.find(column => column.name === frameName && isCodedOpenEndColumn(column))
       : undefined) ||
     columns.find(column => {
       const matches = column.name === activeName || column.label === activeName;
-      return matches && isCoded(column);
+      return matches && isCodedOpenEndColumn(column);
     });
+  const codedSourceName = codedColumn ? sourceTextColumnFor(codedColumn, columns) : '';
+  const codedSourceColumn = codedSourceName
+    ? columns.find(item => item.name === codedSourceName)
+    : undefined;
   const columnValues = (column?: FlowColumn) => {
     if (!column) return [];
     const index = names.findIndex(name => name === column.name || name === column.label);
@@ -4254,6 +4401,41 @@ function ResponsesScreen({
               >
                 Check data
               </Button>
+              <ChoiceSelect
+                className="flow-input tables-weight"
+                aria-label="Sheet weight"
+                value={sheetWeight}
+                disabled={!datasetId}
+                onValueChange={value => {
+                  if (isNewWeightChoice(value)) {
+                    setWeightOpen(true);
+                    return;
+                  }
+                  if (!datasetId) return;
+                  const previous = sheetWeight;
+                  setSheetWeight(value);
+                  void setActiveWeight(datasetId, value || null).catch(() => {
+                    setSheetWeight(previous);
+                    setSheetNote('Could not change the active weight.');
+                  });
+                }}
+                options={appendNewWeightOption([
+                  { value: '', label: 'Unweighted' },
+                  ...weightColumns.map(name => {
+                    const meta = columns.find(column => column.name === name);
+                    const label = String(meta?.label || '').trim() || name;
+                    const shared = weightColumns.filter(other => {
+                      const otherMeta = columns.find(column => column.name === other);
+                      return (String(otherMeta?.label || '').trim() || other) === label;
+                    });
+                    return {
+                      value: name,
+                      label:
+                        shared.length > 1 ? `${label} · ${name}` : weightOptionLabel(name, label),
+                    };
+                  }),
+                ])}
+              />
               {surveyCell ? (
                 <>
                   <Button
@@ -4318,8 +4500,23 @@ function ResponsesScreen({
           reviewing && datasetId ? (
             <CodingReview
               datasetId={datasetId}
-              codeColumn={reviewing.endsWith('_codes') ? reviewing : `${reviewing}_codes`}
-              textColumn={reviewing.replace(/_codes$/, '')}
+              codeColumn={
+                isCodedOpenEndColumn({ name: reviewing })
+                  ? reviewing
+                  : columns.find(
+                      column =>
+                        isCodedOpenEndColumn(column) &&
+                        sourceTextColumnFor(column, columns) === reviewing
+                    )?.name || `${reviewing}_themes`
+              }
+              textColumn={
+                isCodedOpenEndColumn({ name: reviewing })
+                  ? sourceTextColumnFor(
+                      columns.find(column => column.name === reviewing) || { name: reviewing },
+                      columns
+                    )
+                  : reviewing
+              }
               onDone={result => {
                 setReopenTheme(result?.codeColumn || reviewing);
                 setReviewing(null);
@@ -4956,18 +5153,11 @@ function ResponsesScreen({
               <CodeFrameRail
                 datasetId={datasetId}
                 column={codedColumn.name}
-                title={
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                    ?.label || codedColumn.name.replace(/_codes$/, '')
-                }
-                question={
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                    ?.label || ''
-                }
+                title={codedSourceColumn?.label || codedSourceName || codedColumn.name}
+                question={codedSourceColumn?.label || ''}
+                textColumn={codedSourceName || undefined}
                 values={columnValues(codedColumn)}
-                texts={columnValues(
-                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
-                )}
+                texts={columnValues(codedSourceColumn)}
                 onFilter={value => {
                   setValueFilter(value);
                   setShowFilters(true);
@@ -5332,6 +5522,10 @@ function ReportScreen({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const paneParam = searchParams.get('pane');
+  const runParam = searchParams.get('run') || '';
   const [pane, setPane] = useState<ReportView>(() =>
     typeof window === 'undefined'
       ? 'overview'
@@ -5342,24 +5536,39 @@ function ReportScreen({
   const [staleErrors, setStaleErrors] = useState<Record<string, string>>({});
   const lastRun = useAnalysisSetupStore(s => s.lastRun);
   const seenRun = useRef(lastRun?.nonce || 0);
+  /** Switcher only: remember this project's last manual view and keep the URL in sync. */
   const setView = useCallback(
     (view: ReportView) => {
       setPane(view);
       writeStoredReportView(projectId, view);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pane', view);
+      if (view !== 'outputs') params.delete('run');
+      const query = params.toString();
+      router.replace(`/flow/p/${projectId}/report${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [projectId]
+    [projectId, router, searchParams]
   );
+  /** Deep link / programmatic: show the view but do not overwrite the switcher preference. */
+  const showView = useCallback((view: ReportView) => {
+    setPane(view);
+  }, []);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setPane(initialReportView(projectId, params.get('pane')));
-    if (params.get('run')) setOpenRunId(params.get('run') || '');
-  }, [projectId]);
+    const fromUrl = reportViewFromPaneParam(paneParam);
+    if (fromUrl) {
+      showView(fromUrl);
+    } else {
+      showView(readStoredReportView(projectId) || 'overview');
+    }
+    setOpenRunId(runParam);
+  }, [projectId, paneParam, runParam, showView]);
   useEffect(() => {
     if (!lastRun || lastRun.nonce === seenRun.current) return;
     seenRun.current = lastRun.nonce;
-    setView('outputs');
+    showView('outputs');
     setOpenRunId(lastRun.runId);
-  }, [lastRun, setView]);
+    router.replace(analysisReportHref(`/flow/p/${projectId}`, lastRun.runId), { scroll: false });
+  }, [lastRun, showView, router, projectId]);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);
@@ -5440,7 +5649,7 @@ function ReportScreen({
         }
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
-        setProjectPins(projectId, pinsFromRuns(runs));
+        applyServerPins(projectId, pinsFromRuns(runs));
         setSavedTotal(
           savedTableTotal([
             overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
@@ -5732,6 +5941,7 @@ function ReportScreen({
 
   const deck = async (recipe?: OverviewBuildRequest) => {
     setError('');
+    setNote('Building the PowerPoint file');
 
     // Audience overview: auto-build the standard tables from the saved audience.
     if (recipe && exportFileId) {
@@ -5797,7 +6007,7 @@ function ReportScreen({
       setNote(
         created.note ||
           (created.n_copies && created.n_copies > 1
-            ? `Built ${created.n_copies} market decks and saved them as recipes.`
+            ? `Downloaded ${created.n_copies} market decks and saved them as recipes.`
             : 'Overview deck downloaded and saved as a recipe.')
       );
       setDecksTick(value => value + 1);
@@ -5826,17 +6036,23 @@ function ReportScreen({
     } catch {
       /* Fall back to pins when no reshaped document is stored. */
     }
+    const deckStem = (project?.name || 'deck').trim() || 'deck';
     const { exportOfficeDeckAndDownload } = await import('@/lib/office-deck-job');
-    await exportOfficeDeckAndDownload(exportFileId, 'deck', {
-      spec_ids: selected.map(row => row.id),
-      outputs,
-      report_document: reportDocument,
-      headlines: findings
-        .filter(finding => finding.headline)
-        .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
-      ...(template ? { template_base64: template } : {}),
-      ...(templateName ? { template_name: templateName } : {}),
-    });
+    await exportOfficeDeckAndDownload(
+      exportFileId,
+      deckStem,
+      {
+        spec_ids: selected.map(row => row.id),
+        outputs,
+        report_document: reportDocument,
+        name: deckStem,
+        // Report pages carry their own titles; do not send Overview findings by
+        // position — that paired the wrong table under each slide title.
+        ...(template ? { template_base64: template } : {}),
+        ...(templateName ? { template_name: templateName } : {}),
+      },
+      { onProgress: message => setNote(message) }
+    );
     setNote('Deck downloaded.');
     setDecksTick(value => value + 1);
   };
@@ -5867,29 +6083,31 @@ function ReportScreen({
   };
 
   const bannerBook = async () => {
-    if (!datasetId || !selected.length) {
-      setError(
-        staleTables.length
-          ? 'Rebuild or deselect tables built on an older file before exporting.'
-          : 'Save a table before building a banner book.'
-      );
+    const liveSpecs = selected
+      .map(row => ({
+        ...row.spec,
+        dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
+        table_number: row.number || row.spec.table_number,
+      }))
+      .filter(spec => Object.keys(spec).length);
+    const staleIds = staleTables.map(table => table.id).filter(Boolean);
+    if (!datasetId || (!liveSpecs.length && !staleIds.length)) {
+      setError('Save a table before building a banner book.');
       return;
     }
     setError('');
-    const exportDatasetId = selected[0].datasetId || datasetId;
+    const exportDatasetId = selected[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
+    const stem =
+      (audienceNames[0] || 'banner-book').replace(/[^\w.-]+/g, '-').slice(0, 40) || 'banner-book';
     const saved = await flowJson<{ book?: { id?: string } }>(
       `/datasets/${exportDatasetId}/banner-books`,
       {
         method: 'POST',
         body: JSON.stringify({
-          name: 'Banner book',
-          specs: selected
-            .map(row => ({
-              ...row.spec,
-              dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
-              table_number: row.number || row.spec.table_number,
-            }))
-            .filter(spec => Object.keys(spec).length),
+          name: audienceNames[0] ? `${audienceNames[0]} banner book` : 'Banner book',
+          specs: liveSpecs,
+          // Stale ("Needs rebuild") tables are loaded by id; export rebuilds them.
+          spec_ids: staleIds,
         }),
       }
     );
@@ -5897,7 +6115,7 @@ function ReportScreen({
     if (!bookId) throw new Error('The banner book was not saved.');
     await downloadExport(
       `/datasets/${exportDatasetId}/banner-books/${bookId}/export.xlsx`,
-      'banner-book.xlsx',
+      `${stem}-banner-book.xlsx`,
       {
         method: 'POST',
         body: JSON.stringify({ target_dataset_id: exportDatasetId, mapping: {} }),
@@ -6067,10 +6285,12 @@ function ReportScreen({
               disabled={busy !== ''}
               onClick={() => run('deck', deck)}
             >
-              Download PPTX
+              {busy === 'deck' ? 'Building…' : 'Download PPTX'}
             </Button>
           </div>
         </div>
+        {busy === 'deck' && note ? <p className="flow-muted">{note}</p> : null}
+        {error ? <p className="flow-error">{error}</p> : null}
         <ReportEditor
           datasetId={exportFileId || null}
           pins={reportPins}
@@ -6133,6 +6353,7 @@ function ReportScreen({
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
+              setOverviewOpen(false);
             }}
             onClose={() => setOverviewOpen(false)}
           />
@@ -6310,7 +6531,7 @@ function ReportScreen({
                 type="button"
                 disabled={busy !== ''}
                 onClick={() => {
-                  setView('slides');
+                  showView('slides');
                   run('deck', deck);
                 }}
               >

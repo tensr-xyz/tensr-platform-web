@@ -35,6 +35,17 @@ describe('table screen defaults', () => {
     expect(label.length).toBeGreaterThan(0);
   });
 
+  it('stamps working versions so identical stack names stay distinct', () => {
+    const label = datasetFileLabel({
+      parent_dataset_id: 'upload',
+      original_filename: 'cars_EN + FR + DE',
+      lineage_label: 'joined',
+      created_at: '2026-10-21T13:06:14Z',
+    });
+    expect(label).toMatch(/^cars_EN \+ FR \+ DE · /);
+    expect(label).toMatch(/\d{1,2} \w{3} \d{2}:\d{2}:\d{2}$/);
+  });
+
   it('uses the active weight, including the internal raked copy', () => {
     expect(defaultTableWeight('raked', ['raked', 'other'])).toBe('raked');
     expect(defaultTableWeight('_weight', ['raked'])).toBe('raked');

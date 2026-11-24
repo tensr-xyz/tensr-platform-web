@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ShareDialog } from './share-dialog';
 
 jest.mock('@/lib/flow-api', () => ({
@@ -68,12 +68,136 @@ describe('ShareDialog', () => {
     expect(screen.getByText(/Expires: never/)).toBeInTheDocument();
   });
 
-  it('offers Asker between Viewer and Editor', async () => {
+  it('offers Can ask between Can view and Can edit', async () => {
     render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
     expect(await screen.findByText('Share Brand tracker')).toBeInTheDocument();
-    expect(screen.getByText(/Viewer · reads outputs/)).toBeInTheDocument();
-    expect(screen.getByText(/Asker · asks questions/)).toBeInTheDocument();
-    expect(screen.getByText(/Editor · runs and edits/)).toBeInTheDocument();
+    expect(screen.getByText(/Can view · reads outputs/)).toBeInTheDocument();
+    expect(screen.getByText(/Can ask · asks questions/)).toBeInTheDocument();
+    expect(screen.getByText(/Can edit · runs and edits/)).toBeInTheDocument();
+  });
+
+  it('lists pending project invites with role, resend and revoke', async () => {
+    const { flowJson } = jest.requireMock('@/lib/flow-api') as {
+      flowJson: jest.Mock;
+    };
+    flowJson.mockImplementation((path: string) => {
+      if (path === '/me') {
+        return Promise.resolve({ active_organization: { id: 'org-1', name: 'Acme' } });
+      }
+      if (path.includes('/members') && path.includes('/projects/')) {
+        return Promise.resolve({
+          members: [{ user_id: 'owner-1', role: 'owner' }],
+        });
+      }
+      if (path.includes('/organizations/') && path.includes('/members')) {
+        return Promise.resolve({
+          members: [{ user_id: 'owner-1', email: 'owner@example.com', display_name: 'Owner' }],
+        });
+      }
+      if (path.includes('/invitations') && !path.includes('resend')) {
+        return Promise.resolve({
+          invitations: [
+            {
+              id: 'inv-1',
+              email: 'asker@example.com',
+              status: 'PENDING',
+              token: 'tok-ask',
+              project_id: 'p1',
+              project_role: 'asker',
+              created_at: new Date().toISOString(),
+              email_status: 'sent',
+            },
+            {
+              id: 'inv-other',
+              email: 'other@example.com',
+              status: 'PENDING',
+              token: 'tok-other',
+              project_id: 'other-project',
+              project_role: 'viewer',
+            },
+            {
+              id: 'inv-legacy',
+              email: 'legacy@example.com',
+              status: 'pending',
+              token: 'tok-legacy',
+            },
+          ],
+        });
+      }
+      if (path.includes('/shares')) {
+        return Promise.resolve({ shares: [] });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    expect(await screen.findByText('asker@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(screen.getAllByText('Can ask').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Resend' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+    expect(screen.getByText(/People with access · 2/)).toBeInTheDocument();
+    expect(screen.queryByText('other@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('legacy@example.com')).not.toBeInTheDocument();
+  });
+
+  it('posts project_id and project_role when inviting by email', async () => {
+    const { flowJson } = jest.requireMock('@/lib/flow-api') as {
+      flowJson: jest.Mock;
+    };
+    const calls: { path: string; init?: RequestInit }[] = [];
+    flowJson.mockImplementation((path: string, init?: RequestInit) => {
+      calls.push({ path, init });
+      if (path === '/me') {
+        return Promise.resolve({ active_organization: { id: 'org-1' } });
+      }
+      if (path.includes('/members') && path.includes('/projects/')) {
+        return Promise.resolve({ members: [] });
+      }
+      if (path.includes('/organizations/') && path.includes('/members')) {
+        return Promise.resolve({ members: [] });
+      }
+      if (path.includes('/invitations') && init?.method === 'POST') {
+        return Promise.resolve({
+          invitation: {
+            id: 'inv-new',
+            email: 'new@example.com',
+            status: 'PENDING',
+            token: 'tok-new',
+            project_id: 'p1',
+            project_role: 'asker',
+            email_status: 'sent',
+          },
+        });
+      }
+      if (path.includes('/invitations')) {
+        return Promise.resolve({ invitations: [] });
+      }
+      if (path.includes('/shares')) {
+        return Promise.resolve({ shares: [] });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    const email = await screen.findByLabelText('Email');
+    fireEvent.change(email, { target: { value: 'new@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+
+    await waitFor(() => {
+      const inviteCall = calls.find(
+        call =>
+          call.path.includes('/organizations/org-1/invitations') && call.init?.method === 'POST'
+      );
+      expect(inviteCall).toBeTruthy();
+      const body = JSON.parse(String(inviteCall?.init?.body || '{}')) as Record<string, string>;
+      expect(body).toMatchObject({
+        email: 'new@example.com',
+        role: 'member',
+        project_id: 'p1',
+        project_role: 'asker',
+      });
+    });
   });
 
   it('shows published link settings when a project link exists', async () => {

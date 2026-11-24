@@ -1,4 +1,6 @@
+import type { ReactElement } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { audienceDefinitionText, audienceFilter, audienceQuestions } from './audience-filter';
 import { AudiencePanel } from './audience-panel';
 
@@ -8,7 +10,15 @@ jest.mock('@/lib/tensr-api-url', () => ({
 
 jest.mock('@/utils/auth', () => ({
   getTensrApiHeaders: () => ({ Authorization: 'Bearer test' }),
+  getStytchBearerForTensrApi: () => 'Bearer test',
 }));
+
+function renderPanel(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 describe('audience filter', () => {
   it('keeps every condition and wraps an excluded one as not', () => {
@@ -123,7 +133,7 @@ describe('audience panel', () => {
         ],
       }),
     });
-    render(
+    renderPanel(
       <AudiencePanel
         datasetId="file-1"
         columns={[{ name: 'place', label: 'Which place', value_labels: { '1': 'Often' } }]}
@@ -156,7 +166,7 @@ describe('audience panel', () => {
       ok: true,
       json: async () => ({ audiences: [] }),
     });
-    render(
+    renderPanel(
       <AudiencePanel
         datasetId="file-1"
         columns={[
@@ -234,7 +244,7 @@ describe('audience panel', () => {
         ],
       }),
     });
-    render(
+    renderPanel(
       <AudiencePanel
         datasetId="file-1"
         columns={[
@@ -279,7 +289,7 @@ describe('audience panel', () => {
         ],
       }),
     });
-    render(
+    renderPanel(
       <AudiencePanel
         datasetId="file-1"
         columns={[{ name: 'role', label: 'Role', value_labels: { '1': 'Director' } }]}
@@ -296,7 +306,7 @@ describe('audience panel', () => {
         unmatched: ['Legacy segment'],
       }),
     });
-    render(
+    renderPanel(
       <AudiencePanel
         datasetId="file-1"
         columns={[{ name: 'role', label: 'Role', value_labels: { '1': 'Director' } }]}

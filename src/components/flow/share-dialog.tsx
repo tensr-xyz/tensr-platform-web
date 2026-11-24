@@ -15,11 +15,21 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton, Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { inviteCreatedToast, mapApiInvitation } from '@/lib/organization-invitations';
 import { publicShareEmbedSnippet } from '@/lib/public-share';
 import { outputKindLabel, outputRuns, type OutputRun } from '@/components/flow/report-output-runs';
 
 type Person = { user_id: string; role: string; email: string; name: string };
-type Invite = { email?: string; status?: string; token?: string; created_at?: string };
+type Invite = {
+  email?: string;
+  status?: string;
+  token?: string;
+  created_at?: string;
+  project_id?: string;
+  project_role?: string;
+  email_status?: string;
+  email_error?: string | null;
+};
 type Share = {
   id: string;
   token: string;
@@ -147,9 +157,13 @@ export function ShareDialog({
             })
         );
         setInvites(
-          (pending.invitations || []).filter(
-            invite => invite.status === 'pending' || !invite.status
-          )
+          (pending.invitations || []).filter(invite => {
+            const status = String(invite.status || 'PENDING').toUpperCase();
+            if (status !== 'PENDING') return false;
+            const forProject = String(invite.project_id || '');
+            // Project share invites only. Legacy org-only invites stay on Settings.
+            return forProject === projectId;
+          })
         );
         const pages = overview.report?.pages;
         if (Array.isArray(pages) && pages.length) {
@@ -199,15 +213,66 @@ export function ShareDialog({
           load();
           return;
         }
-        await flowJson(`/api/organizations/${orgId}/invitations`, {
-          method: 'POST',
-          body: JSON.stringify({ email: address, role: 'member' }),
-        });
+        const page = await flowJson<{ invitation?: Record<string, unknown> }>(
+          `/api/organizations/${orgId}/invitations`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              email: address,
+              role: 'member',
+              project_id: projectId,
+              project_role: role,
+            }),
+          }
+        );
         setEmail('');
-        setNote('Invitation sent.');
+        const invitation = mapApiInvitation(
+          page.invitation || { email: address, status: 'PENDING', project_id: projectId }
+        );
+        const toast = inviteCreatedToast(invitation);
+        if (toast.variant === 'destructive') {
+          setError(toast.description);
+          setNote(toast.title);
+        } else {
+          setNote(`${toast.title}. ${toast.description}`);
+        }
         load();
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Could not invite'));
+  };
+
+  const resendInvite = (inviteRow: Invite) => {
+    if (!orgId || !inviteRow.token) return;
+    setError('');
+    void flowJson<{ invitation?: Record<string, unknown> }>(
+      `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
+      { method: 'POST' }
+    )
+      .then(page => {
+        const invitation = mapApiInvitation(
+          page.invitation || { email: inviteRow.email, status: 'PENDING' }
+        );
+        const toast = inviteCreatedToast(invitation);
+        if (toast.variant === 'destructive') {
+          setError(toast.description);
+          setNote('Invitation still pending.');
+        } else {
+          setNote('Invitation resent.');
+        }
+        load();
+      })
+      .catch(() => setError('Could not resend.'));
+  };
+
+  const revokeInvite = (inviteRow: Invite) => {
+    if (!inviteRow.token) return;
+    setError('');
+    void flowJson(`/api/invitations/${inviteRow.token}`, { method: 'DELETE' })
+      .then(() => {
+        setNote('Invitation revoked.');
+        load();
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not revoke.'));
   };
 
   const setProjectLink = (access: LinkAccess | null) => {
@@ -330,11 +395,20 @@ export function ShareDialog({
     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || '?';
   };
   const roleName = (value?: string) => {
-    if (value === 'asker') return 'Asker';
-    if (value === 'editor') return 'Editor';
-    if (value === 'viewer' || !value) return 'Viewer';
+    if (value === 'asker') return 'Can ask';
+    if (value === 'editor') return 'Can edit';
+    if (value === 'viewer' || !value) return 'Can view';
     if (value === 'owner') return 'Owner';
     return value[0].toUpperCase() + value.slice(1).toLowerCase();
+  };
+  const invitedAgo = (createdAt?: string) => {
+    if (!createdAt) return 'Invited';
+    const then = Date.parse(createdAt);
+    if (Number.isNaN(then)) return 'Invited';
+    const days = Math.max(0, Math.floor((Date.now() - then) / 86_400_000));
+    if (days <= 0) return 'Invited today';
+    if (days === 1) return 'Invited 1 day ago';
+    return `Invited ${days} days ago`;
   };
   const count = (people || []).length + invites.length;
 
@@ -363,9 +437,9 @@ export function ShareDialog({
                   value={role}
                   onValueChange={setRole}
                   options={[
-                    { value: 'asker', label: 'Asker' },
-                    { value: 'viewer', label: 'Viewer' },
-                    { value: 'editor', label: 'Editor' },
+                    { value: 'asker', label: 'Can ask' },
+                    { value: 'viewer', label: 'Can view' },
+                    { value: 'editor', label: 'Can edit' },
                   ]}
                 />
               </div>
@@ -374,9 +448,9 @@ export function ShareDialog({
               </Button>
             </div>
             <p className="share-roles">
-              <span>Viewer · reads outputs</span>
-              <span>Asker · asks questions, can&apos;t edit</span>
-              <span>Editor · runs and edits</span>
+              <span>Can view · reads outputs</span>
+              <span>Can ask · asks questions, can&apos;t edit</span>
+              <span>Can edit · runs and edits</span>
             </p>
             <span className="share-label">People with access · {count}</span>
             {people === null ? <Skeleton className="h-16" /> : null}
@@ -398,30 +472,42 @@ export function ShareDialog({
                     {inviteRow.email} <span className="share-pending">Pending</span>
                   </strong>
                   <span>
-                    Invited
+                    {invitedAgo(inviteRow.created_at)}
                     {inviteRow.token ? (
                       <>
                         {' · '}
                         <Button
                           className="share-link-btn"
                           type="button"
-                          onClick={() => {
-                            if (!orgId || !inviteRow.token) return;
-                            void flowJson(
-                              `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
-                              { method: 'POST' }
-                            )
-                              .then(() => setNote('Invitation resent.'))
-                              .catch(() => setError('Could not resend.'));
-                          }}
+                          onClick={() => resendInvite(inviteRow)}
                         >
                           Resend
                         </Button>
+                        {' · '}
+                        <Button
+                          className="share-link-btn"
+                          type="button"
+                          onClick={() => revokeInvite(inviteRow)}
+                        >
+                          Revoke
+                        </Button>
+                      </>
+                    ) : null}
+                    {inviteRow.email_status && inviteRow.email_status !== 'sent' ? (
+                      <>
+                        {' · '}
+                        <span className="share-email-status">
+                          {inviteRow.email_status === 'not_configured'
+                            ? 'Not emailed'
+                            : inviteRow.email_status === 'failed'
+                              ? 'Email failed'
+                              : 'No email on record'}
+                        </span>
                       </>
                     ) : null}
                   </span>
                 </span>
-                <span className="share-person-role">Can view</span>
+                <span className="share-person-role">{roleName(inviteRow.project_role)}</span>
               </div>
             ))}
           </div>

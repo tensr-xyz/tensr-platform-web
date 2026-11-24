@@ -52,9 +52,24 @@ const ASSISTANT_ERROR_MESSAGES: Record<string, string> = {
     'Your AI assistant request limit for this billing period is reached. Try again next month or upgrade your plan.',
 };
 
+const CLIENT_TIMEOUT_MESSAGE =
+  'This request timed out. Try a smaller table, or use Manage to run the analysis manually.';
+
+function isClientTimeoutError(error: Error): boolean {
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+    return true;
+  }
+  const raw = (error.message || '').trim();
+  return /signal timed out|the operation was aborted due to timeout|timed out/i.test(raw);
+}
+
 export function formatApiErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Something went wrong. Please try again.';
+  }
+
+  if (isClientTimeoutError(error) && !(error instanceof ApiRequestError)) {
+    return CLIENT_TIMEOUT_MESSAGE;
   }
 
   const raw = error.message || '';

@@ -1,3 +1,5 @@
+import { AUTH_DEAD_END_PATHS } from './auth-signup-redirects';
+
 /** Post-login destinations that match app routes (see proxy matcher). */
 const ALLOWED_RETURN_TO_PREFIXES = [
   '/flow',
@@ -11,7 +13,7 @@ const ALLOWED_RETURN_TO_PREFIXES = [
   '/subscription',
 ] as const;
 
-const BLOCKED_RETURN_TO_PATHS = new Set(['/login', '/sign-up', '/register']);
+const BLOCKED_RETURN_TO_PATHS = new Set<string>(AUTH_DEAD_END_PATHS);
 
 /**
  * Sanitize `returnTo` query values so auth flows never send users to missing

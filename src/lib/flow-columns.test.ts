@@ -273,6 +273,35 @@ describe('picker columns', () => {
       { value: 'Q7_codes', label: 'Q7' },
     ]);
   });
+
+  it('offers agent-coded *_themes columns and metadata-coded frames', () => {
+    const { themeColumns, isCodedOpenEndColumn, sourceTextColumnFor } =
+      jest.requireActual('./flow-columns');
+    const columns = [
+      {
+        name: 'sat_reason_themes',
+        label: 'Why did you give that satisfaction score? themes',
+        source_text_column: 'sat_reason',
+        coded_multi: true,
+      },
+      { name: 'sat_reason', label: 'Why did you give that satisfaction score?' },
+      {
+        name: 'notes_coded',
+        label: 'Notes themes',
+        source_text_column: 'notes',
+        codeframe: { source_text_column: 'notes', codes: [] },
+      },
+      { name: 'region', label: 'Region' },
+    ];
+    expect(themeColumns(columns)).toEqual([
+      { value: 'sat_reason_themes', label: 'Why did you give that satisfaction score?' },
+      { value: 'notes_coded', label: 'Notes' },
+    ]);
+    expect(isCodedOpenEndColumn(columns[0])).toBe(true);
+    expect(isCodedOpenEndColumn(columns[3])).toBe(false);
+    expect(sourceTextColumnFor(columns[0], columns)).toBe('sat_reason');
+    expect(sourceTextColumnFor({ name: 'open_end_codes' }, columns)).toBe('open_end');
+  });
 });
 
 describe('question kind', () => {
@@ -296,6 +325,80 @@ describe('question kind', () => {
     );
     expect(questionKind({ name: 'q5_1', type: 'numeric' }, [1], new Set(['q5_1']))).toBe('multi');
     expect(questionKind({ name: 'weight', type: 'numeric' }, [0.8, 1.2, 1.1])).toBe('numeric');
+  });
+
+  it('keeps labelled nominals as single choice, not a rating scale', () => {
+    const { questionKind } = jest.requireActual('./flow-columns');
+    const regionLabels = {
+      '1': 'North',
+      '2': 'South',
+      '3': 'East',
+      '4': 'West',
+      '5': 'Central',
+    };
+    expect(
+      questionKind(
+        {
+          name: 'region',
+          type: 'numeric',
+          measure: 'nominal',
+          value_labels: regionLabels,
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'region',
+          type: 'numeric',
+          measure: 'scale',
+          value_labels: regionLabels,
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'profession',
+          type: 'numeric',
+          value_labels: {
+            '1': 'GP',
+            '2': 'Nurse',
+            '3': 'Pharmacist',
+            '4': 'Dietitian',
+            '5': 'Specialist',
+            '6': 'Other clinician',
+            '7': 'Prefer not to say',
+          },
+        },
+        [1, 2, 3, 4, 5, 6, 7]
+      )
+    ).toBe('single');
+    expect(
+      questionKind(
+        {
+          name: 'agree',
+          type: 'numeric',
+          measure: 'ordinal',
+          value_labels: {
+            '1': 'Strongly disagree',
+            '2': 'Disagree',
+            '3': 'Neither',
+            '4': 'Agree',
+            '5': 'Strongly agree',
+          },
+        },
+        [1, 2, 3, 4, 5]
+      )
+    ).toBe('scale 1-5');
+    expect(
+      questionKind(
+        { name: 'why', type: 'numeric', measure: 'nominal', n_unique: 200, n_rows: 300 },
+        []
+      )
+    ).not.toBe('numeric');
   });
 });
 

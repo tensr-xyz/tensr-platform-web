@@ -2,7 +2,8 @@
 
 export type TidyMode = 'park' | 'hide' | 'delete';
 
-export type TidyReason = 'not_significant' | 'small_base' | 'broken';
+/** Prune criteria shown in Paper 9b. `needs_rebuild` is counted separately and not acted on. */
+export type TidyReason = 'not_significant' | 'small_base' | 'broken' | 'needs_rebuild';
 
 export type TidyCriteria = {
   mode: TidyMode;
@@ -31,12 +32,15 @@ export type TidyScanResult = {
   dry_run?: boolean;
   n_tables?: number;
   n_pruned?: number;
+  n_needs_rebuild?: number;
   reason_counts?: Partial<Record<TidyReason | 'keep', number>>;
   reason_rows?: TidyReasonRow[];
   confirm_label?: string;
   decisions?: TidyDecision[];
   criteria?: Record<string, unknown>;
 };
+
+const PRUNE_REASONS: TidyReason[] = ['not_significant', 'small_base', 'broken'];
 
 /** Paper 9b defaults: 95%, base under 50, include broken. */
 export const DEFAULT_TIDY_CRITERIA: TidyCriteria = {
@@ -68,6 +72,9 @@ export function reasonRowLabel(
   if (reason === 'small_base') {
     return `Every column base under ${criteria.minBase}`;
   }
+  if (reason === 'needs_rebuild') {
+    return 'Need a rebuild first';
+  }
   return 'Broken (a source question was removed)';
 }
 
@@ -98,18 +105,16 @@ export function tidyScanBody(criteria: TidyCriteria, dryRun: boolean): string {
   });
 }
 
-/** Prefer API reason_rows; fall back to counts + local labels. */
+/** Prefer API reason_rows; fall back to counts + local labels. Paper 9b prune rows only. */
 export function tidyReasonRows(
   result: TidyScanResult | null | undefined,
   criteria: TidyCriteria = DEFAULT_TIDY_CRITERIA
 ): TidyReasonRow[] {
   const fromApi = (result?.reason_rows || []).filter(
-    (row): row is TidyReasonRow =>
-      Boolean(row) &&
-      (row.reason === 'not_significant' || row.reason === 'small_base' || row.reason === 'broken')
+    (row): row is TidyReasonRow => Boolean(row) && PRUNE_REASONS.includes(row.reason as TidyReason)
   );
   if (fromApi.length) {
-    return (['not_significant', 'small_base', 'broken'] as const).map(reason => {
+    return PRUNE_REASONS.map(reason => {
       const hit = fromApi.find(row => row.reason === reason);
       return {
         reason,
@@ -118,11 +123,30 @@ export function tidyReasonRows(
       };
     });
   }
-  return (['not_significant', 'small_base', 'broken'] as const).map(reason => ({
+  return PRUNE_REASONS.map(reason => ({
     reason,
     count: result?.reason_counts?.[reason] ?? 0,
     label: reasonRowLabel(reason, criteria),
   }));
+}
+
+/** Stale / unbuilt tables counted separately; not included in park/hide/delete. */
+export function tidyNeedsRebuildCount(result: TidyScanResult | null | undefined): number {
+  if (typeof result?.n_needs_rebuild === 'number') {
+    return Math.max(0, Math.floor(result.n_needs_rebuild));
+  }
+  const fromRows = (result?.reason_rows || []).find(row => row.reason === 'needs_rebuild');
+  if (fromRows && typeof fromRows.count === 'number') {
+    return Math.max(0, Math.floor(fromRows.count));
+  }
+  return Math.max(0, Math.floor(result?.reason_counts?.needs_rebuild ?? 0));
+}
+
+export function tidyNeedsRebuildNote(count: number): string {
+  const n = Math.max(0, Math.floor(count));
+  if (n < 1) return '';
+  const noun = n === 1 ? 'table needs' : 'tables need';
+  return `${n} ${noun} a rebuild first — left alone.`;
 }
 
 export function tidyConfirmLabel(

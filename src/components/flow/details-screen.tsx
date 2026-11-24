@@ -30,7 +30,10 @@ import { AudiencePanel } from '@/components/flow/audience-panel';
 import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
 import {
   labelChangeLine,
+  labelsImportAppliedNote,
   labelsImportApplyLabel,
+  labelsImportPreviewNote,
+  unmatchedLabelLine,
   type LabelsImportPreview,
 } from '@/lib/label-workbook';
 import { ProjectAiSettingsPanel } from '@/components/flow/project-ai-settings';
@@ -182,22 +185,13 @@ function memberMark(id: string): string {
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
   if (role === 'viewer') return 'Can view';
-  if (role === 'asker') return 'Asker';
+  if (role === 'asker') return 'Can ask';
   return 'Can edit';
 }
 
 function columnKind(column: FlowColumn): string {
-  const name = column.name;
-  if (name.endsWith('_codes')) return 'open';
-  const type = String(column.type || '').toLowerCase();
-  const labels = Object.keys(column.value_labels || {});
-  if (labels.length >= 5 && labels.every(code => /^\d+(\.0)?$/.test(code))) {
-    return `scale ${Math.min(...labels.map(Number))}-${Math.max(...labels.map(Number))}`;
-  }
-  if (['string', 'text'].includes(type)) return labels.length ? 'single' : 'open';
-  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type))
-    return labels.length ? 'single' : 'numeric';
-  return type || 'single';
+  // Same rules as the outline: labelled nominals stay single, not a rating scale.
+  return questionKind(column, []);
 }
 
 function editedLabel(value?: string): string {
@@ -399,6 +393,7 @@ export function DetailsScreen({
         flowJson<{
           labels_changed?: number;
           unmatched?: number;
+          unmatched_rows?: LabelsImportPreview['unmatched_rows'];
           code_changed?: number;
           changes?: LabelsImportPreview['changes'];
         }>(`/datasets/${datasetId}/labels/import`, {
@@ -409,14 +404,17 @@ export function DetailsScreen({
             apply: false,
           }),
         }).then(body => {
-          setLabelsPreview({
+          const preview: LabelsImportPreview = {
             filename: file.name,
             content_base64: content,
             labels_changed: Number(body.labels_changed || 0),
             unmatched: Number(body.unmatched || 0),
+            unmatched_rows: Array.isArray(body.unmatched_rows) ? body.unmatched_rows : [],
             code_changed: Number(body.code_changed || 0),
             changes: Array.isArray(body.changes) ? body.changes : [],
-          });
+          };
+          setLabelsPreview(preview);
+          setLabelsNote(labelsImportPreviewNote(preview));
         })
       )
       .catch(err => {
@@ -432,11 +430,12 @@ export function DetailsScreen({
   const applyLabelsImport = () => {
     if (!datasetId || !projectId || !labelsPreview || labelsBusy) return;
     if (labelsPreview.labels_changed < 1) {
-      setLabelsNote('No label changes to apply.');
+      setLabelsNote(labelsImportPreviewNote(labelsPreview));
       return;
     }
     const previousId = datasetId;
     const content = labelsPreview.content_base64;
+    const appliedCount = labelsPreview.labels_changed;
     if (!content) {
       setLabelsNote('Upload the labels file again, then apply.');
       return;
@@ -469,7 +468,7 @@ export function DetailsScreen({
             title: 'Labels saved as a new version',
             onRestored: () => onChanged?.(),
           });
-          setLabelsNote('Labels applied as a new version.');
+          setLabelsNote(labelsImportAppliedNote(appliedCount));
           onChanged?.();
         });
       })
@@ -515,7 +514,12 @@ export function DetailsScreen({
       `/api/organizations/${orgId}/invitations`,
       {
         method: 'POST',
-        body: JSON.stringify({ email, role: 'member' }),
+        body: JSON.stringify({
+          email,
+          role: 'member',
+          project_id: projectId,
+          project_role: role,
+        }),
       }
     )
       .then(page => {
@@ -810,11 +814,20 @@ export function DetailsScreen({
                     ))}
                   </ul>
                 ) : null}
+                {showLabelChanges && labelsPreview.unmatched_rows.length ? (
+                  <ul className="details-labels-changes">
+                    {labelsPreview.unmatched_rows.map((row, index) => (
+                      <li key={`unmatched-${row.name}-${row.code || ''}-${index}`}>
+                        {unmatchedLabelLine(row)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="details-labels-import-actions">
                   <Button
                     type="button"
                     className="flow-btn"
-                    disabled={!labelsPreview.changes.length}
+                    disabled={!labelsPreview.changes.length && !labelsPreview.unmatched_rows.length}
                     onClick={() => setShowLabelChanges(open => !open)}
                   >
                     {showLabelChanges ? 'Hide changes' : 'See changes'}
@@ -1021,7 +1034,7 @@ export function DetailsScreen({
             value={role}
             onValueChange={setRole}
             options={[
-              { value: 'asker', label: 'Asker' },
+              { value: 'asker', label: 'Can ask' },
               { value: 'viewer', label: 'Viewer' },
               { value: 'editor', label: 'Editor' },
             ]}

@@ -143,6 +143,32 @@ describe('chat output panel', () => {
     ).toBe('How much do you like brand C? by Age band');
   });
 
+  it('badges a rake card Weighting and titles it from the summary', () => {
+    const results = [
+      {
+        procedure: 'rake',
+        analysis_type: 'rake',
+        summary: {
+          title: 'Raked to region and gender',
+          line: 'Efficiency 87.6%. Effective base 700.5. Weight range 0.52 to 1.71. All targets met.',
+          table: [
+            {
+              title: 'Targets',
+              columns: ['Variable', 'Category', 'Target %', 'Achieved %'],
+              rows: [['region', 'North', '25%', '25.0%']],
+            },
+          ],
+        },
+        result: {
+          weighting_efficiency: 0.876,
+          diagnostics: { margins: [{ label: 'North', target_percent: 25, achieved_percent: 25 }] },
+        },
+      },
+    ];
+    expect(outputKind(results)).toBe('Weighting');
+    expect(outputTitle(results, results[0].summary.line)).toBe('Raked to region and gender');
+  });
+
   it('titles a frequency card with the question and badges Frequencies', () => {
     const results = [
       {
@@ -839,8 +865,10 @@ describe('chat output panel', () => {
     expect(isClientDeckResult(results)).toBe(true);
     expect(outputKind(results)).toBe('Client deck');
     expect(outputCardReady({ status: 'ok', tool_results: results }, false)).toBe(true);
-    expect(outputOpenHref('/flow/p/1', 'Client deck', 'job-deck')).toBe('/flow/p/1/report');
-    expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report');
+    expect(outputOpenHref('/flow/p/1', 'Client deck', 'job-deck')).toBe(
+      '/flow/p/1/report?pane=slides'
+    );
+    expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report?pane=slides');
     expect(outputRunIds(results)[0]).toBe('job-deck');
   });
 });

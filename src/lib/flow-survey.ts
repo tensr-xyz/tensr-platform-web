@@ -1,5 +1,5 @@
 import type { AnalysisReportChart } from './analysis-report-types';
-import { significanceFootnoteLine } from './table-significance';
+import { significanceFootnoteLine, type TableSignificanceSettings } from './table-significance';
 
 export type BannerColumn = {
   id: string;
@@ -11,6 +11,7 @@ export type BannerColumn = {
 
 export type BannerCell = {
   banner_id: string;
+  stub_row_id?: string;
   percent?: number | null;
   projected_thousands?: number | null;
   index?: number | null;
@@ -82,7 +83,12 @@ export type BannerRow = {
   cells?: BannerCell[];
 };
 
-export type SigLetter = { stub_row_id?: string; banner_id?: string; letter?: string };
+export type SigLetter = {
+  stub_row_id?: string;
+  banner_id?: string;
+  letter?: string;
+  comparison_type?: string;
+};
 
 export type SurveyCell = {
   bitset: string;
@@ -93,6 +99,10 @@ export type SurveyCell = {
   percent: string;
   n: string;
   letter: string;
+  /** When the book came from a slim analyze run, Evidence can restore the bitset. */
+  runId?: string;
+  stubRowId?: string;
+  bannerId?: string;
 };
 
 export function bannerHeading(column: BannerColumn): string {
@@ -121,20 +131,57 @@ export function bannerHeading(column: BannerColumn): string {
   return split >= 0 ? label.slice(split + 1) : label;
 }
 
-export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string): string {
-  return letters
-    .filter(item => item.stub_row_id === rowId && item.banner_id === bannerId && item.letter)
-    .map(item => item.letter)
+/** Concatenate column letters in A–Z order; keep uppercase when both cases appear. */
+export function concatenateLetters(chars: string[]): string {
+  const best = new Map<string, string>();
+  for (const raw of chars) {
+    const letter = String(raw || '').trim();
+    if (!letter) continue;
+    const key = letter.toUpperCase();
+    const prior = best.get(key);
+    if (!prior || (prior === prior.toLowerCase() && letter === letter.toUpperCase())) {
+      best.set(key, letter === letter.toUpperCase() ? key : letter);
+    }
+  }
+  return [...best.keys()]
+    .sort((left, right) => left.localeCompare(right))
+    .map(key => best.get(key) || key)
     .join('');
 }
 
-export function codedStub(column: string): {
+export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string): string {
+  const onCell = letters.filter(
+    item => item.stub_row_id === rowId && item.banner_id === bannerId && item.letter
+  );
+  // Column letters and paired McNemar row letters never share a cell.
+  const hasColumn = onCell.some(item => item.comparison_type !== 'paired_item');
+  const chosen = hasColumn ? onCell.filter(item => item.comparison_type !== 'paired_item') : onCell;
+  return concatenateLetters(chosen.map(item => String(item.letter || '')));
+}
+
+export function codedStub(
+  column: string,
+  meta?: {
+    coded_multi?: boolean;
+    multi_response?: boolean;
+    code_delimiter?: string | null;
+    source_text_column?: string | null;
+  }
+): {
   column: string;
   multiple_response?: boolean;
   value_delimiter?: string;
 } {
-  if (!column.endsWith('_codes')) return { column };
-  return { column, multiple_response: true, value_delimiter: '|' };
+  const name = String(column || '').trim();
+  const multi =
+    name.endsWith('_codes') ||
+    name.endsWith('_themes') ||
+    Boolean(meta?.coded_multi) ||
+    Boolean(meta?.multi_response) ||
+    Boolean(String(meta?.source_text_column || '').trim());
+  if (!multi) return { column: name || column };
+  const delimiter = String(meta?.code_delimiter || '|').trim() || '|';
+  return { column: name || column, multiple_response: true, value_delimiter: delimiter };
 }
 
 export function efficiencyPercent(value: unknown): string {
@@ -167,12 +214,12 @@ export function formatGroupedNumber(value: number, places = 0): string {
   });
 }
 
-/** Column %, projected thousands, and index in one cell when the book carried them. */
+/** Column %, projected thousands, and index in one cell when those stats are toggled on. */
 export function mediaCellText(
   cell: BannerCell | undefined,
   figure: 'percent' | 'row_percent' | 'total_percent' = 'percent',
   digits = 1,
-  options?: { includeProjected?: boolean }
+  options?: { includeProjected?: boolean; includeIndex?: boolean }
 ): string {
   if (!cell) return '—';
   const value =
@@ -183,27 +230,28 @@ export function mediaCellText(
         : cell.percent;
   let shown = value != null ? `${value.toFixed(digits)}%` : '—';
   if (figure === 'percent') {
-    const includeProjected = options?.includeProjected !== false;
+    const includeProjected = options?.includeProjected === true;
     const projected = cell.projected_thousands;
     if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
       const count = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
-      const labelled = `${count} (000s)`;
+      const labelled = `${count}k`;
       shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
     }
+    const includeIndex = options?.includeIndex === true;
     const index = cell.index;
-    if (typeof index === 'number' && Number.isFinite(index)) {
-      const idx = Math.round(index).toLocaleString('en-GB');
+    if (includeIndex && typeof index === 'number' && Number.isFinite(index)) {
+      const idx = `idx ${Math.round(index).toLocaleString('en-GB')}`;
       shown = shown === '—' ? idx : `${shown} · ${idx}`;
     }
   }
   return shown;
 }
 
-/** Paper 5d stacked cell lines: percent, projected+index, unweighted n. */
+/** Paper 5d stacked cell lines: percent, projected+index, unweighted n — only toggled stats. */
 export function mediaCellLines(
   cell: BannerCell | undefined,
   digits = 1,
-  options?: { includeProjected?: boolean; includeUnweighted?: boolean }
+  options?: { includeProjected?: boolean; includeUnweighted?: boolean; includeIndex?: boolean }
 ): { percent: string; detail: string; base: string } {
   if (!cell) return { percent: '—', detail: '', base: '' };
   const percent =
@@ -211,17 +259,18 @@ export function mediaCellLines(
       ? `${cell.percent.toFixed(digits)}%`
       : '—';
   const parts: string[] = [];
-  const includeProjected = options?.includeProjected !== false;
+  const includeProjected = options?.includeProjected === true;
   const projected = cell.projected_thousands;
   if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
     const rounded = formatGroupedNumber(projected, projected >= 100 ? 0 : 1).replace(/\.0$/, '');
     parts.push(`${rounded}k`);
   }
+  const includeIndex = options?.includeIndex === true;
   const index = cell.index;
-  if (typeof index === 'number' && Number.isFinite(index)) {
-    parts.push(Math.round(index).toLocaleString('en-GB'));
+  if (includeIndex && typeof index === 'number' && Number.isFinite(index)) {
+    parts.push(`idx ${Math.round(index).toLocaleString('en-GB')}`);
   }
-  const includeUnweighted = options?.includeUnweighted !== false;
+  const includeUnweighted = options?.includeUnweighted === true;
   const n = cell.unweighted_n;
   const base =
     includeUnweighted && typeof n === 'number' && Number.isFinite(n)
@@ -241,6 +290,9 @@ export function selectionFromCell(
   const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
   const percent = cell.percent != null ? `${cell.percent.toFixed(1)}%` : '';
   const count = cell.unweighted_n != null ? String(cell.unweighted_n) : '';
+  const runId = String(book.run_id || book.analysis_run_id || '').trim();
+  const stubRowId = String(cell.stub_row_id || row.id || '').trim();
+  const bannerId = String(cell.banner_id || '').trim();
   return {
     bitset,
     textColumn: row.source_text_column || row.column || '',
@@ -250,6 +302,9 @@ export function selectionFromCell(
     percent,
     n: count,
     letter,
+    ...(runId ? { runId } : {}),
+    ...(stubRowId ? { stubRowId } : {}),
+    ...(bannerId ? { bannerId } : {}),
   };
 }
 
@@ -316,7 +371,10 @@ export function themeRead(book: Record<string, unknown>): {
 }
 
 /** The one line under a banner: base, weight, filter, effective base, and the test. */
-export function bannerFootnote(book: Record<string, unknown>): string {
+export function bannerFootnote(
+  book: Record<string, unknown>,
+  settings?: TableSignificanceSettings | null
+): string {
   const parts: string[] = [];
   if (book.answered_n != null) {
     parts.push(
@@ -340,7 +398,7 @@ export function bannerFootnote(book: Record<string, unknown>): string {
     .map(column => (column as { kish_effective_base?: number }).kish_effective_base)
     .find(value => typeof value === 'number');
   if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
-  const sigLine = significanceFootnoteLine(book);
+  const sigLine = significanceFootnoteLine(book, settings);
   if (sigLine) parts.push(sigLine);
   else {
     const letters = book.letters as unknown[] | undefined;

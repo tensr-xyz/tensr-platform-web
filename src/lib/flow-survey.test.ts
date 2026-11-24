@@ -5,7 +5,9 @@ import {
   chartSeriesFromBook,
   chartSignificanceNote,
   codedStub,
+  concatenateLetters,
   efficiencyPercent,
+  lettersFor,
   mediaCellLines,
   mediaCellText,
   selectionFromCell,
@@ -29,15 +31,26 @@ describe('flow survey grid', () => {
       multiple_response: true,
       value_delimiter: '|',
     });
+    expect(codedStub('sat_reason_themes')).toEqual({
+      column: 'sat_reason_themes',
+      multiple_response: true,
+      value_delimiter: '|',
+    });
+    expect(codedStub('custom_themes', { coded_multi: true, code_delimiter: '|' })).toEqual({
+      column: 'custom_themes',
+      multiple_response: true,
+      value_delimiter: '|',
+    });
     expect(codedStub('measure')).toEqual({ column: 'measure' });
   });
 
   it('keeps the cell percent, base, and n for the evidence drill', () => {
     const selected = selectionFromCell(
-      { resolved_weight: 'weight' },
+      { resolved_weight: 'weight', run_id: 'run-slim-1' },
       { id: 'row-1', label: 'Theme', source_text_column: 'open_end' },
       {
         banner_id: 'total',
+        stub_row_id: 'row-1',
         percent: 25,
         unweighted_n: 4,
         column_unweighted_n: 12,
@@ -53,6 +66,9 @@ describe('flow survey grid', () => {
       textColumn: 'open_end',
       bitset: 'bitset',
       letter: 'A',
+      runId: 'run-slim-1',
+      stubRowId: 'row-1',
+      bannerId: 'total',
     });
   });
 
@@ -106,7 +122,23 @@ describe('flow survey grid', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
   });
 
-  it('shows projected thousands and index beside the column percent', () => {
+  it('concatenates column letters in A–Z order and drops McNemar when mixed', () => {
+    expect(concatenateLetters(['C', 'a', 'A', 'B', 'e'])).toBe('ABCe');
+    expect(
+      lettersFor(
+        [
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'A', comparison_type: 'column_pair' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'e', comparison_type: 'column_pair' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'B', comparison_type: 'paired_item' },
+          { stub_row_id: 'yes', banner_id: 'london', letter: 'C', comparison_type: 'column_pair' },
+        ],
+        'yes',
+        'london'
+      )
+    ).toBe('ACe');
+  });
+
+  it('shows projected thousands and index beside the column percent only when toggled on', () => {
     expect(
       mediaCellText({
         banner_id: 'total',
@@ -114,15 +146,20 @@ describe('flow survey grid', () => {
         projected_thousands: 102.6,
         index: 131.2,
       })
-    ).toBe('39.4% · 102.6 (000s) · 131');
+    ).toBe('39.4%');
     expect(
-      mediaCellText({
-        banner_id: 'total',
-        percent: 69.0,
-        projected_thousands: 2678.957,
-        index: 100,
-      })
-    ).toBe('69.0% · 2,679 (000s) · 100');
+      mediaCellText(
+        {
+          banner_id: 'total',
+          percent: 39.4,
+          projected_thousands: 102.6,
+          index: 131.2,
+        },
+        'percent',
+        1,
+        { includeProjected: true, includeIndex: true }
+      )
+    ).toBe('39.4% · 102.6k · idx 131');
     expect(
       mediaCellText(
         {
@@ -133,9 +170,22 @@ describe('flow survey grid', () => {
         },
         'percent',
         1,
-        { includeProjected: false }
+        { includeProjected: true, includeIndex: true }
       )
-    ).toBe('69.0% · 100');
+    ).toBe('69.0% · 2,679k · idx 100');
+    expect(
+      mediaCellText(
+        {
+          banner_id: 'total',
+          percent: 69.0,
+          projected_thousands: 2678.957,
+          index: 100,
+        },
+        'percent',
+        1,
+        { includeProjected: false, includeIndex: false }
+      )
+    ).toBe('69.0%');
   });
 
   it('names the paired McNemar test when brands are compared inside a column', () => {
@@ -149,7 +199,24 @@ describe('flow survey grid', () => {
     ).toContain('Paired McNemar test at 95%');
   });
 
-  it('stacks reach cell lines like Paper 5d (percent, projected+index, n)', () => {
+  it('stacks reach cell lines like Paper 5d (percent, projected+index, n) when toggled', () => {
+    expect(
+      mediaCellLines(
+        {
+          banner_id: 'total',
+          percent: 42.0,
+          projected_thousands: 1014.2,
+          index: 105,
+          unweighted_n: 212,
+        },
+        1,
+        { includeProjected: true, includeIndex: true, includeUnweighted: true }
+      )
+    ).toEqual({
+      percent: '42.0%',
+      detail: '1,014k · idx 105',
+      base: 'n 212',
+    });
     expect(
       mediaCellLines({
         banner_id: 'total',
@@ -160,8 +227,8 @@ describe('flow survey grid', () => {
       })
     ).toEqual({
       percent: '42.0%',
-      detail: '1,014k · 105',
-      base: 'n 212',
+      detail: '',
+      base: '',
     });
   });
 

@@ -10,8 +10,10 @@ describe('safeReturnTo', () => {
   });
 
   it('rejects auth and dead signup routes', () => {
+    expect(safeReturnTo('/signup')).toBe('/flow');
     expect(safeReturnTo('/sign-up')).toBe('/flow');
     expect(safeReturnTo('/register')).toBe('/flow');
+    expect(safeReturnTo('/join')).toBe('/flow');
     expect(safeReturnTo('/login')).toBe('/flow');
     expect(safeReturnTo('/login?foo=1')).toBe('/flow');
   });

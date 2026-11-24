@@ -397,11 +397,16 @@ export type ResponseQualityReport = {
     straightline_rows?: number;
     trap_rows?: number;
     bot_rows?: number;
+    duplicate_rows?: number;
+    outlier_rows?: number;
+    poor_text_rows?: number;
+    non_substantive_rows?: number;
     keep?: number;
     review?: number;
     remove?: number;
     would_remove?: number;
     would_review?: number;
+    respondents?: number;
   };
   rows: Array<{
     row_index: number;

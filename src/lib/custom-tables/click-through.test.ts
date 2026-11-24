@@ -2,6 +2,8 @@ import {
   decodeRowUidBitset,
   drillClickCopy,
   drillRequest,
+  hydrateCellProvenance,
+  needsStoredCellProvenance,
   netUnionReconciles,
   provenanceTraceKind,
   resolveCompleteCell,
@@ -79,5 +81,23 @@ describe('banner cell click-through', () => {
         child: { n_rows_filtered: 2 },
       })
     ).toBe('Intersection filter (2 clauses) · 2 rows.');
+  });
+
+  it('hydrates a slim cell from the stored run before resolving', async () => {
+    const slim = { provenance: {} };
+    expect(needsStoredCellProvenance(slim)).toBe(true);
+    const hydrated = await hydrateCellProvenance(slim, {
+      runId: 'run-1',
+      stubRowId: 'group:A',
+      bannerId: 'total',
+      fetchProvenance: async () => ({
+        provenance: { row_uid_bitset: BITSET_U0_U2, row_uid_bitset_miss_count: 0, n_uids: 2 },
+      }),
+    });
+    expect(resolveCompleteCell(hydrated, ORIGIN)).toEqual({
+      kind: 'complete',
+      uids: ['u0', 'u2'],
+      n: 2,
+    });
   });
 });

@@ -45,6 +45,8 @@ export function VariablePreviewTrigger({
   fileName,
   className,
   children,
+  /** Real columns when `column` is a multi-response / brand-list set name. */
+  memberColumns,
 }: {
   datasetId?: string;
   projectId?: string;
@@ -54,6 +56,7 @@ export function VariablePreviewTrigger({
   fileName?: string;
   className?: string;
   children?: ReactNode;
+  memberColumns?: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -62,22 +65,61 @@ export function VariablePreviewTrigger({
   const [usedByCount, setUsedByCount] = useState(0);
   const [resolvedKind, setResolvedKind] = useState(kind || '');
 
+  const memberKey = (memberColumns || []).map(String).filter(Boolean).join('\0');
+
   useEffect(() => {
     if (!open || !datasetId || !column) return;
     let cancelled = false;
+    const members = memberKey ? memberKey.split('\0') : [];
+    const primary = flowJson<ValuePage>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values`
+    ).catch(() => null);
+    const fallbacks =
+      members.length > 0
+        ? Promise.all(
+            members
+              .slice(0, 8)
+              .map(name =>
+                flowJson<ValuePage>(
+                  `/datasets/${datasetId}/columns/${encodeURIComponent(name)}/values`
+                ).catch(() => null)
+              )
+          )
+        : Promise.resolve([] as (ValuePage | null)[]);
     void Promise.all([
-      flowJson<ValuePage>(
-        `/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values`
-      ).catch(() => null),
+      primary,
+      fallbacks,
       flowJson<ColumnDependencies>(
-        `/datasets/${datasetId}/columns/${encodeURIComponent(column)}/dependencies`
+        `/datasets/${datasetId}/columns/${encodeURIComponent(members[0] || column)}/dependencies`
       ).catch(() => null),
-    ]).then(([values, deps]) => {
+    ]).then(([values, memberPages, deps]) => {
       if (cancelled) return;
-      const nextBars = barsFromCounts(values);
+      let page = values;
+      // A set name is not a file column — use member pages so answered is not 0.
+      if ((!page || !page.n) && memberPages.some(Boolean)) {
+        const pages = memberPages.filter(Boolean) as ValuePage[];
+        const n = Math.max(...pages.map(item => Number(item.n || 0)), 0);
+        const missing = Math.min(...pages.map(item => Number(item.missing || 0)), n);
+        const counts: Record<string, number> = {};
+        const labels: Record<string, string> = {};
+        pages.forEach((item, index) => {
+          const name = members[index] || `item_${index + 1}`;
+          const selected = Object.entries(item.counts || {}).find(([code]) => {
+            const text = String(item.value_labels?.[code] || code)
+              .trim()
+              .toLowerCase();
+            return text === 'selected' || text === 'yes' || code === '1';
+          });
+          const count = selected ? Number(selected[1] || 0) : 0;
+          counts[name] = count;
+          labels[name] = String(item.value_labels?.[name] || name);
+        });
+        page = { n, missing, counts, value_labels: labels };
+      }
+      const nextBars = barsFromCounts(page);
       setBars(nextBars);
-      const answered = Math.max(0, Number(values?.n || 0) - Number(values?.missing || 0));
-      const skipped = Number(values?.missing || 0);
+      const answered = Math.max(0, Number(page?.n || 0) - Number(page?.missing || 0));
+      const skipped = Number(page?.missing || 0);
       const file = fileName || 'This file';
       setFileNote(
         skipped
@@ -89,7 +131,7 @@ export function VariablePreviewTrigger({
         setResolvedKind(
           variablePanelKind(
             {
-              value_labels: values?.value_labels || null,
+              value_labels: page?.value_labels || null,
             },
             nextBars.length
           )
@@ -99,7 +141,7 @@ export function VariablePreviewTrigger({
     return () => {
       cancelled = true;
     };
-  }, [open, datasetId, column, fileName, kind]);
+  }, [open, datasetId, column, fileName, kind, memberKey]);
 
   const goResponses = (showLineage: boolean) => {
     if (!projectId) return;

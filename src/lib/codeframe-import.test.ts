@@ -12,6 +12,7 @@ import {
 describe('codeframe import helpers', () => {
   it('derives the verbatim column from a coded column name', () => {
     expect(textColumnFromCodeColumn('comment_codes')).toBe('comment');
+    expect(textColumnFromCodeColumn('sat_reason_themes')).toBe('sat_reason');
     expect(textColumnFromCodeColumn('Q22')).toBe('Q22');
   });
 

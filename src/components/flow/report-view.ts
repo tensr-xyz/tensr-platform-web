@@ -42,6 +42,7 @@ export function readStoredReportView(projectId: string): ReportView | null {
   return null;
 }
 
+/** Persist only a view the user picked on the Slides | Overview | Outputs switcher. */
 export function writeStoredReportView(projectId: string, view: ReportView): void {
   if (typeof window === 'undefined' || !projectId) return;
   try {
@@ -51,7 +52,23 @@ export function writeStoredReportView(projectId: string, view: ReportView): void
   }
 }
 
-/** URL pane wins, then last view for this project, else Overview. */
+/**
+ * URL pane wins (deep link from chat / Open / Add to report).
+ * Otherwise the last switcher choice for this project, else Overview.
+ */
 export function initialReportView(projectId: string, paneParam: string | null): ReportView {
   return reportViewFromPaneParam(paneParam) || readStoredReportView(projectId) || 'overview';
+}
+
+/** Report URL for a specific view (and optional output run to select). */
+export function reportViewHref(
+  projectHref: string,
+  view: ReportView,
+  runId?: string | null
+): string {
+  const base = `${projectHref}/report?pane=${view}`;
+  if (view === 'outputs' && runId) {
+    return `${base}&run=${encodeURIComponent(runId)}`;
+  }
+  return base;
 }

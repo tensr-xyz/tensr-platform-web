@@ -1,11 +1,13 @@
 import {
   adoptDerivedDataset,
+  codingDerivedDatasetIdFromToolResults,
   createdDatasetFromToolResults,
   derivedDatasetFromToolResults,
   derivedWorkspacePath,
   spreadsheetPatchFromDerivedDataset,
   toolResultsSavedWorkingVersion,
   userFacingSchemaColumns,
+  weightingDerivedDatasetIdFromToolResults,
 } from './adopt-derived-dataset';
 import type { TabData } from '@/stores/tabs-store';
 import { useChatStore } from '@/stores/chat-store';
@@ -202,6 +204,77 @@ describe('toolResultsSavedWorkingVersion', () => {
         },
       ])
     ).toBe(false);
+  });
+});
+
+describe('codingDerivedDatasetIdFromToolResults', () => {
+  it('returns the coded themes file so chat can put it in use', () => {
+    expect(
+      codingDerivedDatasetIdFromToolResults([
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'code_open_text' },
+          result: {
+            ok: true,
+            derived_dataset_id: 'themes-file',
+            saved_label: 'Why that score? themes',
+            out_column: 'reason_themes',
+          },
+        },
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'banner_table' },
+          result: { ok: true, derived_dataset_id: 'should-not-win' },
+        },
+      ])
+    ).toBe('themes-file');
+  });
+
+  it('ignores non-coding turns', () => {
+    expect(
+      codingDerivedDatasetIdFromToolResults([
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'rake' },
+          result: { ok: true, derived_dataset_id: 'raked' },
+        },
+      ])
+    ).toBeNull();
+  });
+});
+
+describe('weightingDerivedDatasetIdFromToolResults', () => {
+  it('returns the raked file so chat can put it in use', () => {
+    expect(
+      weightingDerivedDatasetIdFromToolResults([
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'rake' },
+          result: {
+            ok: true,
+            derived_dataset_id: 'raked-file',
+            weighting_efficiency: 0.876,
+          },
+        },
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'frequencies' },
+          result: { ok: true, derived_dataset_id: 'should-not-win' },
+        },
+      ])
+    ).toBe('raked-file');
+  });
+
+  it('ignores non-weighting turns', () => {
+    expect(
+      weightingDerivedDatasetIdFromToolResults([
+        {
+          name: 'run_analysis',
+          args: { analysis_type: 'code_open_text' },
+          result: { ok: true, derived_dataset_id: 'themes' },
+        },
+      ])
+    ).toBeNull();
   });
 });
 

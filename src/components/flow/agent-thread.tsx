@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProjectSessions } from '@/hooks/api/use-project-data';
@@ -35,6 +36,7 @@ import {
   outputChecks,
   hasSummaryTable,
   isClientDeckResult,
+  analysisReportHref,
   clientDeckReportHref,
   isProcedurePlaceholder,
   keptModelAnswer,
@@ -1327,6 +1329,7 @@ export function AgentThreadColumn({
   emptyDescription?: string;
   emptySuggestions?: string[];
 }) {
+  const router = useRouter();
   const [stepsOpen, setStepsOpen] = useState(true);
   const [asker, setAsker] = useState(false);
   const [askedOwner, setAskedOwner] = useState(false);
@@ -1802,16 +1805,22 @@ export function AgentThreadColumn({
                 </>
               ) : (
                 <>
-                  <Link
-                    className="flow-btn primary"
-                    href={
-                      thread.runIds[0]
-                        ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(thread.runIds[0])}`
-                        : `${projectHref}/report?pane=outputs`
-                    }
-                  >
-                    Open
-                  </Link>
+                  {asker ? (
+                    <Button
+                      className="flow-btn primary"
+                      type="button"
+                      onClick={() => thread.setPanelOpen(true)}
+                    >
+                      Open as table
+                    </Button>
+                  ) : (
+                    <Link
+                      className="flow-btn primary"
+                      href={analysisReportHref(projectHref, thread.runIds[0])}
+                    >
+                      Open
+                    </Link>
+                  )}
                   {asker ? null : (
                     <>
                       <Button
@@ -1820,9 +1829,10 @@ export function AgentThreadColumn({
                         disabled={!thread.runIds[0] || !thread.datasetId || inReport}
                         onClick={() => {
                           if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
+                          const runId = thread.runIds[0];
                           void savePin(thread.projectId, thread.datasetId, {
-                            id: thread.runIds[0],
-                            runId: thread.runIds[0],
+                            id: runId,
+                            runId,
                             datasetId: thread.datasetId,
                             headline: thread.title,
                             support: thread.takeaway,
@@ -1832,7 +1842,10 @@ export function AgentThreadColumn({
                             topline: true,
                             keepLive: true,
                           })
-                            .then(() => thread.setStatus('Added to the report.'))
+                            .then(() => {
+                              thread.setStatus('Added to the report.');
+                              router.push(analysisReportHref(projectHref, runId));
+                            })
                             .catch(() =>
                               thread.setStatus('That result could not be added to the report.')
                             );

@@ -519,9 +519,67 @@ describe('reshapeReportDocument', () => {
     expect(originalIds.every(id => result.document.pages.some(page => page.id === id))).toBe(true);
     const board = result.document.pages.filter(page => page.section === 'Board');
     expect(board[0]?.id).toBe(result.document.pages[0]?.id);
-    expect(board.some(page => page.title === 'Recommendations')).toBe(true);
+    expect(board[0]?.layoutId).toBe('title_page');
+    expect(board.some(page => page.title === 'Implications')).toBe(true);
     expect(board.every(page => page.title !== 'How to read this report')).toBe(true);
-    expect(board.filter(page => page.title !== 'Recommendations')).toHaveLength(2);
+    expect(
+      board.filter(page => page.title !== 'Implications' && page.layoutId !== 'title_page')
+    ).toHaveLength(2);
+  });
+
+  it('picks strongest insights and skips title/exec for a board version', () => {
+    let doc = addPage(normalizeReportDocument({ pages: [] }), {
+      title: 'Audience Check',
+      layoutId: 'title_page',
+      section: 'Title',
+    });
+    doc = addPage(doc, {
+      title: 'Executive summary',
+      layoutId: 'title_and_content',
+      section: 'Executive summary',
+    });
+    doc = addPage(doc, {
+      title: 'United States share higher among female than male respondents (62.8% vs 60.8%)',
+      layoutId: 'title_and_content',
+      section: 'Insights',
+    });
+    doc = addPage(doc, {
+      title: 'UK reads Global Ledger more (35% vs 28%)',
+      layoutId: 'title_and_content',
+      section: 'Insights',
+    });
+    doc = addPage(doc, {
+      title: 'The Exchange over-indexes in Germany (22% vs 14%)',
+      layoutId: 'title_and_content',
+      section: 'Insights',
+    });
+    const chartPageIds = doc.pages
+      .filter(page => page.section === 'Insights' && !page.title.includes('62.8%'))
+      .map(page => page.id);
+    for (const pageId of chartPageIds) {
+      doc = insertTable(doc, pageId, { runId: `run-${pageId}`, tableSpecId: `spec-${pageId}` });
+    }
+
+    const result = reshapeReportDocument(doc, {
+      kind: 'board',
+      maxSlides: 5,
+      includeRecommendations: true,
+    });
+    const board = result.document.pages.filter(page => page.section === 'Board');
+    // Title + 2 strong findings + Implications (weak gap dropped, not used as padding).
+    expect(board).toHaveLength(4);
+    expect(board[0]?.layoutId).toBe('title_page');
+    expect(board[0]?.title).toBe('Audience Check');
+    expect(board[board.length - 1]?.title).toBe('Implications');
+    const findingTitles = board.slice(1, -1).map(page => page.title);
+    expect(findingTitles).toContain('UK reads Global Ledger more (35% vs 28%)');
+    expect(findingTitles).toContain('The Exchange over-indexes in Germany (22% vs 14%)');
+    expect(findingTitles.every(title => !title.includes('62.8%'))).toBe(true);
+    const implBody =
+      board[board.length - 1]?.objects.find(obj => obj.slotId === 'content')?.text || '';
+    expect(implBody).not.toContain('Focus on:');
+    expect(implBody).not.toContain('• •');
+    expect(implBody.trimStart().startsWith('• ')).toBe(false);
   });
 
   it('parses board and short reshape prompts', () => {

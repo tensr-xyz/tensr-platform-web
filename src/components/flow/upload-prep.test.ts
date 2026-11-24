@@ -1,4 +1,4 @@
-import { prepApplyBody, preparedCopyLabel, prepParts } from './upload-prep';
+import { prepApplyBody, preparedCopyLabel, prepParts, qualityFlagTitle } from './upload-prep';
 
 describe('upload prep', () => {
   it('lists each part by its label and never drops rows', () => {
@@ -35,8 +35,9 @@ describe('upload prep', () => {
       'brand awareness',
       'Weight: Design weight',
       'NPS groups for How likely are you to recommend it?',
-      '6 quality flags',
+      '11 quality flags',
     ]);
+    expect(parts.find(part => part.id === 'flags')?.title).toBe('Flag 11 respondents');
     const body = prepApplyBody(['sets', 'weight']);
     expect(body).toEqual({
       labels: false,
@@ -86,9 +87,33 @@ describe('upload prep', () => {
   it('says when no NPS scale and no quality flags were found', () => {
     const parts = prepParts({ quality: { flagged: 0, checked: 3 } });
     expect(parts.map(part => part.label)).toEqual(['No NPS scale found', 'No quality flags']);
+    expect(parts.every(part => !part.after)).toBe(true);
     expect(prepParts({}).map(part => part.label)).toEqual([
       'No NPS scale found',
       'No quality flags',
     ]);
+  });
+
+  it('leads the quality row with the count that would be removed', () => {
+    expect(
+      qualityFlagTitle({
+        flagged: 318,
+        respondents: 380,
+        would_remove: 3,
+        would_remove_share: 0.008,
+      })
+    ).toBe('Flag 3 respondents');
+    const flags = prepParts({
+      quality: {
+        flagged: 318,
+        respondents: 380,
+        speeder_rows: 200,
+        would_remove: 3,
+        would_remove_share: 0.008,
+        threshold: 0.5,
+      },
+    }).find(part => part.id === 'flags');
+    expect(flags?.title).toBe('Flag 3 respondents');
+    expect(flags?.before).toContain('318 flagged in total');
   });
 });

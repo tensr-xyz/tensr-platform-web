@@ -30,26 +30,27 @@ describe('round 13', () => {
     expect(displayedCount(cell, false)).toBe('36');
     expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76 (70)');
     expect(displayedCount({ count: 76.2 }, true)).toBe('76');
+    // Counts keep people units (same as the base), even when projected_thousands is on the cell.
     expect(
       displayedCount(
         { count: 2678957, weighted_n: 2678957, unweighted_n: 2046, projected_thousands: 2678.957 },
         true
       )
-    ).toBe('2,679 (2,046)');
+    ).toBe('2,678,957 (2,046)');
     expect(displayedCount({ count: 2678957, unweighted_n: 2046 }, true)).toBe('2,678,957 (2,046)');
   });
 
-  it('asks for projected thousands only when the weight is a projection', () => {
+  it('sends only the statistics the user toggled (no forced index / projected)', () => {
     expect(tableStatisticsForWeight(['column_proportion', 'count'], true, true)).toEqual([
       'column_proportion',
       'count',
-      'projected_thousands',
-      'index',
-      'unweighted_base',
     ]);
     expect(
       tableStatisticsForWeight(['column_proportion', 'projected_thousands'], true, false)
-    ).toEqual(['column_proportion', 'index', 'unweighted_base']);
+    ).toEqual(['column_proportion']);
+    expect(
+      tableStatisticsForWeight(['column_proportion', 'projected_thousands', 'index'], true, true)
+    ).toEqual(['column_proportion', 'projected_thousands', 'index']);
     expect(tableStatisticsForWeight(['column_proportion'], false)).toEqual(['column_proportion']);
   });
 

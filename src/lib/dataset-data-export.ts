@@ -3,7 +3,13 @@ import { downloadExport } from '@/components/flow/survey-screens';
 /** Stem for download filenames from an upload or version name. */
 export function exportStem(name?: string): string {
   const base = (name || 'dataset').replace(/\.[a-z0-9]+$/i, '');
-  return base.replace(/[^\w.-]+/g, '-').slice(0, 60) || 'dataset';
+  return (
+    base
+      .replace(/[^\w.-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'dataset'
+  );
 }
 
 /** One data file from GET /datasets/{id}/export. */

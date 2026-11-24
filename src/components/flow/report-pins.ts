@@ -85,6 +85,21 @@ export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
     });
 }
 
+/**
+ * Keep pins that were just saved in this session when a stale overview/cache
+ * list has not caught up yet (otherwise "In report" flips back to 0).
+ */
+export function mergeProjectPins(server: ReportPin[], local: ReportPin[]): ReportPin[] {
+  const byRun = new Map<string, ReportPin>();
+  for (const pin of server) {
+    if (pin.runId) byRun.set(pin.runId, pin);
+  }
+  for (const pin of local) {
+    if (pin.runId && !byRun.has(pin.runId)) byRun.set(pin.runId, pin);
+  }
+  return [...byRun.values()];
+}
+
 const runCache = new Map<string, RunSummary[]>();
 
 export function rememberReportRuns(projectId: string, runs: RunSummary[]) {
@@ -96,10 +111,44 @@ export function cachedReportRuns(projectId: string): RunSummary[] | null {
   return runCache.get(projectId) || [];
 }
 
+function patchCachedRun(
+  projectId: string,
+  runId: string,
+  patch: { in_report: boolean; report_pin?: ServerPin | null; dataset_id?: string }
+) {
+  const cached = runCache.get(projectId);
+  if (!cached) return;
+  let found = false;
+  const next = cached.map(run => {
+    if (String(run.id) !== runId) return run;
+    found = true;
+    return {
+      ...run,
+      in_report: patch.in_report,
+      report_pin: patch.in_report ? (patch.report_pin ?? run.report_pin) : null,
+      dataset_id: patch.dataset_id || run.dataset_id,
+    };
+  });
+  if (!found && patch.in_report) {
+    next.unshift({
+      id: runId,
+      dataset_id: patch.dataset_id || '',
+      in_report: true,
+      report_pin: patch.report_pin || null,
+    });
+  }
+  runCache.set(projectId, next);
+}
+
 export function setProjectPins(projectId: string, pins: ReportPin[]) {
   store.set(projectId, pins);
   loaded.add(projectId);
   emit();
+}
+
+/** Apply server pins without dropping newer local pins still missing from the payload. */
+export function applyServerPins(projectId: string, server: ReportPin[]) {
+  setProjectPins(projectId, mergeProjectPins(server, projectPins(projectId)));
 }
 
 export function projectPins(projectId: string): ReportPin[] {
@@ -197,9 +246,15 @@ export async function loadProjectPins(projectId: string, fileIds: string[]): Pro
 }
 
 export async function savePin(projectId: string, datasetId: string, pin: ReportPin) {
+  const body = serverBody(pin);
   await flowJson(`/datasets/${datasetId}/analysis-runs/${pin.runId}/report-pin`, {
     method: 'PUT',
-    body: JSON.stringify(serverBody(pin)),
+    body: JSON.stringify(body),
+  });
+  patchCachedRun(projectId, pin.runId, {
+    in_report: true,
+    report_pin: body,
+    dataset_id: datasetId,
   });
   setProjectPins(projectId, [
     ...projectPins(projectId).filter(item => item.runId !== pin.runId),
@@ -209,6 +264,7 @@ export async function savePin(projectId: string, datasetId: string, pin: ReportP
 
 export async function clearPin(projectId: string, datasetId: string, runId: string) {
   await flowJson(`/datasets/${datasetId}/analysis-runs/${runId}/report-pin`, { method: 'DELETE' });
+  patchCachedRun(projectId, runId, { in_report: false, report_pin: null });
   setProjectPins(
     projectId,
     projectPins(projectId).filter(item => item.runId !== runId)

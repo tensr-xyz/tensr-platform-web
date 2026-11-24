@@ -1108,6 +1108,25 @@ class ApiClient {
           group?: string | null;
         }>(`/datasets/analysis-runs/${runId}/resolve${q}`);
       },
+
+      cellProvenance: (runId: string, stubRowId: string, bannerId: string) => {
+        const q =
+          `?stub_row_id=${encodeURIComponent(stubRowId)}` +
+          `&banner_id=${encodeURIComponent(bannerId)}`;
+        return this.request<{
+          run_id: string;
+          stub_row_id: string;
+          banner_id: string;
+          provenance: {
+            row_uid_bitset?: string;
+            row_uid_bitset_miss_count?: number;
+            provenance_unavailable?: string;
+            n_uids?: number;
+            origin_dataset_id?: string;
+          };
+          row_uid_order?: string[];
+        }>(`/datasets/analysis-runs/${runId}/cell-provenance${q}`);
+      },
     },
 
     tables: {

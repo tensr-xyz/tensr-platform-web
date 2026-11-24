@@ -17,7 +17,8 @@ export type TableSignificanceSettings = {
 export const DEFAULT_TABLE_SIGNIFICANCE: TableSignificanceSettings = {
   showAs: 'letters',
   confidence: 95,
-  multipleComparison: 'bonferroni',
+  // Displayr column comparisons default to no MCC (Q defaults to FDR).
+  multipleComparison: 'none',
   meansPostHoc: 'tukey',
   dunnettControl: '',
   asProjectDefault: false,
@@ -306,10 +307,7 @@ export function significanceFootnoteLine(
   const columns = ((book.banner_columns as { id?: string }[]) || []).filter(
     column => column.id && column.id !== 'total'
   ).length;
-  const named = String(book.letter_test || '').trim();
-  if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
-    return named || `Paired McNemar test at ${confidence}%`;
-  }
+  // Arrows vs total always describe the chosen confidence — never a stale McNemar line.
   if (showAs === 'arrows') {
     const correction =
       mcc === 'none'
@@ -318,6 +316,11 @@ export function significanceFootnoteLine(
           ? `, Bonferroni-corrected${columns ? ` across ${columns} columns` : ''}`
           : ', FDR-corrected';
     return `Arrows: higher or lower than the total at ${confidence}%${correction}`;
+  }
+  const named = String(book.letter_test || '').trim();
+  if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+    // Rebuild from the live confidence so a hard-coded engine string cannot drift.
+    return `Paired McNemar test at ${confidence}%`;
   }
   const correction =
     mcc === 'none'

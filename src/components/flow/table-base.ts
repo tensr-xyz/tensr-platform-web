@@ -25,7 +25,7 @@ function effectiveNSuffix(weight: TableBaseBook['weight'] | null | undefined): s
   if (raw == null) return '';
   const ess = Number(raw);
   if (!Number.isFinite(ess)) return '';
-  return ` · effective n ${formatBase(ess)}`;
+  return ` · Kish effective n ${formatBase(ess)}`;
 }
 
 /** "Base: …" once. A label that already starts with base is not prefixed again. */

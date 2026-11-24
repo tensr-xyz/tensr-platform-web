@@ -26,6 +26,16 @@ describe('formatApiErrorMessage', () => {
     expect(formatApiErrorMessage(new Error('Network failed'))).toBe('Network failed');
   });
 
+  it('maps AbortSignal timeout wording to a plain sentence', () => {
+    const timedOut = new DOMException('signal timed out', 'TimeoutError');
+    expect(formatApiErrorMessage(timedOut)).toBe(
+      'This request timed out. Try a smaller table, or use Manage to run the analysis manually.'
+    );
+    const aborted = new DOMException('The operation was aborted due to timeout', 'AbortError');
+    expect(formatApiErrorMessage(aborted)).toMatch(/timed out/i);
+    expect(formatApiErrorMessage(aborted)).not.toMatch(/signal timed out/i);
+  });
+
   it('uses agent_loop_timeout detail message', () => {
     const err = new Error(
       'API Error: 504 - {"detail":{"error":"agent_loop_timeout","message":"This request hit the server time limit."}}'

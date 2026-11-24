@@ -100,7 +100,7 @@ function labelTokens(text: string): Set<string> {
   return new Set(folded.match(/[a-z0-9]+/g) || []);
 }
 
-function orderedValueLabels(labels: Record<string, string>): boolean {
+export function orderedValueLabels(labels: Record<string, string>): boolean {
   const entries = Object.entries(labels);
   if (entries.length < 3) return false;
   let ratingHits = 0;

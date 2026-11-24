@@ -1,4 +1,4 @@
-import { deliverableOutputs, pinsFromRuns } from './report-pins';
+import { deliverableOutputs, mergeProjectPins, pinsFromRuns } from './report-pins';
 
 describe('server report pins', () => {
   it('maps pinned runs from the run list', () => {
@@ -53,5 +53,38 @@ describe('server report pins', () => {
     ]);
     expect(deliverableOutputs(pins, 'deck').map(item => item.title)).toEqual(['London is 42%']);
     expect(deliverableOutputs(pins, 'topline')).toHaveLength(2);
+  });
+
+  it('keeps a just-saved local pin when the server list is still stale', () => {
+    const server = pinsFromRuns([
+      {
+        id: 'r1',
+        dataset_id: 'd1',
+        in_report: true,
+        report_pin: { headline: 'Older finding' },
+      },
+    ]);
+    const local = [
+      {
+        id: 'pin-r2',
+        runId: 'r2',
+        datasetId: 'd1',
+        headline: 'Just added',
+        support: '',
+        citation: '',
+        afterId: '',
+        deck: true,
+        topline: true,
+        keepLive: true,
+      },
+    ];
+    expect(
+      mergeProjectPins(server, local)
+        .map(pin => pin.runId)
+        .sort()
+    ).toEqual(['r1', 'r2']);
+    expect(mergeProjectPins(server, local).find(pin => pin.runId === 'r1')?.headline).toBe(
+      'Older finding'
+    );
   });
 });

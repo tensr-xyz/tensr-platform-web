@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { DropdownMenuItem, Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
-import { datasetRowId } from '@/components/flow/survey-screens';
+import { datasetRowId, WeightPanel } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { StackWaves } from '@/components/flow/stack-waves';
 import { JoinFiles } from '@/components/flow/join-files';
@@ -31,9 +31,14 @@ import {
 } from '@/lib/upload-dataset';
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
+import { ResponseQualityPanel } from '@/components/flow/response-quality-panel';
 import { ConnectQualtricsDialog } from '@/components/flow/connect-qualtrics-dialog';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { showDatasetVersionUndoToast, useDatasetVersion } from '@/lib/dataset-version-undo';
+import {
+  sourceVersionTitle as sharedSourceVersionTitle,
+  versionWhen as sharedVersionWhen,
+} from '@/components/flow/version-title';
 
 export type SourceFile = {
   dataset_id?: string;
@@ -147,60 +152,10 @@ export function sourceFileName(file: SourceFile): string {
   return 'Untitled file';
 }
 
-const VERSION_MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-export function versionWhen(value?: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}:${seconds}`;
-}
-
-/** Stack-style working-copy names like "cars_EN + DE + FR". */
-function looksLikeStackName(name: string): boolean {
-  return / \+ /.test(name);
-}
+export const versionWhen = sharedVersionWhen;
 
 export function sourceVersionTitle(file: SourceFile): string {
-  if (!file.parent_dataset_id) return sourceFileName(file);
-  const original = String(file.original_filename || '').trim();
-  const label = String(file.lineage_label || '').trim();
-  let base = '';
-  let fromOperationLabel = false;
-  // Prefer the operation label ("Raked to region") so two same-day copies stay distinct
-  // by what was done. Keep stack-style file names ("cars_EN + DE + FR").
-  if (original && !looksLikeFileId(original) && looksLikeStackName(original)) {
-    base = original;
-  } else if (label && !looksLikeFileId(label)) {
-    base = label;
-    fromOperationLabel = true;
-  } else if (original && !looksLikeFileId(original)) {
-    base = original;
-  } else {
-    base = sourceFileName(file);
-  }
-  if (!base) base = 'Untitled file';
-  // Operation labels stay sentence case ("Raked to region"); file-style names keep their case.
-  const titled = fromOperationLabel ? base.charAt(0).toUpperCase() + base.slice(1) : base;
-  if (/\d{1,2}:\d{2}/.test(titled)) return titled;
-  const stamp = versionWhen(file.created_at || file.updated_at);
-  return stamp ? `${titled} · ${stamp}` : titled;
+  return sharedSourceVersionTitle(file);
 }
 
 /** Newest tip per lineage group, then every older version in one shared fold. */
@@ -280,6 +235,28 @@ export function fileMark(name: string): string {
   return 'FILE';
 }
 
+/** Kind badge for a Sources row. A raked copy keeps the parent's .sav mark, not FILE. */
+export function sourceFileMark(file: SourceFile, datasets: SourceFile[] = []): string {
+  for (const name of [file.original_filename, ...(file.source_filenames || [])]) {
+    const text = String(name || '').trim();
+    if (!text) continue;
+    const mark = fileMark(text);
+    if (mark !== 'FILE') return mark;
+  }
+  const parent = datasets.find(row => datasetRowId(row) === file.parent_dataset_id);
+  if (parent) {
+    for (const name of [parent.original_filename, ...(parent.source_filenames || [])]) {
+      const text = String(name || '').trim();
+      if (!text) continue;
+      const mark = fileMark(text);
+      if (mark !== 'FILE') return mark;
+    }
+    const fromParent = fileMark(sourceFileName(parent));
+    if (fromParent !== 'FILE') return fromParent;
+  }
+  return fileMark(sourceFileName(file));
+}
+
 export function contextMark(kind?: string): string {
   const value = (kind || '').toLowerCase();
   if (value === 'questionnaire' || value === 'pdf') return 'PDF';
@@ -306,6 +283,8 @@ export function SourcesScreen({
   const [addOpen, setAddOpen] = useState(false);
   const [stackOpen, setStackOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [weightOpen, setWeightOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
   const [docName, setDocName] = useState('');
   const [docKind, setDocKind] = useState('brief');
   const [docText, setDocText] = useState('');
@@ -314,10 +293,12 @@ export function SourcesScreen({
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectMode, setConnectMode] = useState<'qualtrics' | 'request'>('qualtrics');
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const activeId = project?.active_dataset_id || '';
   const skippedPrep = useRef<Set<string>>(new Set());
   const activeBeforeStack = useRef(activeId);
+  const activeFile = files.find(row => datasetRowId(row) === activeId);
 
   useEffect(() => {
     if (!activeId || proposal || skippedPrep.current.has(activeId)) return;
@@ -474,7 +455,7 @@ export function SourcesScreen({
     const stem = exportStem(sourceFileName(file));
     return (
       <div key={id} className="sources-dataset" data-active={inUse}>
-        <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
+        <span className="sources-kind">{sourceFileMark(file, datasets)}</span>
         <span>
           <span className="sources-file-name">{sourceVersionTitle(file)}</span>
           <span className="flow-muted">{note}</span>
@@ -502,6 +483,55 @@ export function SourcesScreen({
       </div>
     );
   };
+
+  if (qualityOpen && activeId) {
+    return (
+      <section className="sources-page">
+        <div className="sources-wrap sources-wrap-wide">
+          <ResponseQualityPanel
+            datasetId={activeId}
+            projectName={project?.name || ''}
+            fileLabel={activeFile ? sourceFileName(activeFile) : rememberedFileName(activeId)}
+            completes={activeFile?.n_rows}
+            onClose={() => setQualityOpen(false)}
+            onUploadNewer={() => fileInput.current?.click()}
+            onApplied={nextId => {
+              setQualityOpen(false);
+              if (!projectId || !nextId) {
+                onChanged();
+                return;
+              }
+              void flowJson(`/api/projects/${projectId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ active_dataset_id: nextId }),
+              }).then(() => {
+                showDatasetVersionUndoToast({
+                  projectId,
+                  previousDatasetId: activeId,
+                  currentDatasetId: nextId,
+                  title: 'Quality-cleaned as a new version',
+                  onRestored: () => onChanged(),
+                });
+                onChanged();
+              });
+            }}
+          />
+          <Input
+            ref={fileInput}
+            className="sources-file-input"
+            type="file"
+            accept={ACCEPTED_UPLOAD_ACCEPT}
+            aria-label="Upload file"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) upload(file);
+            }}
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="sources-page">
@@ -539,6 +569,7 @@ export function SourcesScreen({
         {proposal ? (
           <UploadPrepCard
             proposal={proposal.prep}
+            applying={preparing}
             fileName={(() => {
               const match = files.find(row => datasetRowId(row) === proposal.id);
               return match ? sourceFileName(match) : rememberedFileName(proposal.id);
@@ -549,6 +580,8 @@ export function SourcesScreen({
                 setError('Sign in again to prepare the file.');
                 return;
               }
+              setError(null);
+              setPreparing(true);
               void applyUploadPrep(proposal.id, bearer, kept)
                 .then(saved =>
                   moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
@@ -563,9 +596,11 @@ export function SourcesScreen({
                 })
                 .catch(err =>
                   setError(err instanceof Error ? err.message : 'The file was not prepared.')
-                );
+                )
+                .finally(() => setPreparing(false));
             }}
             onSkip={() => {
+              if (preparing) return;
               skippedPrep.current.add(proposal.id);
               const bearer = getStytchBearerForTensrApi();
               if (bearer) void skipUploadPrep(proposal.id, bearer);
@@ -658,28 +693,49 @@ export function SourcesScreen({
               Stacked, weighted or coded copies Tensr made. Export any as .sav with an .sps weight
               file. Your uploads stay unchanged.
             </p>
-            {files.length >= 2 ? (
+            {files.length >= 1 ? (
               <span className="sources-actions">
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    activeBeforeStack.current = activeId;
-                    setJoinOpen(true);
-                  }}
-                >
-                  Join files
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    activeBeforeStack.current = activeId;
-                    setStackOpen(true);
-                  }}
-                >
-                  Stack files
-                </Button>
+                {activeId ? (
+                  <>
+                    <Button className="flow-btn" type="button" onClick={() => setQualityOpen(true)}>
+                      Response quality
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setWeightOpen(true);
+                      }}
+                    >
+                      Weight this file
+                    </Button>
+                  </>
+                ) : null}
+                {files.length >= 2 ? (
+                  <>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setJoinOpen(true);
+                      }}
+                    >
+                      Join files
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        activeBeforeStack.current = activeId;
+                        setStackOpen(true);
+                      }}
+                    >
+                      Stack files
+                    </Button>
+                  </>
+                ) : null}
               </span>
             ) : null}
           </div>
@@ -903,6 +959,34 @@ export function SourcesScreen({
           />
         </DialogContent>
       </Dialog>
+
+      {weightOpen && activeId ? (
+        <WeightPanel
+          datasetId={activeId}
+          datasets={files}
+          onClose={() => setWeightOpen(false)}
+          onAdopted={nextId => {
+            setWeightOpen(false);
+            if (!projectId || !nextId) {
+              onChanged();
+              return;
+            }
+            void flowJson(`/api/projects/${projectId}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ active_dataset_id: nextId }),
+            }).then(() => {
+              showDatasetVersionUndoToast({
+                projectId,
+                previousDatasetId: activeBeforeStack.current,
+                currentDatasetId: nextId,
+                title: 'Weighted as a new version',
+                onRestored: () => onChanged(),
+              });
+              onChanged();
+            });
+          }}
+        />
+      ) : null}
     </section>
   );
 }

@@ -84,6 +84,38 @@ export function drillRequest(
   return { stub_row_id: stubRowId, banner_id: bannerId };
 }
 
+/** True when a slim analyze book dropped the bitset but the stored run can restore it. */
+export function needsStoredCellProvenance(cell: ClickableCell): boolean {
+  return provenanceTraceKind(cell.provenance) === 'unknown';
+}
+
+export async function hydrateCellProvenance(
+  cell: ClickableCell,
+  params: {
+    runId: string;
+    stubRowId: string;
+    bannerId: string;
+    fetchProvenance: (
+      runId: string,
+      stubRowId: string,
+      bannerId: string
+    ) => Promise<{ provenance?: CellProvenance }>;
+  }
+): Promise<ClickableCell> {
+  if (!needsStoredCellProvenance(cell)) return cell;
+  const runId = String(params.runId || '').trim();
+  const stubRowId = String(params.stubRowId || '').trim();
+  const bannerId = String(params.bannerId || '').trim();
+  if (!runId || !stubRowId || !bannerId) return cell;
+  const loaded = await params.fetchProvenance(runId, stubRowId, bannerId);
+  const provenance = loaded?.provenance;
+  if (!provenance || typeof provenance !== 'object') return cell;
+  return {
+    ...cell,
+    provenance: { ...(cell.provenance || {}), ...provenance },
+  };
+}
+
 export function drillClickCopy(payload: {
   filter_ref?: { filters?: unknown[] };
   child?: { n_rows_filtered?: number };

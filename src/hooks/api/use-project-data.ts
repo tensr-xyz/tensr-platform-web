@@ -180,9 +180,21 @@ export async function prefetchProjectTab(
               `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
             ),
           staleTime: PROJECT_STALE_MS.columns,
+        }),
+        client.prefetchQuery({
+          queryKey: projectQueryKeys.audiences(datasetId),
+          queryFn: () => flowJson<DatasetAudiencesPayload>(`/datasets/${datasetId}/audiences`),
+          staleTime: PROJECT_STALE_MS.details,
         })
       );
     }
+    jobs.push(
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.detail(projectId),
+        queryFn: () => flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`),
+        staleTime: PROJECT_STALE_MS.details,
+      })
+    );
   }
   if (tab === 'chat') {
     jobs.push(
@@ -259,6 +271,52 @@ export type DatasetPreviewPayload = {
   rows?: unknown[][];
   headers?: string[];
 };
+
+export type DatasetAudiencesPayload = {
+  audiences?: {
+    name?: string;
+    label?: string;
+    description?: string;
+    filter?: { combine?: string; filters?: unknown[] };
+    n?: number;
+    n_total?: number;
+    share?: number;
+    weighted_share?: number | null;
+    projected_people?: number | null;
+  }[];
+  unmatched?: string[];
+};
+
+export type ProjectDetailPayload = {
+  project?: {
+    id?: string;
+    name?: string;
+    ai_enabled?: boolean;
+    ai_settings?: unknown;
+    [key: string]: unknown;
+  };
+  datasets?: unknown[];
+};
+
+export function useProjectDetail(projectId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.detail(projectId || ''),
+    queryFn: () => flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`),
+    enabled: Boolean(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
+
+export function useDatasetAudiences(datasetId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.audiences(datasetId || ''),
+    queryFn: () => flowJson<DatasetAudiencesPayload>(`/datasets/${datasetId}/audiences`),
+    enabled: Boolean(datasetId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: true,
+  });
+}
 
 export function useProjectContextDocs(projectId: string | undefined | null) {
   return useQuery({
