@@ -610,8 +610,8 @@ export function ExportDialog({
     };
     return (
       <Dialog open onOpenChange={open => !open && onClose()}>
-        <DialogContent className="export-dialog xr">
-          <DialogHeader className="xp-head">
+        <DialogContent className="export-dialog xr flow-modal">
+          <DialogHeader className="xp-head flow-modal-head">
             <p className="xp-eyebrow">{headerBits.join(' · ')}</p>
             <DialogTitle>Export report</DialogTitle>
             <DialogDescription className="sr-only">
@@ -904,7 +904,7 @@ export function ExportDialog({
               </div>
             </div>
           </div>
-          <div className="xp-foot">
+          <div className="xp-foot flow-modal-foot">
             <div className="xp-help">
               {error ? (
                 <span className="flow-error">{error}</span>

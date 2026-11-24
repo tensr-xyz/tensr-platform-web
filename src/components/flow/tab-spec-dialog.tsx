@@ -107,9 +107,11 @@ export function TabSpecDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="tab-spec-dialog" aria-describedby="tab-spec-summary">
-        <DialogTitle className="tab-spec-eyebrow">Tables → Build from a spec</DialogTitle>
-        <div className="tab-spec-title">Build tables from your spec</div>
+      <DialogContent className="tab-spec-dialog flow-modal" aria-describedby="tab-spec-summary">
+        <div className="flow-modal-head">
+          <DialogTitle className="tab-spec-eyebrow">Tables → Build from a spec</DialogTitle>
+          <div className="tab-spec-title">Build tables from your spec</div>
+        </div>
 
         <Input
           ref={fileRef}
@@ -120,97 +122,101 @@ export function TabSpecDialog({
           onChange={e => void onFile(e.target.files?.[0])}
         />
 
-        {!report && !busy ? (
-          <div className="tab-spec-file">
-            <span>{fileName || 'Choose an Excel or Word tab plan'}</span>
-            <Button
-              type="button"
-              className="tab-spec-choose"
-              disabled={!datasetId || busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              Choose file
-            </Button>
-          </div>
-        ) : null}
+        <div className="flow-modal-body">
+          {!report && !busy ? (
+            <div className="tab-spec-file">
+              <span>{fileName || 'Choose an Excel or Word tab plan'}</span>
+              <Button
+                type="button"
+                className="tab-spec-choose"
+                disabled={!datasetId || busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                Choose file
+              </Button>
+            </div>
+          ) : null}
 
-        {busy ? (
-          <div className="tab-spec-list" aria-busy="true">
-            <Skeleton className="tab-spec-skeleton" />
-            <Skeleton className="tab-spec-skeleton" />
-            <Skeleton className="tab-spec-skeleton short" />
-          </div>
-        ) : null}
+          {busy ? (
+            <div className="tab-spec-list" aria-busy="true">
+              <Skeleton className="tab-spec-skeleton" />
+              <Skeleton className="tab-spec-skeleton" />
+              <Skeleton className="tab-spec-skeleton short" />
+            </div>
+          ) : null}
 
-        {!busy && error ? <p className="flow-error">{error}</p> : null}
+          {!busy && error ? <p className="flow-error">{error}</p> : null}
+
+          {!busy && report ? (
+            <>
+              <div className="tab-spec-file">
+                <span>{report.filename || fileName || 'Tab plan'}</span>
+                <span className="tab-spec-file-meta">{tabSpecFileLine(report)}</span>
+              </div>
+
+              <div className="tab-spec-section-label">What Tensr read</div>
+              <div className="tab-spec-list" role="table" aria-label="Tables from the spec">
+                <div className="tab-spec-row head" role="row">
+                  <span role="columnheader">#</span>
+                  <span role="columnheader">Table</span>
+                  <span role="columnheader">Banner</span>
+                  <span role="columnheader">Status</span>
+                </div>
+                {rows.map(row => {
+                  const matchedRow = tabSpecIsMatched(row);
+                  return (
+                    <div key={row.index} className="tab-spec-row" role="row">
+                      <span role="cell">{row.index}</span>
+                      <span role="cell">{row.title}</span>
+                      <span role="cell">{row.banner_label || '—'}</span>
+                      <span
+                        role="cell"
+                        className={matchedRow ? 'tab-spec-status ok' : 'tab-spec-status warn'}
+                      >
+                        {tabSpecStatusLabel(row)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {reviewOnly
+                ? rows.map(row =>
+                    row.refusal?.reason ? (
+                      <p key={`reason-${row.index}`} className="tab-spec-reason">
+                        {row.title}: {row.refusal.reason}
+                        {row.refusal.hand_work ? ` ${row.refusal.hand_work}` : ''}
+                      </p>
+                    ) : null
+                  )
+                : null}
+
+              <p id="tab-spec-summary" className="tab-spec-summary">
+                {tabSpecSummaryLine(report)}
+              </p>
+            </>
+          ) : null}
+        </div>
 
         {!busy && report ? (
-          <>
-            <div className="tab-spec-file">
-              <span>{report.filename || fileName || 'Tab plan'}</span>
-              <span className="tab-spec-file-meta">{tabSpecFileLine(report)}</span>
-            </div>
-
-            <div className="tab-spec-section-label">What Tensr read</div>
-            <div className="tab-spec-list" role="table" aria-label="Tables from the spec">
-              <div className="tab-spec-row head" role="row">
-                <span role="columnheader">#</span>
-                <span role="columnheader">Table</span>
-                <span role="columnheader">Banner</span>
-                <span role="columnheader">Status</span>
-              </div>
-              {rows.map(row => {
-                const matchedRow = tabSpecIsMatched(row);
-                return (
-                  <div key={row.index} className="tab-spec-row" role="row">
-                    <span role="cell">{row.index}</span>
-                    <span role="cell">{row.title}</span>
-                    <span role="cell">{row.banner_label || '—'}</span>
-                    <span
-                      role="cell"
-                      className={matchedRow ? 'tab-spec-status ok' : 'tab-spec-status warn'}
-                    >
-                      {tabSpecStatusLabel(row)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {reviewOnly
-              ? rows.map(row =>
-                  row.refusal?.reason ? (
-                    <p key={`reason-${row.index}`} className="tab-spec-reason">
-                      {row.title}: {row.refusal.reason}
-                      {row.refusal.hand_work ? ` ${row.refusal.hand_work}` : ''}
-                    </p>
-                  ) : null
-                )
-              : null}
-
-            <p id="tab-spec-summary" className="tab-spec-summary">
-              {tabSpecSummaryLine(report)}
-            </p>
-
-            <div className="tab-spec-actions">
-              <Button
-                type="button"
-                className="tab-spec-secondary"
-                disabled={needs <= 0 || building}
-                onClick={() => setReviewOnly(current => !current)}
-              >
-                {reviewOnly ? 'Show all' : tabSpecReviewLabel(needs)}
-              </Button>
-              <Button
-                type="button"
-                className="tab-spec-primary"
-                disabled={matched <= 0 || building}
-                onClick={() => void buildMatched()}
-              >
-                {building ? 'Building…' : tabSpecBuildLabel(matched)}
-              </Button>
-            </div>
-          </>
+          <div className="tab-spec-actions flow-modal-foot">
+            <Button
+              type="button"
+              className="tab-spec-secondary"
+              disabled={needs <= 0 || building}
+              onClick={() => setReviewOnly(current => !current)}
+            >
+              {reviewOnly ? 'Show all' : tabSpecReviewLabel(needs)}
+            </Button>
+            <Button
+              type="button"
+              className="tab-spec-primary"
+              disabled={matched <= 0 || building}
+              onClick={() => void buildMatched()}
+            >
+              {building ? 'Building…' : tabSpecBuildLabel(matched)}
+            </Button>
+          </div>
         ) : null}
       </DialogContent>
     </Dialog>

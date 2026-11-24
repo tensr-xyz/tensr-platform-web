@@ -5633,7 +5633,26 @@ button.chat-result-top {
 
 .share-dialog,
 .export-dialog {
-  max-width: 640px;
+  max-width: 680px;
+}
+
+/* TEN-268: shared long-modal shell — cap height, scroll body, pin head/foot. */
+.flow-modal {
+  display: flex !important;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+}
+
+.flow-modal-head,
+.flow-modal-foot {
+  flex-shrink: 0;
+}
+
+.flow-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* Rows and list items built on Button keep their content at the start. */
@@ -6845,11 +6864,19 @@ button.chat-result-top {
 .tidy-dialog {
   width: min(520px, calc(100vw - 32px));
   max-width: 520px;
+  max-height: 85vh;
   padding: 20px;
   border-radius: 14px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
   box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.tidy-dialog .flow-modal-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -12127,12 +12154,12 @@ button.chat-result-top {
   top: 98px !important;
 }
 
-/* 6i / 11d Export report (grouped page picker). */
+/* 6i / 11d Export report (grouped page picker). TEN-268: 85vh cap. */
 .export-dialog.xr {
   width: min(960px, 94vw);
   max-width: 960px !important;
-  height: min(780px, calc(100vh - 48px));
-  max-height: min(780px, calc(100vh - 48px)) !important;
+  height: auto;
+  max-height: 85vh !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: hidden;
@@ -12434,13 +12461,24 @@ button.chat-result-top {
   display: none !important;
 }
 
-/* 6f Share, from the Paper export. */
+/* 6f Share, from the Paper export (TEN-268: 680 wide, 85vh cap). */
 .share-dialog {
-  width: min(530px, 94vw);
-  max-width: 530px !important;
+  width: min(680px, 94vw);
+  max-width: 680px !important;
+  max-height: 85vh !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: hidden;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.share-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .share-dialog .share-head {
@@ -12643,7 +12681,7 @@ button.chat-result-top {
   border-radius: 10px;
 }
 
-/* 10f published link settings inside Share. */
+/* 10f published link settings inside Share (TEN-268: two-column where it helps). */
 .share-published {
   display: flex;
   flex-direction: column;
@@ -12652,7 +12690,7 @@ button.chat-result-top {
   padding: 12px;
   border: 1px solid var(--color-line);
   border-radius: 10px;
-  background: var(--color-well);
+  background: var(--color-canvas);
 }
 
 .share-published-head {
@@ -12673,6 +12711,24 @@ button.chat-result-top {
   font-size: 12px;
 }
 
+.share-published-grid {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.share-published-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-well);
+}
+
 .share-published-row {
   display: flex;
   align-items: center;
@@ -12682,6 +12738,23 @@ button.chat-result-top {
 .share-published-stack {
   align-items: stretch;
   flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-well);
+}
+
+.share-published > .share-published-row:not(.share-published-stack) {
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-well);
+}
+
+@media (max-width: 640px) {
+  .share-published-grid {
+    flex-direction: column;
+  }
 }
 
 .share-password-row input {
@@ -12702,8 +12775,7 @@ button.chat-result-top {
 }
 
 .share-picker .share-body {
-  max-height: min(420px, 60vh);
-  overflow: auto;
+  max-height: none;
 }
 
 .share-pick-row {
@@ -12798,9 +12870,14 @@ button.chat-result-top {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
   padding: 12px 22px;
   border-top: 1px solid var(--color-line);
   background: var(--color-well);
+}
+
+.share-head {
+  flex-shrink: 0;
 }
 
 .share-foot-note {
@@ -13420,15 +13497,21 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 }
 
 .recipe-editor-dialog {
-  width: min(520px, calc(100vw - 32px));
-  max-width: 520px;
-  max-height: calc(100vh - 48px);
-  overflow: auto;
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
+  max-height: 85vh;
+  overflow: hidden;
   padding: 22px;
   border-radius: 14px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
   box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recipe-editor-dialog .flow-modal-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -13593,13 +13676,19 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .tab-spec-dialog {
   width: min(848px, calc(100vw - 32px));
   max-width: 848px;
-  max-height: calc(100vh - 48px);
-  overflow: auto;
+  max-height: 85vh;
+  overflow: hidden;
   padding: 22px;
   border-radius: 14px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
   box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tab-spec-dialog .flow-modal-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -13768,15 +13857,21 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 /* Paper 10h · Responses → Check data */
 .data-checks-dialog {
-  width: min(520px, calc(100vw - 32px));
-  max-width: 520px;
-  max-height: calc(100vh - 48px);
-  overflow: auto;
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
+  max-height: 85vh;
+  overflow: hidden;
   padding: 22px;
   border-radius: 14px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
   box-shadow: #1b1c1a29 0 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-checks-dialog .flow-modal-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -15586,7 +15681,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .wave-refresh {
   width: min(1120px, 94vw);
   max-width: min(1120px, 94vw) !important;
-  max-height: min(860px, 92vh);
+  max-height: 85vh;
   overflow: hidden;
 }
 

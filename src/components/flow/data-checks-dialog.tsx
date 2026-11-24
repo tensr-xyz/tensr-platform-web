@@ -59,52 +59,60 @@ export function DataChecksDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="data-checks-dialog" aria-describedby="data-checks-note">
-        <DialogTitle className="data-checks-eyebrow">Responses → Check data</DialogTitle>
-        <div className="data-checks-title" aria-live="polite">
-          {title}
+      <DialogContent className="data-checks-dialog flow-modal" aria-describedby="data-checks-note">
+        <div className="flow-modal-head">
+          <DialogTitle className="data-checks-eyebrow">Responses → Check data</DialogTitle>
+          <div className="data-checks-title" aria-live="polite">
+            {title}
+          </div>
         </div>
 
-        {busy ? (
-          <div className="data-checks-list" aria-busy="true">
-            <Skeleton className="data-checks-skeleton" />
-            <Skeleton className="data-checks-skeleton" />
-            <Skeleton className="data-checks-skeleton short" />
-          </div>
-        ) : null}
+        <div className="flow-modal-body">
+          {busy ? (
+            <div className="data-checks-list" aria-busy="true">
+              <Skeleton className="data-checks-skeleton" />
+              <Skeleton className="data-checks-skeleton" />
+              <Skeleton className="data-checks-skeleton short" />
+            </div>
+          ) : null}
 
-        {!busy && error ? <p className="flow-error">{error}</p> : null}
+          {!busy && error ? <p className="flow-error">{error}</p> : null}
 
-        {!busy && !error ? (
-          <div className="data-checks-list">
-            {cards.map(card => (
-              <div key={card.id} className="data-checks-card">
-                <div className="data-checks-card-title">{card.title}</div>
-                {card.detail ? <div className="data-checks-card-detail">{card.detail}</div> : null}
-                {onShow ? (
-                  <Button
-                    type="button"
-                    className="data-checks-card-action"
-                    onClick={() => {
-                      onShow(card);
-                      onOpenChange(false);
-                    }}
-                  >
-                    {card.showLabel}
-                  </Button>
-                ) : (
-                  <div className="data-checks-card-action-static">{card.showLabel}</div>
-                )}
-              </div>
-            ))}
-            {passed ? <div className="data-checks-passed">{passed}</div> : null}
-            {!cards.length && !passed ? (
-              <div className="data-checks-passed">✓ No construction or straight-lining issues</div>
-            ) : null}
-          </div>
-        ) : null}
+          {!busy && !error ? (
+            <div className="data-checks-list">
+              {cards.map(card => (
+                <div key={card.id} className="data-checks-card">
+                  <div className="data-checks-card-title">{card.title}</div>
+                  {card.detail ? (
+                    <div className="data-checks-card-detail">{card.detail}</div>
+                  ) : null}
+                  {onShow ? (
+                    <Button
+                      type="button"
+                      className="data-checks-card-action"
+                      onClick={() => {
+                        onShow(card);
+                        onOpenChange(false);
+                      }}
+                    >
+                      {card.showLabel}
+                    </Button>
+                  ) : (
+                    <div className="data-checks-card-action-static">{card.showLabel}</div>
+                  )}
+                </div>
+              ))}
+              {passed ? <div className="data-checks-passed">{passed}</div> : null}
+              {!cards.length && !passed ? (
+                <div className="data-checks-passed">
+                  ✓ No construction or straight-lining issues
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-        <p id="data-checks-note" className="data-checks-note">
+        <p id="data-checks-note" className="data-checks-note flow-modal-foot">
           {dataChecksFooterNote()}
         </p>
       </DialogContent>

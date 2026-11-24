@@ -237,4 +237,46 @@ describe('ShareDialog', () => {
     expect(screen.getByRole('button', { name: 'Unpublish' })).toBeInTheDocument();
     expect(screen.getByText('Viewer filters')).toBeInTheDocument();
   });
+
+  it('keeps Done outside the scroll body so the action stays pinned', async () => {
+    const { flowJson } = jest.requireMock('@/lib/flow-api') as {
+      flowJson: jest.Mock;
+    };
+    flowJson.mockImplementation((path: string) => {
+      if (path === '/me') {
+        return Promise.resolve({ active_organization: { id: 'org-1' } });
+      }
+      if (path.includes('/members') && path.includes('/projects/')) {
+        return Promise.resolve({ members: [] });
+      }
+      if (path.includes('/organizations/')) {
+        return Promise.resolve({ members: [], invitations: [] });
+      }
+      if (path.includes('/shares')) {
+        return Promise.resolve({
+          shares: [
+            {
+              id: 'share-1',
+              token: 'tok-abc',
+              kind: 'project_link',
+              password_required: false,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    const settings = await screen.findByText('Published link settings');
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    const dialog = document.body.querySelector('.share-dialog');
+    const scroll = document.body.querySelector('.share-scroll');
+    const foot = document.body.querySelector('.share-foot');
+    expect(dialog?.classList.contains('flow-modal')).toBe(true);
+    expect(scroll).toBeTruthy();
+    expect(foot).toBeTruthy();
+    expect(scroll?.contains(foot)).toBe(false);
+    expect(scroll?.contains(settings)).toBe(true);
+  });
 });

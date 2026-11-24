@@ -415,337 +415,343 @@ export function ShareDialog({
   return (
     <>
       <Dialog open onOpenChange={open => !open && onClose()}>
-        <DialogContent className="share-dialog">
-          <DialogHeader className="share-head">
+        <DialogContent className="share-dialog flow-modal">
+          <DialogHeader className="share-head flow-modal-head">
             <DialogTitle>Share {projectName}</DialogTitle>
             <DialogDescription>
               Project, with its sources, tables, outputs and report.
             </DialogDescription>
           </DialogHeader>
-          <div className="share-body">
-            <div className="share-invite">
-              <div className="share-field">
-                <Input
-                  aria-label="Email"
-                  value={email}
-                  placeholder="Add people by email"
-                  onChange={event => setEmail(event.target.value)}
-                />
-                <ChoiceSelect
-                  className="share-role"
-                  aria-label="Role"
-                  value={role}
-                  onValueChange={setRole}
-                  options={[
-                    { value: 'asker', label: 'Can ask' },
-                    { value: 'viewer', label: 'Can view' },
-                    { value: 'editor', label: 'Can edit' },
-                  ]}
-                />
+          <div className="share-scroll flow-modal-body">
+            <div className="share-body">
+              <div className="share-invite">
+                <div className="share-field">
+                  <Input
+                    aria-label="Email"
+                    value={email}
+                    placeholder="Add people by email"
+                    onChange={event => setEmail(event.target.value)}
+                  />
+                  <ChoiceSelect
+                    className="share-role"
+                    aria-label="Role"
+                    value={role}
+                    onValueChange={setRole}
+                    options={[
+                      { value: 'asker', label: 'Can ask' },
+                      { value: 'viewer', label: 'Can view' },
+                      { value: 'editor', label: 'Can edit' },
+                    ]}
+                  />
+                </div>
+                <Button className="flow-btn primary" type="button" onClick={invite}>
+                  Invite
+                </Button>
               </div>
-              <Button className="flow-btn primary" type="button" onClick={invite}>
-                Invite
-              </Button>
+              <p className="share-roles">
+                <span>Can view · reads outputs</span>
+                <span>Can ask · asks questions, can&apos;t edit</span>
+                <span>Can edit · runs and edits</span>
+              </p>
+              <span className="share-label">People with access · {count}</span>
+              {people === null ? <Skeleton className="h-16" /> : null}
+              {(people || []).map(person => (
+                <div key={person.user_id} className="share-person">
+                  <span className="share-mark">{mark(person.name || person.email)}</span>
+                  <span className="share-who">
+                    <strong>{person.name}</strong>
+                    <span>{person.email}</span>
+                  </span>
+                  <span className="share-person-role">{roleName(person.role)}</span>
+                </div>
+              ))}
+              {invites.map(inviteRow => (
+                <div key={inviteRow.token || inviteRow.email} className="share-person">
+                  <span className="share-mark pending">{mark(inviteRow.email)}</span>
+                  <span className="share-who">
+                    <strong>
+                      {inviteRow.email} <span className="share-pending">Pending</span>
+                    </strong>
+                    <span>
+                      {invitedAgo(inviteRow.created_at)}
+                      {inviteRow.token ? (
+                        <>
+                          {' · '}
+                          <Button
+                            className="share-link-btn"
+                            type="button"
+                            onClick={() => resendInvite(inviteRow)}
+                          >
+                            Resend
+                          </Button>
+                          {' · '}
+                          <Button
+                            className="share-link-btn"
+                            type="button"
+                            onClick={() => revokeInvite(inviteRow)}
+                          >
+                            Revoke
+                          </Button>
+                        </>
+                      ) : null}
+                      {inviteRow.email_status && inviteRow.email_status !== 'sent' ? (
+                        <>
+                          {' · '}
+                          <span className="share-email-status">
+                            {inviteRow.email_status === 'not_configured'
+                              ? 'Not emailed'
+                              : inviteRow.email_status === 'failed'
+                                ? 'Email failed'
+                                : 'No email on record'}
+                          </span>
+                        </>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="share-person-role">{roleName(inviteRow.project_role)}</span>
+                </div>
+              ))}
             </div>
-            <p className="share-roles">
-              <span>Can view · reads outputs</span>
-              <span>Can ask · asks questions, can&apos;t edit</span>
-              <span>Can edit · runs and edits</span>
-            </p>
-            <span className="share-label">People with access · {count}</span>
-            {people === null ? <Skeleton className="h-16" /> : null}
-            {(people || []).map(person => (
-              <div key={person.user_id} className="share-person">
-                <span className="share-mark">{mark(person.name || person.email)}</span>
+            <div className="share-section">
+              <div className="share-anyone">
+                <span className="share-icon">⛓</span>
                 <span className="share-who">
-                  <strong>{person.name}</strong>
-                  <span>{person.email}</span>
-                </span>
-                <span className="share-person-role">{roleName(person.role)}</span>
-              </div>
-            ))}
-            {invites.map(inviteRow => (
-              <div key={inviteRow.token || inviteRow.email} className="share-person">
-                <span className="share-mark pending">{mark(inviteRow.email)}</span>
-                <span className="share-who">
-                  <strong>
-                    {inviteRow.email} <span className="share-pending">Pending</span>
-                  </strong>
+                  <strong>Anyone with the link</strong>
                   <span>
-                    {invitedAgo(inviteRow.created_at)}
-                    {inviteRow.token ? (
-                      <>
-                        {' · '}
-                        <Button
-                          className="share-link-btn"
-                          type="button"
-                          onClick={() => resendInvite(inviteRow)}
-                        >
-                          Resend
-                        </Button>
-                        {' · '}
-                        <Button
-                          className="share-link-btn"
-                          type="button"
-                          onClick={() => revokeInvite(inviteRow)}
-                        >
-                          Revoke
-                        </Button>
-                      </>
-                    ) : null}
-                    {inviteRow.email_status && inviteRow.email_status !== 'sent' ? (
-                      <>
-                        {' · '}
-                        <span className="share-email-status">
-                          {inviteRow.email_status === 'not_configured'
-                            ? 'Not emailed'
-                            : inviteRow.email_status === 'failed'
-                              ? 'Email failed'
-                              : 'No email on record'}
-                        </span>
-                      </>
-                    ) : null}
+                    {linkOn
+                      ? linkAccess === 'anonymous'
+                        ? 'Anyone, no sign-in (read-only)'
+                        : `Signed-in people in ${workspaceName}`
+                      : 'Choose who can open the link'}
                   </span>
                 </span>
-                <span className="share-person-role">{roleName(inviteRow.project_role)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="share-section">
-            <div className="share-anyone">
-              <span className="share-icon">⛓</span>
-              <span className="share-who">
-                <strong>Anyone with the link</strong>
-                <span>
-                  {linkOn
-                    ? linkAccess === 'anonymous'
-                      ? 'Anyone, no sign-in (read-only)'
-                      : `Signed-in people in ${workspaceName}`
-                    : 'Choose who can open the link'}
-                </span>
-              </span>
-              <span className="share-person-role">Can view</span>
-              <Checkbox
-                checked={linkOn}
-                disabled={linkBusy}
-                onCheckedChange={value => setProjectLink(value === true ? 'signed_in' : null)}
-                aria-label="Link sharing"
-              />
-            </div>
-            {linkOn ? (
-              <div className="share-link-modes" role="radiogroup" aria-label="Link access">
-                <Button
-                  type="button"
-                  className="share-link-mode"
-                  data-active={linkAccess === 'signed_in' ? 'true' : 'false'}
-                  aria-checked={linkAccess === 'signed_in'}
-                  role="radio"
+                <span className="share-person-role">Can view</span>
+                <Checkbox
+                  checked={linkOn}
                   disabled={linkBusy}
-                  onClick={() => setProjectLink('signed_in')}
-                >
-                  <strong>Signed-in people in {workspaceName}</strong>
-                </Button>
-                <Button
-                  type="button"
-                  className="share-link-mode"
-                  data-active={linkAccess === 'anonymous' ? 'true' : 'false'}
-                  aria-checked={linkAccess === 'anonymous'}
-                  role="radio"
-                  disabled={linkBusy}
-                  onClick={() => setProjectLink('anonymous')}
-                >
-                  <strong>Anyone, no sign-in (read-only)</strong>
-                  <span>Opens this viewer. No rows, no chat, no edits.</span>
-                </Button>
-                <p className="share-link-meta">
-                  {pageCounts
-                    ? `Pages shared: ${pageCounts.shared} of ${pageCounts.total}`
-                    : 'Pages shared: all publishable pages'}
-                  {' · '}Expires: never · Turn off any time
-                </p>
+                  onCheckedChange={value => setProjectLink(value === true ? 'signed_in' : null)}
+                  aria-label="Link sharing"
+                />
               </div>
-            ) : null}
-            <div className="share-copy">
-              <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!linkOn || !link}
-                onClick={() =>
-                  void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
-                }
-              >
-                Copy link
-              </Button>
-            </div>
-            <div className="share-one">
-              <Checkbox
-                checked={oneOutput}
-                onCheckedChange={value => {
-                  if (value === true) openPicker();
-                  else clearOutputShare();
-                }}
-                aria-label="Share one output only"
-              />
-              <span className="share-who">
-                <strong>Share one output only</strong>
-                <span>
-                  {outputShare?.title
-                    ? `Link for “${outputShare.title}”`
-                    : 'Send one result, like a table by brand, on its own'}
-                </span>
-              </span>
-              <Button className="flow-btn" type="button" onClick={openPicker}>
-                Choose
-              </Button>
-            </div>
-            {outputLink ? (
+              {linkOn ? (
+                <div className="share-link-modes" role="radiogroup" aria-label="Link access">
+                  <Button
+                    type="button"
+                    className="share-link-mode"
+                    data-active={linkAccess === 'signed_in' ? 'true' : 'false'}
+                    aria-checked={linkAccess === 'signed_in'}
+                    role="radio"
+                    disabled={linkBusy}
+                    onClick={() => setProjectLink('signed_in')}
+                  >
+                    <strong>Signed-in people in {workspaceName}</strong>
+                  </Button>
+                  <Button
+                    type="button"
+                    className="share-link-mode"
+                    data-active={linkAccess === 'anonymous' ? 'true' : 'false'}
+                    aria-checked={linkAccess === 'anonymous'}
+                    role="radio"
+                    disabled={linkBusy}
+                    onClick={() => setProjectLink('anonymous')}
+                  >
+                    <strong>Anyone, no sign-in (read-only)</strong>
+                    <span>Opens this viewer. No rows, no chat, no edits.</span>
+                  </Button>
+                  <p className="share-link-meta">
+                    {pageCounts
+                      ? `Pages shared: ${pageCounts.shared} of ${pageCounts.total}`
+                      : 'Pages shared: all publishable pages'}
+                    {' · '}Expires: never · Turn off any time
+                  </p>
+                </div>
+              ) : null}
               <div className="share-copy">
-                <Input readOnly aria-label="Output link" value={outputLink} />
+                <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
                 <Button
                   className="flow-btn"
                   type="button"
+                  disabled={!linkOn || !link}
                   onClick={() =>
-                    void navigator.clipboard
-                      .writeText(outputLink)
-                      .then(() => setNote('Output link copied.'))
+                    void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
                   }
                 >
                   Copy link
                 </Button>
               </div>
-            ) : null}
-            {settingsShare ? (
-              <div className="share-published" aria-label="Published link settings">
-                <div className="share-published-head">
-                  <span className="share-label">Published link settings</span>
-                  {projectShare && outputShare ? (
-                    <ChoiceSelect
-                      className="share-settings-pick"
-                      aria-label="Which link"
-                      value={settingsShare.id}
-                      onValueChange={setSettingsShareId}
-                      options={[
-                        {
-                          value: projectShare.id,
-                          label: 'Project link',
-                        },
-                        {
-                          value: outputShare.id,
-                          label: outputShare.title
-                            ? `Output · ${outputShare.title}`
-                            : 'Output link',
-                        },
-                      ]}
-                    />
-                  ) : null}
-                </div>
-                <div className="share-published-row">
-                  <span className="share-who">
-                    <strong>Password</strong>
-                    <span>
-                      {settingsShare.password_required
-                        ? 'Viewers must enter a password'
-                        : 'Optional. Protect this published link'}
-                    </span>
+              <div className="share-one">
+                <Checkbox
+                  checked={oneOutput}
+                  onCheckedChange={value => {
+                    if (value === true) openPicker();
+                    else clearOutputShare();
+                  }}
+                  aria-label="Share one output only"
+                />
+                <span className="share-who">
+                  <strong>Share one output only</strong>
+                  <span>
+                    {outputShare?.title
+                      ? `Link for “${outputShare.title}”`
+                      : 'Send one result, like a table by brand, on its own'}
                   </span>
-                  <Switch
-                    checked={Boolean(settingsShare.password_required)}
-                    disabled={passwordBusy}
-                    onCheckedChange={value => {
-                      if (!value) {
-                        savePassword(false);
-                        return;
-                      }
-                      if (!passwordDraft.trim()) {
-                        setError('Enter a password, then turn protection on.');
-                        return;
-                      }
-                      savePassword(true);
-                    }}
-                    aria-label="Password protect"
-                  />
-                </div>
-                <div className="share-copy share-password-row">
-                  <Input
-                    type="password"
-                    autoComplete="new-password"
-                    aria-label="Link password"
-                    placeholder={
-                      settingsShare.password_required ? 'Replace password' : 'Set a password'
-                    }
-                    value={passwordDraft}
-                    onChange={event => setPasswordDraft(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter') savePassword(true);
-                    }}
-                  />
+                </span>
+                <Button className="flow-btn" type="button" onClick={openPicker}>
+                  Choose
+                </Button>
+              </div>
+              {outputLink ? (
+                <div className="share-copy">
+                  <Input readOnly aria-label="Output link" value={outputLink} />
                   <Button
                     className="flow-btn"
                     type="button"
-                    disabled={passwordBusy || !passwordDraft.trim()}
-                    onClick={() => savePassword(true)}
+                    onClick={() =>
+                      void navigator.clipboard
+                        .writeText(outputLink)
+                        .then(() => setNote('Output link copied.'))
+                    }
                   >
-                    Save
+                    Copy link
                   </Button>
                 </div>
-                <div className="share-published-row share-published-stack">
-                  <span className="share-who">
-                    <strong>Viewer filters</strong>
-                    <span>
-                      {filterLabels.length
-                        ? `On the shared page: ${filterLabels.join(', ')}`
-                        : settingsShare.kind === 'output'
-                          ? 'Filters appear on the shared page when set on this output'
-                          : 'Use a one-output link to offer viewer filters'}
+              ) : null}
+              {settingsShare ? (
+                <div className="share-published" aria-label="Published link settings">
+                  <div className="share-published-head">
+                    <span className="share-label">Published link settings</span>
+                    {projectShare && outputShare ? (
+                      <ChoiceSelect
+                        className="share-settings-pick"
+                        aria-label="Which link"
+                        value={settingsShare.id}
+                        onValueChange={setSettingsShareId}
+                        options={[
+                          {
+                            value: projectShare.id,
+                            label: 'Project link',
+                          },
+                          {
+                            value: outputShare.id,
+                            label: outputShare.title
+                              ? `Output · ${outputShare.title}`
+                              : 'Output link',
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="share-published-grid">
+                    <div className="share-published-card">
+                      <div className="share-published-row">
+                        <span className="share-who">
+                          <strong>Password</strong>
+                          <span>
+                            {settingsShare.password_required
+                              ? 'Viewers must enter a password'
+                              : 'Optional. Protect this published link'}
+                          </span>
+                        </span>
+                        <Switch
+                          checked={Boolean(settingsShare.password_required)}
+                          disabled={passwordBusy}
+                          onCheckedChange={value => {
+                            if (!value) {
+                              savePassword(false);
+                              return;
+                            }
+                            if (!passwordDraft.trim()) {
+                              setError('Enter a password, then turn protection on.');
+                              return;
+                            }
+                            savePassword(true);
+                          }}
+                          aria-label="Password protect"
+                        />
+                      </div>
+                      <div className="share-copy share-password-row">
+                        <Input
+                          type="password"
+                          autoComplete="new-password"
+                          aria-label="Link password"
+                          placeholder={
+                            settingsShare.password_required ? 'Replace password' : 'Set a password'
+                          }
+                          value={passwordDraft}
+                          onChange={event => setPasswordDraft(event.target.value)}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter') savePassword(true);
+                          }}
+                        />
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          disabled={passwordBusy || !passwordDraft.trim()}
+                          onClick={() => savePassword(true)}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="share-published-card">
+                      <span className="share-who">
+                        <strong>Viewer filters</strong>
+                        <span>
+                          {filterLabels.length
+                            ? `On the shared page: ${filterLabels.join(', ')}`
+                            : settingsShare.kind === 'output'
+                              ? 'Filters appear on the shared page when set on this output'
+                              : 'Use a one-output link to offer viewer filters'}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="share-published-row share-published-stack">
+                    <span className="share-who">
+                      <strong>Embed</strong>
+                      <span>Paste this iframe into another web page</span>
                     </span>
-                  </span>
-                </div>
-                <div className="share-published-row share-published-stack">
-                  <span className="share-who">
-                    <strong>Embed</strong>
-                    <span>Paste this iframe into another web page</span>
-                  </span>
-                  <div className="share-copy share-embed">
-                    <Textarea
-                      readOnly
-                      aria-label="Embed code"
-                      className="share-embed-code"
-                      value={embedSnippet}
-                      rows={3}
-                    />
+                    <div className="share-copy share-embed">
+                      <Textarea
+                        readOnly
+                        aria-label="Embed code"
+                        className="share-embed-code"
+                        value={embedSnippet}
+                        rows={3}
+                      />
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!settingsLink}
+                        onClick={() =>
+                          void navigator.clipboard
+                            .writeText(embedSnippet)
+                            .then(() => setNote('Embed code copied.'))
+                        }
+                      >
+                        Copy embed
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="share-published-row">
+                    <span className="share-who">
+                      <strong>Unpublish</strong>
+                      <span>Turn this published link off. The URL stops working.</span>
+                    </span>
                     <Button
                       className="flow-btn"
                       type="button"
-                      disabled={!settingsLink}
-                      onClick={() =>
-                        void navigator.clipboard
-                          .writeText(embedSnippet)
-                          .then(() => setNote('Embed code copied.'))
-                      }
+                      disabled={linkBusy}
+                      onClick={() => unpublish(settingsShare)}
                     >
-                      Copy embed
+                      Unpublish
                     </Button>
                   </div>
                 </div>
-                <div className="share-published-row">
-                  <span className="share-who">
-                    <strong>Unpublish</strong>
-                    <span>Turn this published link off. The URL stops working.</span>
-                  </span>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    disabled={linkBusy}
-                    onClick={() => unpublish(settingsShare)}
-                  >
-                    Unpublish
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
-          <div className="share-foot">
+          <div className="share-foot flow-modal-foot">
             <span className="share-foot-note">
               {error ? (
                 <span className="flow-error">{error}</span>
@@ -767,12 +773,12 @@ export function ShareDialog({
       </Dialog>
       {pickerOpen ? (
         <Dialog open onOpenChange={open => !open && setPickerOpen(false)}>
-          <DialogContent className="share-dialog share-picker">
-            <DialogHeader className="share-head">
+          <DialogContent className="share-dialog share-picker flow-modal">
+            <DialogHeader className="share-head flow-modal-head">
               <DialogTitle>Choose an output</DialogTitle>
               <DialogDescription>The link shows this result only.</DialogDescription>
             </DialogHeader>
-            <div className="share-body">
+            <div className="share-body share-scroll flow-modal-body">
               {outputs === null ? <Skeleton className="h-24" /> : null}
               {pickerError ? <p className="flow-error">{pickerError}</p> : null}
               {outputs && !outputs.length && !pickerError ? (
@@ -795,7 +801,7 @@ export function ShareDialog({
                 </Button>
               ))}
             </div>
-            <div className="share-foot">
+            <div className="share-foot flow-modal-foot">
               <span />
               <Button className="flow-btn" type="button" onClick={() => setPickerOpen(false)}>
                 Cancel
