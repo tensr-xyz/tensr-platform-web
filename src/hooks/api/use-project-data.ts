@@ -283,6 +283,7 @@ export type DatasetAudiencesPayload = {
     share?: number;
     weighted_share?: number | null;
     projected_people?: number | null;
+    used_in?: number;
   }[];
   unmatched?: string[];
 };

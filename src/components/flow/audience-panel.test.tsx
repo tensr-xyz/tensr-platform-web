@@ -37,6 +37,27 @@ describe('audience filter', () => {
     });
   });
 
+  it('writes an excluded condition as is not in the definition', () => {
+    const columns = [
+      {
+        name: 'place',
+        label: 'Which place',
+        value_labels: { '1': 'Often', '2': 'Sometimes' },
+      },
+    ];
+    expect(
+      audienceDefinitionText(
+        {
+          combine: 'and',
+          filters: [
+            { op: 'not', combine: 'and', filters: [{ column: 'place', op: '=', value: '1' }] },
+          ],
+        },
+        columns
+      )
+    ).toBe('Which place is not Often');
+  });
+
   it('offers a question by its label and writes the definition in those words', () => {
     const columns = [
       { name: '_row_uid', label: 'Row', value_labels: { a: 'A' } },
@@ -129,6 +150,7 @@ describe('audience panel', () => {
             label: 'Regulars',
             description: 'People who go often',
             filter: { combine: 'and', filters: [{ column: 'place', op: '=', value: '1' }] },
+            used_in: 4,
           },
         ],
       }),
@@ -140,6 +162,7 @@ describe('audience panel', () => {
       />
     );
     expect(await screen.findByText('Regulars')).toBeTruthy();
+    expect(screen.getByText('Used in 4 answers')).toBeTruthy();
     expect(
       screen.getByText('Regulars').closest('li')?.querySelector('.audience-definition')?.textContent
     ).toBe('Which place is Often');
@@ -285,6 +308,7 @@ describe('audience panel', () => {
             filter: { combine: 'and', filters: [{ column: 'role', op: '=', value: '1' }] },
             n: 12,
             share: 0.01,
+            used_in: 2,
           },
         ],
       }),
@@ -296,6 +320,66 @@ describe('audience panel', () => {
       />
     );
     expect(await screen.findByText(/Low base/)).toBeTruthy();
+    expect(screen.queryByText(/Used in/)).toBeNull();
+  });
+
+  it('toggles is to is not so the condition is stored as not', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ audiences: [] }),
+    });
+    renderPanel(
+      <AudiencePanel
+        datasetId="file-1"
+        columns={[
+          {
+            name: 'place',
+            label: 'Which place',
+            value_labels: { '1': 'Often', '2': 'Sometimes' },
+          },
+        ]}
+      />
+    );
+    expect(await screen.findByText('No audiences yet.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '+ New audience' }));
+    fireEvent.change(screen.getByLabelText('Add a question, search by label'), {
+      target: { value: 'Which place' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Which place' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Often' }));
+    fireEvent.click(screen.getByRole('button', { name: /Match operator for Which place/ }));
+    expect(
+      screen.getByRole('button', { name: /Match operator for Which place/ }).textContent
+    ).toMatch(/is not/);
+    fireEvent.change(screen.getByLabelText('Name · what people will type in chat'), {
+      target: { value: 'Elsewhere' },
+    });
+    fireEvent.change(screen.getByLabelText('Plain description · shown in answers and footnotes'), {
+      target: { value: 'Not the often place' },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Elsewhere',
+        label: 'Elsewhere',
+        description: 'Not the often place',
+        filter: {
+          combine: 'and',
+          filters: [
+            { op: 'not', combine: 'and', filters: [{ column: 'place', op: '=', value: '1' }] },
+          ],
+        },
+      }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save audience' }));
+    expect(await screen.findByText('Elsewhere')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      call => call[1]?.method === 'POST' && !String(call[0]).endsWith('/preview')
+    );
+    const body = JSON.parse(String(post?.[1].body));
+    expect(body.filter.filters).toEqual([
+      { op: 'not', combine: 'and', filters: [{ column: 'place', op: '=', value: '1' }] },
+    ]);
   });
 
   it('flags audiences that did not carry to this file', async () => {

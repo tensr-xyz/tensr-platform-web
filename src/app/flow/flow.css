@@ -14788,9 +14788,14 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   color: var(--color-warn);
 }
 
-.audience-low {
+.audience-low,
+.audience-used {
   font-size: 12px;
   line-height: 16px;
+}
+
+.audience-used {
+  color: var(--color-muted);
 }
 
 .audience-stat {
@@ -14961,6 +14966,19 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   color: var(--color-muted);
   font-size: 12px;
   line-height: 16px;
+}
+
+button.audience-op {
+  flex: none;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: inherit;
+  cursor: pointer;
 }
 
 .audience-remove,
