@@ -153,7 +153,10 @@ export function isInvalidContractLead(text: string): boolean {
   const raw = String(text || '').trim();
   if (!raw) return true;
   const low = raw.toLowerCase();
+  if (/\{\{|\}\}/.test(raw)) return true;
   if (/building the (?:table|deck)/i.test(low)) return true;
+  if (/^done so far\b/i.test(low)) return true;
+  if (/the reply did not finish/i.test(low)) return true;
   if (/current status:\s*pending|status:\s*pending|status is pending/i.test(low)) return true;
   if (/once it finishes|once the table finishes/i.test(low)) return true;
   if (/i(?:'|’)?ll give you|i will give you/i.test(low)) return true;
@@ -172,10 +175,10 @@ export function isInvalidContractLead(text: string): boolean {
 
 /** Deferred promise / pending status is not chat prose once a result exists (TEN-192). */
 export function isDeferredResultProse(text: string): boolean {
-  const low = String(text || '')
-    .trim()
-    .toLowerCase();
-  if (!low) return false;
+  const raw = String(text || '').trim();
+  if (!raw) return false;
+  if (/\{\{|\}\}/.test(raw)) return true;
+  const low = raw.toLowerCase();
   if (isInvalidContractLead(low)) return true;
   return /still building|table is still pending|pull (?:the body|its figures)/i.test(low);
 }
@@ -402,19 +405,24 @@ export const UNFINISHED_TURN_ANSWER =
 
 /** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
 export function visibleTurnAnswer(status: string | undefined, text: string): string {
-  const done = text.trim();
-  if (done) return done;
+  const raw = String(text || '').trim();
   if (status === 'awaiting_approval') return '';
+  // Placeholders / progress stubs are not a finished reply (TEN-40).
+  if (/\{\{|\}\}/.test(raw) || isDeferredResultProse(raw)) {
+    return status === 'continuing' ? CONTINUING_TURN_ANSWER : EMPTY_TURN_ANSWER;
+  }
+  const done = withoutResultTokens(raw).trim();
+  if (done) return done;
   if (status === 'continuing') return CONTINUING_TURN_ANSWER;
   return EMPTY_TURN_ANSWER;
 }
 
 /** Keep the streamed answer when the finished text is only a procedure line. */
 export function keptModelAnswer(streamed: string, finalText: string): string {
-  const live = streamed.trim();
-  const done = finalText.trim();
+  const live = withoutResultTokens(streamed).trim();
+  const done = withoutResultTokens(finalText).trim();
   if (!done) return live;
-  if (!live || live.includes('{{')) return done;
+  if (!live || /\{\{|\}\}/.test(streamed)) return done;
   if (isBlandAnswer(done) && !isBlandAnswer(live)) return live;
   return done;
 }
@@ -1031,7 +1039,9 @@ export function outputBaseNote(answer: string): string {
 /** A result citation the server did not fill. The table comes from the result, not this token. */
 export function withoutResultTokens(answer: string): string {
   return String(answer || '')
+    .replace(/\{\{[^}]+\}\}/g, '')
     .replace(/\{+\s*table:\s*[^{}\n]+\}+/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

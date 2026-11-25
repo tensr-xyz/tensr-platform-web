@@ -5,6 +5,7 @@ import {
   withoutStrayEnding,
   outputChecks,
   isInvalidContractLead,
+  isDeferredResultProse,
   isProcedurePlaceholder,
   hasSummaryTable,
   outputCardReady,
@@ -643,6 +644,22 @@ describe('chat output panel', () => {
   it('drops an unfilled table citation', () => {
     expect(withoutResultTokens('The subset is below.\n\n{table:r1}')).toBe('The subset is below.');
     expect(withoutResultTokens('See {{table:r2}}.')).toBe('See .');
+  });
+
+  it('TEN-40: strips scalar placeholders and never shows them as the reply', () => {
+    expect(
+      withoutResultTokens('The run is status {{r1.ok}}, and no projected thousands came back.')
+    ).not.toContain('{{');
+    expect(isInvalidContractLead('The run is status {{r1.ok}}.')).toBe(true);
+    expect(isDeferredResultProse('The run is status {{r1.ok}}.')).toBe(true);
+    const finding = 'Brand Alpha leads at 71.1%, ahead of Brand Beta 58.3%.';
+    expect(
+      resultLead('The run is status {{r1.ok}}, and no figures came back.', [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
+    expect(visibleTurnAnswer('ok', 'status {{r1.ok}}')).toBe(EMPTY_TURN_ANSWER);
+    expect(keptModelAnswer('status {{r1.ok}}', finding)).toContain('71.1%');
   });
 
   it('names a funnel that follows a saved column as Funnel', () => {
