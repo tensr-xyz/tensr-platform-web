@@ -1224,12 +1224,14 @@ export function useAgentThread({
   }, [projectId, question]);
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
-  // TEN-192: when a pending banner finishes on poll, replace deferred chat prose with the lead.
+  // TEN-192: when a pending banner finishes on poll, replace deferred / empty chat prose with the lead.
   useEffect(() => {
     if (!toolResults?.length || runBusy) return;
     const next = readableTurnAnswer(turn?.status || 'ok', answer, toolResults);
     if (!next || next === answer) return;
+    const blank = !String(answer || '').trim();
     if (
+      !blank &&
       !isDeferredResultProse(answer) &&
       answer !== EMPTY_TURN_ANSWER &&
       answer !== CONTINUING_TURN_ANSWER &&
@@ -1595,7 +1597,12 @@ export function AgentThreadColumn({
             )}
           </div>
         ) : null}
-        {thread.answer && (!thread.plan || thread.approving) ? (
+        {(thread.answer ||
+          thread.structuredTables.length ||
+          thread.resultCharts.length ||
+          thread.resultView.duplication ||
+          thread.lead) &&
+        (!thread.plan || thread.approving) ? (
           notInData ? (
             <div className="asker-not-in-data" role="status">
               <p>

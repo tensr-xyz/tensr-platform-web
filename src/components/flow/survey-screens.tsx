@@ -639,7 +639,10 @@ export function BannerGrid({
             <tr>
               <th title={cornerLabel || undefined}>{cornerLabel}</th>
               {columns.map(column => {
-                const heading = bannerHeading(column);
+                const audienceLabel = String(
+                  (book as { audience_label?: unknown }).audience_label || ''
+                ).trim();
+                const heading = bannerHeading(column, audienceLabel);
                 return (
                   <th key={column.id} title={heading || undefined}>
                     {heading}

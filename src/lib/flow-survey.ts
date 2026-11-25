@@ -121,13 +121,33 @@ function isAffirmativeBannerToken(text: string): boolean {
   return Number.isFinite(asNumber) && asNumber === 1;
 }
 
+function looksLikeColumnCode(text: string, column = ''): boolean {
+  const value = text.trim();
+  if (!value) return true;
+  if (value.includes('_') && !value.includes(' ')) return true;
+  const name = column.trim();
+  return Boolean(name && value.toLowerCase() === name.toLowerCase() && name.includes('_'));
+}
+
 /** Banner column label a person reads. Bare 0/1 codes use the variable / audience name. */
 export function bannerHeading(column: BannerColumn, audienceLabel = ''): string {
   const raw = column.label || column.id;
   const splitAt = raw.indexOf('=');
   const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
   const generic = value.trim().toLowerCase();
-  const variable = (column.column_label || audienceLabel || '').trim();
+  const codeName = String(column.codes?.[0]?.column || '').trim();
+  const columnLabel = (column.column_label || '').trim();
+  const audience = audienceLabel.trim();
+  // Prefer a person-facing name: audience, then a real variable label, never a code.
+  const variable = (
+    (audience && (isAffirmativeBannerToken(value) || generic === '0' || generic === '0.0')
+      ? audience
+      : '') ||
+    (columnLabel && !looksLikeColumnCode(columnLabel, codeName) ? columnLabel : '') ||
+    audience ||
+    columnLabel ||
+    ''
+  ).trim();
   // Affirmative 0/1 codes ("1", "1.0", Selected, Yes) show the item label, not the code.
   const affirmative = isAffirmativeBannerToken(value);
   const negative =
@@ -156,7 +176,7 @@ export function bannerHeading(column: BannerColumn, audienceLabel = ''): string 
   if (code != null && String(code).trim() && !isAffirmativeBannerToken(String(code))) {
     return String(code);
   }
-  if (audienceLabel.trim() && affirmative) return audienceLabel.trim();
+  if (audience && affirmative) return audience;
   const split = label.indexOf('=');
   return split >= 0 ? label.slice(split + 1) : label;
 }

@@ -102,13 +102,18 @@ export function ThreadResult({
   );
   // Pending / "once it finishes" promises are not a finished reply (TEN-192).
   const readable = isDeferredResultProse(prose) ? '' : prose;
+  const lead = resultLead(answer, enriched, tables);
   if (!tables.length && !charts.length && !view.duplication) {
-    if (!readable) return null;
+    // Finished numbers in the summary still count as a reply when prose was blank.
+    if (!readable && !lead) return null;
+    if (!readable && lead) {
+      return <AnalysisResult lead={lead} tables={[]} />;
+    }
     return <FlowMarkdown className="chat-prose">{readable}</FlowMarkdown>;
   }
   return (
     <AnalysisResult
-      lead={resultLead(answer, enriched, tables)}
+      lead={lead}
       tables={tables}
       charts={charts}
       footnote={resultFootnote(

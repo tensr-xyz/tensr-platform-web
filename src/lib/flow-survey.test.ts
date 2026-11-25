@@ -137,6 +137,19 @@ describe('flow survey grid', () => {
         'US institutional investors'
       )
     ).toBe('US institutional investors');
+    // Audience wording wins over a column_label that is still the variable name.
+    expect(
+      bannerHeading(
+        {
+          id: 'inv=1',
+          label: '1',
+          column_label: 'inv_institutional',
+          codes: [{ column: 'inv_institutional', code: '1' }],
+          letter_slot: 'A',
+        },
+        'US institutional investors'
+      )
+    ).toBe('US institutional investors');
   });
 
   it('shows rake efficiency as a percent', () => {

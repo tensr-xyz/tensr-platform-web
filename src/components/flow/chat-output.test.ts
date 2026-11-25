@@ -737,6 +737,10 @@ describe('chat output panel', () => {
         { procedure: 'banner_table', summary: { line: finding } },
       ])
     ).toContain('71.1%');
+    // Blank streamed answer must still salvage the finished finding (empty chat card).
+    expect(
+      readableTurnAnswer('ok', '', [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('71.1%');
   });
 
   it('TEN-192: denial drafts before the banner lands are deferred prose', () => {
