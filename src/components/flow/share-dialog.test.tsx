@@ -278,5 +278,10 @@ describe('ShareDialog', () => {
     expect(foot).toBeTruthy();
     expect(scroll?.contains(foot)).toBe(false);
     expect(scroll?.contains(settings)).toBe(true);
+    // DialogContent centering classes must remain (TEN-268 regression: inset:0 overlay).
+    expect(dialog?.className).toMatch(/left-\[50%\]/);
+    expect(dialog?.className).toMatch(/top-\[50%\]/);
+    expect(dialog?.className).toMatch(/translate-x-\[-50%\]/);
+    expect(dialog?.className).toMatch(/translate-y-\[-50%\]/);
   });
 });

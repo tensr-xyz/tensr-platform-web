@@ -2118,8 +2118,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   z-index: 20;
 }
 
-.flow-palette > div,
-.flow-modal > div {
+.flow-palette > div {
   width: min(640px, 92vw);
   background: white;
   border-radius: var(--radius-lg);
@@ -2211,16 +2210,6 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   border-top: 1px solid var(--color-line);
   color: var(--color-muted);
   font-size: 12px;
-}
-
-.flow-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(27, 28, 26, 0.28);
-  display: flex;
-  justify-content: center;
-  padding-top: 12vh;
-  z-index: 20;
 }
 
 .flow-error {
@@ -5636,8 +5625,17 @@ button.chat-result-top {
   max-width: 680px;
 }
 
-/* TEN-268: shared long-modal shell — cap height, scroll body, pin head/foot. */
+/*
+ * TEN-268: shared long-modal shell on DialogContent.
+ * Keep Radix/Tailwind centering (left/top 50% + translate). Never set inset:0 —
+ * that was an old full-screen overlay and pinned dialogs to the top-left.
+ */
 .flow-modal {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
   display: flex !important;
   flex-direction: column;
   max-height: 85vh;
