@@ -1676,6 +1676,7 @@ export function AgentThreadColumn({
                 ['Weight', thread.resultView.weight],
                 ['Wave', thread.resultView.wave],
                 ['Source', thread.resultView.source],
+                ['Test', thread.resultView.test],
               ] as const
             )
               .filter(([, value]) => Boolean(value))

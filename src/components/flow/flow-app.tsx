@@ -1007,6 +1007,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       project={project}
                       datasets={datasets}
                       ready={tabReady}
+                      asker={myRole === 'asker'}
                       pendingAsk={pendingAsk}
                       onAsked={() => setPendingAsk(null)}
                       onChanged={reload}
@@ -2873,6 +2874,7 @@ function ChatScreen({
   project,
   datasets,
   ready,
+  asker = false,
   pendingAsk,
   onAsked,
   onChanged,
@@ -2881,6 +2883,7 @@ function ChatScreen({
   project?: FlowProject;
   datasets: DatasetRow[];
   ready: boolean;
+  asker?: boolean;
   pendingAsk?: string | null;
   onAsked?: () => void;
   onChanged?: () => void;
@@ -3343,7 +3346,11 @@ function ChatScreen({
             <AgentThreadColumn
               thread={thread}
               projectHref={projectHref}
-              placeholder="Ask a follow-up... Type @ to point at a column."
+              placeholder={
+                asker
+                  ? 'Ask about reach, profile or how titles compare…'
+                  : 'Ask a follow-up... Type @ to point at a column.'
+              }
             />
           </section>
           <FlowSidePanel
