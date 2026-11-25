@@ -40,7 +40,10 @@ import {
   clientDeckReportHref,
   isProcedurePlaceholder,
   keptModelAnswer,
-  visibleTurnAnswer,
+  readableTurnAnswer,
+  EMPTY_TURN_ANSWER,
+  CONTINUING_TURN_ANSWER,
+  UNFINISHED_TURN_ANSWER,
   outputKind,
   outputRunIds,
   outputStat,
@@ -427,9 +430,10 @@ export function useAgentThread({
             if (watchToken !== turnTokenRef.current && !clientDeckStillPending(next)) {
               return;
             }
-            const nextAnswer = visibleTurnAnswer(
+            const nextAnswer = readableTurnAnswer(
               next.status,
-              keptModelAnswer('', next.answer_markdown || '')
+              keptModelAnswer('', next.answer_markdown || ''),
+              next.tool_results
             );
             shown(() => {
               setAnswer(nextAnswer);
@@ -746,9 +750,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = visibleTurnAnswer(
+        const kept = readableTurnAnswer(
           result.status,
-          keptModelAnswer(draft, result.answer_markdown || '')
+          keptModelAnswer(draft, result.answer_markdown || ''),
+          result.tool_results
         );
         const suggestions =
           result.status === 'awaiting_approval'
@@ -929,9 +934,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = visibleTurnAnswer(
+        const kept = readableTurnAnswer(
           result.status,
-          keptModelAnswer(streamedRef.current, result.answer_markdown || '')
+          keptModelAnswer(streamedRef.current, result.answer_markdown || ''),
+          result.tool_results
         );
         const suggestions =
           result.status === 'awaiting_approval'
@@ -1228,8 +1234,14 @@ export function useAgentThread({
       )
     )
   );
-  // Never leave a pending/deferred promise as the chat body after the run (TEN-192).
-  const prose = isDeferredResultProse(proseRaw) ? '' : proseRaw;
+  // Never leave a pending/deferred / "did not finish" stub as the chat body (TEN-242).
+  const prose =
+    proseRaw === EMPTY_TURN_ANSWER ||
+    proseRaw === CONTINUING_TURN_ANSWER ||
+    proseRaw === UNFINISHED_TURN_ANSWER ||
+    isDeferredResultProse(proseRaw)
+      ? ''
+      : proseRaw;
   const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },

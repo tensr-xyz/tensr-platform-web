@@ -16,6 +16,7 @@ import {
   EMPTY_TURN_ANSWER,
   CONTINUING_TURN_ANSWER,
   UNFINISHED_TURN_ANSWER,
+  readableTurnAnswer,
   visibleTurnAnswer,
   outputTakeaway,
   outputTitle,
@@ -660,6 +661,16 @@ describe('chat output panel', () => {
     ).toContain('71.1%');
     expect(visibleTurnAnswer('ok', 'status {{r1.ok}}')).toBe(EMPTY_TURN_ANSWER);
     expect(keptModelAnswer('status {{r1.ok}}', finding)).toContain('71.1%');
+    expect(
+      readableTurnAnswer('ok', 'status {{r1.ok}}', [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
+    expect(
+      readableTurnAnswer('ok', EMPTY_TURN_ANSWER, [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
   });
 
   it('names a funnel that follows a saved column as Funnel', () => {

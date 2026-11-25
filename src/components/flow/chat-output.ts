@@ -417,6 +417,32 @@ export function visibleTurnAnswer(status: string | undefined, text: string): str
   return EMPTY_TURN_ANSWER;
 }
 
+/**
+ * TEN-242: prefer finished result lines over "did not finish" / placeholders
+ * when the card already has a summary.
+ */
+export function readableTurnAnswer(
+  status: string | undefined,
+  text: string,
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+): string {
+  const kept = visibleTurnAnswer(status, text);
+  if (status === 'awaiting_approval') return kept;
+  const unfinished =
+    !kept ||
+    kept === EMPTY_TURN_ANSWER ||
+    kept === CONTINUING_TURN_ANSWER ||
+    kept === UNFINISHED_TURN_ANSWER ||
+    /\{\{|\}\}/.test(kept) ||
+    isDeferredResultProse(kept);
+  if (!unfinished) return kept;
+  const salvaged = resultLead(kept, results).trim();
+  if (salvaged && salvaged !== EMPTY_TURN_ANSWER && !/\{\{|\}\}/.test(salvaged)) {
+    return salvaged;
+  }
+  return kept;
+}
+
 /** Keep the streamed answer when the finished text is only a procedure line. */
 export function keptModelAnswer(streamed: string, finalText: string): string {
   const live = withoutResultTokens(streamed).trim();
