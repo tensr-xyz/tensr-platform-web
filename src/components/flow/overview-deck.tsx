@@ -27,6 +27,9 @@ export type OverviewSlide = {
   note: string;
   lowBase?: boolean;
   lowBaseNote?: string;
+  /** When set, the slide stays visible but greyed (Paper 8a). */
+  unsupported?: boolean;
+  reason?: string;
 };
 
 export const OVERVIEW_SLIDES: OverviewSlide[] = [
@@ -44,9 +47,9 @@ export const OVERVIEW_SLIDES: OverviewSlide[] = [
   },
   { id: 'seniority', title: 'Seniority, role and sector', note: 'Audience vs total · index' },
   {
-    id: 'attitudes',
-    title: 'Key attitudes',
-    note: 'Top statements where the audience over-indexes',
+    id: 'profile',
+    title: 'Audience profile',
+    note: '2–3 themed columns of standout stats vs total',
   },
   {
     id: 'market',
@@ -54,6 +57,28 @@ export const OVERVIEW_SLIDES: OverviewSlide[] = [
     note: 'A group under the base is shown with a low-base note',
   },
 ];
+
+/** Grey the profile slide when no audience is selected (Paper 8a). */
+export function withOverviewSlideSupport(
+  slides: OverviewSlide[],
+  audience: string
+): OverviewSlide[] {
+  const hasAudience = Boolean(
+    audience &&
+    !['total sample', 'total', 'everyone', 'all'].includes(audience.trim().toLowerCase())
+  );
+  return slides.map(slide => {
+    if (slide.id !== 'profile') return slide;
+    if (hasAudience) {
+      return { ...slide, unsupported: false, reason: undefined };
+    }
+    return {
+      ...slide,
+      unsupported: true,
+      reason: 'Pick an audience to profile against the total.',
+    };
+  });
+}
 
 export type OverviewBuildRequest = {
   audience: string;
@@ -271,7 +296,10 @@ export function OverviewDeck({
   onBuild?: (request: OverviewBuildRequest) => Promise<void> | void;
   onClose: () => void;
 }) {
-  const initial = useMemo(() => slides || OVERVIEW_SLIDES, [slides]);
+  const initial = useMemo(
+    () => withOverviewSlideSupport(slides || OVERVIEW_SLIDES, audience || ''),
+    [slides, audience]
+  );
   const [order, setOrder] = useState(initial);
   const [chosenAudience, setChosenAudience] = useState(audience || '');
   const [saved, setSaved] = useState(false);
@@ -282,6 +310,9 @@ export function OverviewDeck({
     // Keep the picker on the audience the parent passed (do not snap to Total).
     if (audience) setChosenAudience(audience);
   }, [audience]);
+  useEffect(() => {
+    setOrder(current => withOverviewSlideSupport(current, chosenAudience));
+  }, [chosenAudience]);
   const [headline, setHeadline] = useState(true);
   const [footnote, setFootnote] = useState(true);
   const [hideLow, setHideLow] = useState(false);
@@ -694,14 +725,33 @@ export function OverviewDeck({
               <ol>
                 {order.map((slide, index) => {
                   const showLow = Boolean(slide.lowBase || slide.lowBaseNote) && !hideLow;
+                  const unsupported = Boolean(slide.unsupported);
+                  const rowClass = [
+                    showLow ? 'deck-slide-low' : '',
+                    unsupported ? 'deck-slide-unsupported' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
                   return (
-                    <li key={slide.id} className={showLow ? 'deck-slide-low' : undefined}>
+                    <li key={slide.id} className={rowClass || undefined}>
                       <span>{index + 1}</span>
                       <span>
                         {slide.title}
-                        <span className={showLow ? 'deck-low-note' : 'flow-muted'}>
-                          {showLow ? ` · ${slide.lowBaseNote || 'shown with a low-base note'}` : ''}{' '}
-                          {slide.note}
+                        <span
+                          className={
+                            unsupported
+                              ? 'deck-unsupported-note'
+                              : showLow
+                                ? 'deck-low-note'
+                                : 'flow-muted'
+                          }
+                        >
+                          {unsupported
+                            ? ` · ${slide.reason || 'Not available for this file'}`
+                            : showLow
+                              ? ` · ${slide.lowBaseNote || 'shown with a low-base note'}`
+                              : ''}{' '}
+                          {unsupported ? '' : slide.note}
                         </span>
                       </span>
                       <Button type="button" className="flow-btn" onClick={() => move(index, -1)}>

@@ -5958,6 +5958,12 @@ function ReportScreen({
         note?: string;
         low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
         slides_built?: string[];
+        slides_status?: {
+          id?: string;
+          title?: string;
+          unsupported?: boolean;
+          reason?: string | null;
+        }[];
         detail?: string;
       }>(`/datasets/${exportFileId}/export/deck/overview`, {
         method: 'POST',
@@ -5980,9 +5986,12 @@ function ReportScreen({
             ? 'audience-overview-by-market.zip'
             : 'deck.pptx')
       );
-      if (created.low_bases?.length) {
+      if (created.low_bases?.length || created.slides_status?.length) {
         setOverviewSlides(current =>
           current.map(slide => {
+            const status = created.slides_status?.find(
+              item => String(item.id || '').toLowerCase() === String(slide.id || '').toLowerCase()
+            );
             const hit = created.low_bases?.find(note => {
               const title = String(note.title || '').toLowerCase();
               return (
@@ -5990,17 +5999,26 @@ function ReportScreen({
                 title.includes(String(slide.id || '').toLowerCase())
               );
             });
-            return hit
-              ? {
-                  ...slide,
-                  lowBase: true,
-                  lowBaseNote:
-                    hit.note ||
-                    (hit.base != null
-                      ? `One group has a base of ${hit.base} · shown with a low-base note`
-                      : 'shown with a low-base note'),
-                }
-              : slide;
+            let next = slide;
+            if (status) {
+              next = {
+                ...next,
+                unsupported: Boolean(status.unsupported),
+                reason: status.reason || undefined,
+              };
+            }
+            if (hit) {
+              next = {
+                ...next,
+                lowBase: true,
+                lowBaseNote:
+                  hit.note ||
+                  (hit.base != null
+                    ? `One group has a base of ${hit.base} · shown with a low-base note`
+                    : 'shown with a low-base note'),
+              };
+            }
+            return next;
           })
         );
       }
