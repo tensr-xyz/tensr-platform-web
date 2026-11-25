@@ -1118,7 +1118,8 @@ export function useAgentThread({
                 ? nextStepsForResult(restoredTurn, columnLabels, reportPinsRef.current.length > 0)
                 : []
             );
-            setDownloads([]);
+            // Hydrate from exports.key even when the saved turn omitted downloads[].
+            setDownloads(restoredTurn && !pending ? downloadEntries(restoredTurn) : []);
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
@@ -1126,10 +1127,38 @@ export function useAgentThread({
             // Failed tool steps still leave tool_results; only a ready output opens the column.
             setPanelOpen(outputCardReady(restoredTurn, Boolean(pending)));
           });
-          // Resume deck progress polling when reopening a chat mid-build.
-          if (restoredTurn && !pending) {
+          // Reopen: resolve a finished job immediately, then keep watching if still live.
+          // Saved turns often stay on mid-build status after the job completed in the background.
+          if (restoredTurn && !pending && clientDeckStillPending(restoredTurn)) {
             const watchToken = ++turnTokenRef.current;
-            startDeckWatch(restoredTurn, watchToken);
+            void import('@/lib/client-deck-job').then(
+              async ({ resolvePendingClientDeckInResponse }) => {
+                if (token !== openToken.current || controller.signal.aborted) return;
+                const resolved = await resolvePendingClientDeckInResponse(restoredTurn, {
+                  datasetId: datasetIdRef.current,
+                  signal: controller.signal,
+                });
+                if (token !== openToken.current || controller.signal.aborted) return;
+                const nextAnswer = readableTurnAnswer(
+                  resolved.status,
+                  keptModelAnswer('', resolved.answer_markdown || ''),
+                  resolved.tool_results
+                );
+                shown(() => {
+                  setAnswer(nextAnswer);
+                  setTurn(resolved);
+                  setDownloads(downloadEntries(resolved));
+                  setNextSteps(
+                    nextStepsForResult(resolved, columnLabels, reportPinsRef.current.length > 0)
+                  );
+                  setPanelOpen(outputCardReady(resolved, false));
+                });
+                onFinishedRef.current?.(resolved);
+                if (clientDeckStillPending(resolved)) {
+                  startDeckWatch(resolved, watchToken);
+                }
+              }
+            );
           }
         })
         .catch(err => {
@@ -1840,10 +1869,10 @@ export function AgentThreadColumn({
                       onClick={() => {
                         if (!thread.datasetId) return;
                         thread.setStatus('Exporting PowerPoint…');
-                        void import('@/lib/office-deck-job')
-                          .then(({ exportOfficeDeckAndDownload }) =>
-                            exportOfficeDeckAndDownload(thread.datasetId!, 'deck', {
-                              fill_report: false,
+                        void import('@/lib/client-deck-job')
+                          .then(({ exportClientDeckAgain }) =>
+                            exportClientDeckAgain(thread.datasetId!, thread.turn?.tool_results, {
+                              onProgress: message => thread.setStatus(message),
                             })
                           )
                           .then(() => thread.setStatus('PowerPoint downloaded.'))
