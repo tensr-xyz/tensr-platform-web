@@ -18,6 +18,7 @@ import {
   documentFromPins,
   duplicateObject,
   duplicatePage,
+  upsertPinPage,
   fitDocumentTextFrames,
   fitPageTextFrames,
   looksLikeDeckRequestBrief,
@@ -154,7 +155,46 @@ describe('report document page model', () => {
     expect(doc.pages[0]?.objects[1]?.pinId).toBe('pin-alpha');
     expect(doc.pages[0]?.objects[1]?.runId).toBe('run-1');
     expect(pagesForExport(doc).map(page => page.title)).toEqual(['Alpha finding', 'Gamma finding']);
-    expect(doc.pages[1]?.objects.map(obj => obj.kind)).toEqual(['text', 'text']);
+    // No share bars → Headline + table bound to the run (not another finding's prose).
+    expect(doc.pages[1]?.layoutId).toBe('title_only');
+    expect(doc.pages[1]?.objects.map(obj => obj.kind)).toEqual(['text', 'table']);
+    expect(doc.pages[1]?.objects[0]?.text).toBe('Beta finding');
+  });
+
+  it('upserts a pin slide onto an existing deck without dropping cover pages', () => {
+    const deck = addPage(normalizeReportDocument({}), {
+      title: 'Cover',
+      layoutId: 'title_page',
+    });
+    const { document: withPin, pageId } = upsertPinPage(deck, {
+      id: 'pin-spearman',
+      runId: 'run-spearman',
+      headline: 'Spearman correlation',
+      support: 'No real link between the pair.',
+      bars: [],
+      deck: true,
+    });
+    expect(withPin.pages).toHaveLength(2);
+    const page = withPin.pages.find(item => item.id === pageId);
+    expect(page?.title).toBe('Spearman correlation');
+    expect(page?.layoutId).toBe('title_only');
+    expect(page?.objects.map(obj => obj.kind)).toEqual(['text', 'table']);
+    expect(page?.objects[0]?.text).toBe('Spearman correlation');
+    expect(page?.objects[1]?.text).toBe('');
+    const { document: refreshed, pageId: sameId } = upsertPinPage(withPin, {
+      id: 'pin-spearman',
+      runId: 'run-spearman',
+      headline: 'Spearman correlation',
+      support: 'Updated finding for this run only.',
+      bars: [{ label: 'ρ', percent: 12 }],
+      deck: true,
+    });
+    expect(sameId).toBe(pageId);
+    expect(refreshed.pages).toHaveLength(2);
+    expect(refreshed.pages[0]?.title).toBe('Cover');
+    const again = refreshed.pages.find(item => item.id === pageId);
+    expect(again?.layoutId).toBe('title_and_content');
+    expect(again?.objects.map(obj => obj.kind)).toEqual(['text', 'chart']);
   });
 
   it('reorders, duplicates, groups, sorts, and moves objects', () => {

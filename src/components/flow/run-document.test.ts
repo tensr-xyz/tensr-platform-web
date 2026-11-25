@@ -2,6 +2,7 @@ import {
   documentApa,
   documentCsv,
   documentMarkdown,
+  enrichPinFromRunDocument,
   pinIsThin,
   pinStory,
   placePins,
@@ -177,5 +178,22 @@ describe('saved run document', () => {
     expect(story.bars.map(bar => bar.percent)).toEqual([30.1, 12]);
     expect(pinIsThin({ support: 'n = 40', bars: [] })).toBe(true);
     expect(pinIsThin({ support: story.support, bars: story.bars })).toBe(false);
+    const enriched = enrichPinFromRunDocument(
+      {
+        id: 'pin-run-1',
+        runId: 'run-1',
+        headline: 'Chat title',
+        support: 'Commentary from another output.',
+        citation: 'Frequencies',
+        afterId: '',
+        deck: true,
+        topline: true,
+        keepLive: true,
+      },
+      document
+    );
+    expect(enriched.support).toBe('First is the largest group.');
+    expect(enriched.bars?.map(bar => bar.percent)).toEqual([30.1, 12]);
+    expect(enriched.headline).toBe('Group');
   });
 });

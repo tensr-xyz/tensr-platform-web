@@ -33,7 +33,12 @@ export type SavedAudience = {
   share?: number;
   weighted_share?: number | null;
   projected_people?: number | null;
+  used_in?: number;
 };
+
+function usedInLabel(count: number): string {
+  return count === 1 ? 'Used in 1 answer' : `Used in ${count} answers`;
+}
 
 type Size = {
   n: number;
@@ -85,7 +90,7 @@ function Definition({ text }: { text: string }) {
             </span>
           );
         }
-        const match = part.match(/^(Q\d+)\s+(.+?)\s+(is|includes any)\s+(.+)$/i);
+        const match = part.match(/^(Q\d+)\s+(.+?)\s+(is not|is|includes any|excludes)\s+(.+)$/i);
         if (match) {
           return (
             <span key={index}>
@@ -94,7 +99,7 @@ function Definition({ text }: { text: string }) {
             </span>
           );
         }
-        const plain = part.match(/^(.+?)\s+(is|includes any)\s+(.+)$/i);
+        const plain = part.match(/^(.+?)\s+(is not|is|includes any|excludes)\s+(.+)$/i);
         if (plain) {
           return (
             <span key={index}>
@@ -379,6 +384,21 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
     );
   };
 
+  const setExclude = (index: number, groupIndex: number | null, exclude: boolean) => {
+    setConditions(current =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        if (groupIndex === null) return { ...item, exclude };
+        return {
+          ...item,
+          group: item.group?.map((child, childIndex) =>
+            childIndex === groupIndex ? { ...child, exclude } : child
+          ),
+        };
+      })
+    );
+  };
+
   const renderCondition = (
     condition: AudienceCondition,
     index: number,
@@ -391,7 +411,14 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
       : condition.value
         ? [condition.value]
         : [];
-    const operator = values.length > 1 ? 'includes any' : 'is';
+    const multi = values.length > 1;
+    const operator = condition.exclude
+      ? multi
+        ? 'excludes'
+        : 'is not'
+      : multi
+        ? 'includes any'
+        : 'is';
     return (
       <div
         key={`${index}-${groupIndex ?? 'top'}-${condition.column}`}
@@ -400,7 +427,15 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
         <div className="audience-condition-head">
           <span className="audience-q">{questionCode(column)}</span>
           <span className="audience-q-label">{questionLabel(column)}</span>
-          <span className="audience-op">{operator}</span>
+          <Button
+            type="button"
+            className="flow-btn audience-op"
+            aria-label={`Match operator for ${questionLabel(column)}`}
+            aria-pressed={condition.exclude}
+            onClick={() => setExclude(index, groupIndex, !condition.exclude)}
+          >
+            {operator} ▾
+          </Button>
           <Button
             type="button"
             className="flow-btn audience-remove"
@@ -477,11 +512,16 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
             const share = shareOf(audience);
             const people = counted(audience.projected_people);
             const definition = audienceDefinitionText(audience.filter, columns);
+            const usedIn = Math.max(0, Math.floor(Number(audience.used_in) || 0));
             return (
               <li key={audience.name} className="audience-row">
                 <div className="audience-row-name">
                   <strong>{audience.label || audience.name}</strong>
-                  {low ? <div className="audience-low">Low base · flagged in answers</div> : null}
+                  {low ? (
+                    <div className="audience-low">Low base · flagged in answers</div>
+                  ) : (
+                    <div className="audience-used">{usedInLabel(usedIn)}</div>
+                  )}
                 </div>
                 <div className="audience-row-copy">
                   {definition ? <Definition text={definition} /> : null}

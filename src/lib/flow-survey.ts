@@ -491,13 +491,25 @@ export function chartSeriesFromBook(book: Record<string, unknown> | null): Banne
 }
 
 /** Chart kinds that remap the same banner cells (Displayr table ↔ visualization). */
-export type BannerChartKind = 'bar' | 'line' | 'area' | 'pie';
+export type BannerChartKind =
+  | 'bar'
+  | 'stacked'
+  | 'stacked_100'
+  | 'horizontal'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'donut';
 
 export const BANNER_CHART_KINDS: { value: BannerChartKind; label: string }[] = [
   { value: 'bar', label: 'Bar' },
+  { value: 'stacked', label: 'Stacked' },
+  { value: 'stacked_100', label: '100%' },
+  { value: 'horizontal', label: 'Horizontal' },
   { value: 'line', label: 'Line' },
   { value: 'area', label: 'Area' },
   { value: 'pie', label: 'Pie' },
+  { value: 'donut', label: 'Donut' },
 ];
 
 function seriesLetters(values: BannerChartValue[], categories: string[]): string[] | undefined {
@@ -522,7 +534,8 @@ export function chartFromBannerSeries(
   const y_label = opts?.yLabel || 'Percent';
   const significance_note = opts?.significanceNote?.trim() || undefined;
 
-  if (kind === 'pie') {
+  if (kind === 'pie' || kind === 'donut') {
+    const pieKind = kind === 'donut' ? 'donut' : 'pie';
     if (series.length === 1) {
       const row = series[0]!;
       const letters = seriesLetters(
@@ -530,7 +543,7 @@ export function chartFromBannerSeries(
         row.values.map(item => item.name)
       );
       return {
-        kind: 'pie',
+        kind: pieKind,
         title,
         categories: row.values.map(item => item.name),
         values: row.values.map(item => item.value),
@@ -544,7 +557,7 @@ export function chartFromBannerSeries(
       return cell?.letter?.trim() || '';
     });
     return {
-      kind: 'pie',
+      kind: pieKind,
       title,
       categories: series.map(row => row.label),
       values: series.map(
@@ -572,6 +585,42 @@ export function chartFromBannerSeries(
       title,
       x_label: '',
       y_label,
+      categories,
+      series: chartSeries,
+      ...(significance_note ? { significance_note } : {}),
+    };
+  }
+
+  if (kind === 'stacked') {
+    return {
+      kind: 'bar_stacked',
+      title,
+      x_label: '',
+      y_label,
+      categories,
+      series: chartSeries,
+      ...(significance_note ? { significance_note } : {}),
+    };
+  }
+
+  if (kind === 'stacked_100') {
+    return {
+      kind: 'bar_stacked_100',
+      title,
+      x_label: '',
+      y_label: 'Percent',
+      categories,
+      series: chartSeries,
+      ...(significance_note ? { significance_note } : {}),
+    };
+  }
+
+  if (kind === 'horizontal') {
+    return {
+      kind: 'bar_horizontal',
+      title,
+      x_label: y_label,
+      y_label: '',
       categories,
       series: chartSeries,
       ...(significance_note ? { significance_note } : {}),

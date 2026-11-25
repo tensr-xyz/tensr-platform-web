@@ -30,10 +30,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 5 * 60 * 1000,
             gcTime: 10 * 60 * 1000,
-            retry: (failureCount, error: any) => {
-              if (error?.status >= 400 && error?.status < 500) {
-                return false;
-              }
+            // 4xx never retries. 5xx retries once, then surfaces the error.
+            retry: (failureCount, error: unknown) => {
+              const status =
+                error && typeof error === 'object' && 'status' in error
+                  ? Number((error as { status?: unknown }).status)
+                  : NaN;
+              if (status >= 400 && status < 500) return false;
+              if (status >= 500) return failureCount < 1;
               return failureCount < 3;
             },
             retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),

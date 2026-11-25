@@ -154,6 +154,22 @@ export function splitBrief(text: string): { objectives: string; audience: string
   return out;
 }
 
+/** Preview headers/rows must be arrays — a failed or odd preview must not crash Details. */
+export function previewColumns(preview: { headers?: unknown; rows?: unknown } | null | undefined): {
+  headers: string[];
+  rows: unknown[][];
+} {
+  const rawHeaders = preview?.headers;
+  const headers = Array.isArray(rawHeaders)
+    ? rawHeaders.map(header => String(header ?? ''))
+    : rawHeaders && typeof rawHeaders === 'object'
+      ? Object.values(rawHeaders as Record<string, unknown>).map(header => String(header ?? ''))
+      : [];
+  const rawRows = preview?.rows;
+  const rows = Array.isArray(rawRows) ? rawRows.map(row => (Array.isArray(row) ? row : [])) : [];
+  return { headers, rows };
+}
+
 export function joinBrief(objectives: string, audience: string, notes = ''): string {
   const values = [objectives, audience, notes];
   return BRIEF_SECTIONS.map((label, index) =>
@@ -278,8 +294,7 @@ export function DetailsScreen({
         kinds: {} as Record<string, string>,
       };
     }
-    const headers = preview?.headers || [];
-    const rows = preview?.rows || [];
+    const { headers, rows } = previewColumns(preview);
     const multi = new Set(
       (meta.multiple_response_sets || []).flatMap(set => [
         ...(set.columns || []).map(entry =>

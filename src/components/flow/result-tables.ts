@@ -15,6 +15,8 @@ export type ResultView = {
   audienceDefinition: string;
   wave: string;
   source: string;
+  /** Significance or paired-test label for Asker provenance chips (Paper 7a). */
+  test: string;
   /** match, mismatch, pending, or empty when this result has no R reproduction. */
   rCheck: string;
   rStatement: string;
@@ -1620,6 +1622,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     audienceDefinition: '',
     wave: '',
     source: '',
+    test: '',
     rCheck: '',
     rStatement: '',
     base: '',
@@ -1902,6 +1905,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (!view.source) {
       const source = cell(record.source_label);
       if (source) view.source = source;
+    }
+    if (!view.test) {
+      const test = cell(
+        record.test_label || record.significance_label || record.letter_test || record.test
+      );
+      if (test) view.test = test;
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')

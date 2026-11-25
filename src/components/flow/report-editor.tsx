@@ -260,6 +260,155 @@ export function previewGridFromBannerBook(
   return rowsOut.length > 1 ? rowsOut : [];
 }
 
+function RunTableGrid({
+  rows,
+  style,
+  banded,
+  minimal,
+}: {
+  rows: string[][];
+  style: ReportObject['tableStyle'];
+  banded: boolean;
+  minimal: boolean;
+}) {
+  return (
+    <table
+      style={{
+        fontFamily: cssFontStack(style.fontFamily),
+        fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
+        color: style.bodyColor,
+        borderColor: style.borderColor,
+        borderWidth: minimal ? 0 : style.borderWidthPt,
+      }}
+    >
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr key={rowIndex}>
+            {row.map((cell, colIndex) => {
+              const isHeader = rowIndex === 0;
+              const shade = banded && !isHeader && rowIndex % 2 === 0;
+              return (
+                <td
+                  key={colIndex}
+                  style={{
+                    background: isHeader ? style.headerFill : shade ? '#F6F6F3' : style.bodyFill,
+                    color: isHeader ? style.headerColor : style.bodyColor,
+                    borderColor: style.borderColor,
+                    fontWeight: isHeader ? 600 : 400,
+                  }}
+                >
+                  {cell}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function AnalysisRunTablePreview({
+  runId,
+  style,
+  banded,
+  minimal,
+}: {
+  runId: string;
+  style: ReportObject['tableStyle'];
+  banded: boolean;
+  minimal: boolean;
+}) {
+  const [rows, setRows] = useState<string[][] | null>(null);
+  const [title, setTitle] = useState('');
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  useEffect(() => {
+    let live = true;
+    void import('@/lib/analysis-runs').then(({ fetchAnalysisRun }) =>
+      fetchAnalysisRun(runId).then(run => {
+        if (!live) return;
+        if (!run) {
+          setPhase('error');
+          return;
+        }
+        void import('@/components/flow/run-document').then(({ runDocument }) => {
+          if (!live) return;
+          const document = runDocument({
+            op: run.op,
+            title: run.report?.meta?.title,
+            report: run.report,
+            result: run.result,
+            created_at: run.created_at,
+          });
+          const table = document.tables[0];
+          if (!table) {
+            setPhase('error');
+            return;
+          }
+          setTitle(table.title || document.title || '');
+          setRows([table.columns, ...table.rows.map(row => [...row])]);
+          setPhase('ready');
+        });
+      })
+    );
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+  if (phase === 'loading') {
+    return (
+      <div className="report-editor-table-skeleton" aria-busy="true" aria-label="Loading table">
+        <div className="report-editor-table-skeleton-bar" />
+        <div className="report-editor-table-skeleton-bar" />
+        <div className="report-editor-table-skeleton-bar" />
+      </div>
+    );
+  }
+  if (phase === 'error' || !rows?.length) {
+    return <p className="report-editor-table-empty">Could not load this table.</p>;
+  }
+  return (
+    <div className="report-editor-table-preview" data-preset={style.preset} data-phase="ready">
+      {title ? <p className="report-editor-table-title">{title}</p> : null}
+      <RunTableGrid rows={rows} style={style} banded={banded} minimal={minimal} />
+    </div>
+  );
+}
+
+function ChartObjectPreview({ obj, pins }: { obj: ReportObject; pins: PinLike[] }) {
+  const pin =
+    pins.find(
+      item =>
+        (obj.pinId && String(item.id || '') === obj.pinId) ||
+        (obj.runId && String(item.runId || item.run_id || '') === obj.runId)
+    ) || null;
+  const bars = (pin?.bars || []).filter(bar => String(bar?.label || '').trim());
+  if (!bars.length) {
+    return <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>;
+  }
+  return (
+    <div className="report-editor-chart-preview" aria-label="Chart">
+      {bars.map((bar, index) => {
+        const percent = Number(bar.percent) || 0;
+        return (
+          <div key={`${bar.label}-${index}`} className="report-editor-chart-row">
+            <div className="report-editor-chart-label">
+              <span>{bar.label}</span>
+              <span>{percent.toFixed(1)}%</span>
+            </div>
+            <div className="report-editor-chart-track">
+              <div
+                className="report-editor-chart-bar"
+                style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TableObjectPreview({
   obj,
   datasetId,
@@ -273,6 +422,7 @@ function TableObjectPreview({
   const banded = style.preset === 'banded';
   const minimal = style.preset === 'compact';
   const specId = String(obj.tableSpecId || '').trim();
+  const runId = String(obj.runId || '').trim();
   const tableQuery = usePageTableBook(datasetId, pageId, specId);
   const rows = useMemo(() => {
     if (!tableQuery.data) return [] as string[][];
@@ -286,6 +436,12 @@ function TableObjectPreview({
     () => (tableQuery.data ? tablePreviewFootnote(tableQuery.data) : ''),
     [tableQuery.data]
   );
+  // Analysis-run tables (Add to report) have a run id but no saved table spec.
+  if (!specId && runId) {
+    return (
+      <AnalysisRunTablePreview runId={runId} style={style} banded={banded} minimal={minimal} />
+    );
+  }
   const phase: 'idle' | 'loading' | 'ready' | 'error' =
     !specId || !datasetId
       ? 'idle'
@@ -305,43 +461,7 @@ function TableObjectPreview({
         <p className="report-editor-table-title">{questionTitle}</p>
       ) : null}
       {showGrid ? (
-        <table
-          style={{
-            fontFamily: cssFontStack(style.fontFamily),
-            fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
-            color: style.bodyColor,
-            borderColor: style.borderColor,
-            borderWidth: minimal ? 0 : style.borderWidthPt,
-          }}
-        >
-          <tbody>
-            {rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, colIndex) => {
-                  const isHeader = rowIndex === 0;
-                  const shade = banded && !isHeader && rowIndex % 2 === 0;
-                  return (
-                    <td
-                      key={colIndex}
-                      style={{
-                        background: isHeader
-                          ? style.headerFill
-                          : shade
-                            ? '#F6F6F3'
-                            : style.bodyFill,
-                        color: isHeader ? style.headerColor : style.bodyColor,
-                        borderColor: style.borderColor,
-                        fontWeight: isHeader ? 600 : 400,
-                      }}
-                    >
-                      {cell}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <RunTableGrid rows={rows} style={style} banded={banded} minimal={minimal} />
       ) : phase === 'loading' ? (
         <div className="report-editor-table-skeleton" aria-busy="true" aria-label="Loading table">
           <div className="report-editor-table-skeleton-bar" />
@@ -367,6 +487,7 @@ function CanvasObjectView({
   paintArmed,
   datasetId,
   pageId,
+  pins,
   onSelect,
 }: {
   obj: ReportObject;
@@ -374,6 +495,7 @@ function CanvasObjectView({
   paintArmed: boolean;
   datasetId: string | null;
   pageId: string;
+  pins: PinLike[];
   onSelect: () => void;
 }) {
   const style = obj.textStyle;
@@ -454,6 +576,8 @@ function CanvasObjectView({
         </span>
       ) : obj.kind === 'table' ? (
         <TableObjectPreview obj={obj} datasetId={datasetId} pageId={pageId} />
+      ) : obj.kind === 'chart' ? (
+        <ChartObjectPreview obj={obj} pins={pins} />
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}
@@ -465,11 +589,14 @@ export function ReportEditor({
   datasetId,
   pins = [],
   labelsRevision = 0,
+  focusRunId = '',
 }: {
   datasetId: string | null;
   pins?: PinLike[];
   /** Bumped after find/replace so the editor reloads the saved document. */
   labelsRevision?: number;
+  /** Deep link from Add / Open in report — select the page for this run. */
+  focusRunId?: string;
 }) {
   const queryClient = useQueryClient();
   const storedDocument = useReportDocument(datasetId);
@@ -547,7 +674,7 @@ export function ReportEditor({
   const pinKey = pins.map(pin => pin.id || pin.runId || '').join(',');
   useEffect(() => {
     skipSave.current = true;
-    const bootKey = `${datasetId || ''}:${labelsRevision}:${pinKey}`;
+    const bootKey = `${datasetId || ''}:${labelsRevision}:${pinKey}:${focusRunId || ''}`;
     const stored = storedDocument.data;
     const waiting = Boolean(datasetId) && storedDocument.isPending && !stored;
     const settledEmpty =
@@ -581,9 +708,14 @@ export function ReportEditor({
     }
 
     setDocument(next);
-    setPageId(current =>
-      next.pages.some(item => item.id === current) ? current : next.pages[0]?.id || ''
-    );
+    const focus = String(focusRunId || '').trim();
+    const focusedPage = focus
+      ? next.pages.find(page => page.objects.some(obj => obj.runId === focus))
+      : null;
+    setPageId(current => {
+      if (focusedPage) return focusedPage.id;
+      return next.pages.some(item => item.id === current) ? current : next.pages[0]?.id || '';
+    });
     if (bootedFor.current !== bootKey) {
       setSelectedId(null);
       setPaintSourceId(null);
@@ -614,6 +746,7 @@ export function ReportEditor({
     datasetId,
     pinKey,
     labelsRevision,
+    focusRunId,
     storedDocument.data,
     storedDocument.isPending,
     storedDocument.isError,
@@ -1283,6 +1416,7 @@ export function ReportEditor({
                     paintArmed={Boolean(paintSourceId)}
                     datasetId={datasetId}
                     pageId={page?.id || ''}
+                    pins={pins}
                     onSelect={() => selectObject(obj.id)}
                   />
                 ))}

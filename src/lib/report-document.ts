@@ -1210,73 +1210,156 @@ export type PinLike = {
   deck?: boolean;
   keepLive?: boolean;
   keep_live?: boolean;
+  afterId?: string;
+  after_id?: string;
 };
 
-/** Each report pin becomes one title-and-content page with live refs. */
+/** Chart when the pin has share bars; otherwise a live table for a run; else finding text. */
+export function pinPagePlan(pin: PinLike): {
+  layoutId: string;
+  contentKind: ReportObjectKind;
+  contentText: string;
+} {
+  const support = String(pin.support || '').trim();
+  const hasChart = Array.isArray(pin.bars) && pin.bars.some(bar => String(bar?.label || '').trim());
+  const runId = String(pin.run_id || pin.runId || '').trim();
+  if (hasChart) {
+    return { layoutId: 'title_and_content', contentKind: 'chart', contentText: '' };
+  }
+  if (runId) {
+    // Headline + table — the editor loads this run's table, not another finding's prose.
+    return { layoutId: 'title_only', contentKind: 'table', contentText: '' };
+  }
+  return { layoutId: 'title_and_content', contentKind: 'text', contentText: support };
+}
+
+function pinObjectShell(
+  pin: PinLike,
+  options: {
+    kind: ReportObjectKind;
+    slotId: string;
+    layoutId: string;
+    text: string;
+    zIndex: number;
+  }
+): ReportObject {
+  const pinId = String(pin.id || '').trim() || newId('pin');
+  const runId = String(pin.run_id || pin.runId || '').trim() || null;
+  const keepLive = pin.keep_live !== false && pin.keepLive !== false;
+  return {
+    id: newId('obj'),
+    kind: options.kind,
+    slotId: options.slotId,
+    frame: frameForSlot(options.layoutId, options.slotId) || normalizeFrame(null),
+    zIndex: options.zIndex,
+    hidden: false,
+    text: options.text,
+    textStyle: {
+      ...DEFAULT_TEXT_STYLE,
+      ...(options.slotId === 'title' ? { fontSizePt: 28, bold: true } : {}),
+    },
+    runs: [],
+    binding: null,
+    shapeType: null,
+    imageUrl: null,
+    runId,
+    pinId,
+    tableSpecId: null,
+    tableStyle: normalizeTableStyle({}),
+    tableRules: [],
+    tableEdits: normalizeTableEdits({}),
+    keepLive,
+  };
+}
+
+/** One slide for a report pin: finding on the title, chart/table/finding body in content. */
+export function pageFromPin(pin: PinLike, options?: { pageId?: string }): ReportPage | null {
+  const headline = String(pin.headline || pin.title || '').trim();
+  if (!headline) return null;
+  const plan = pinPagePlan(pin);
+  return {
+    id: options?.pageId || newId('page'),
+    title: headline,
+    layoutId: plan.layoutId,
+    section: null,
+    hideFromExport: pin.deck === false,
+    hideFromPublish: false,
+    objects: [
+      pinObjectShell(pin, {
+        kind: 'text',
+        slotId: 'title',
+        layoutId: plan.layoutId,
+        text: headline,
+        zIndex: 1,
+      }),
+      pinObjectShell(pin, {
+        kind: plan.contentKind,
+        slotId: 'content',
+        layoutId: plan.layoutId,
+        text: plan.contentText,
+        zIndex: 2,
+      }),
+    ],
+  };
+}
+
+/** Page index whose objects reference this pin's run or pin id. */
+export function findPageIndexForPin(document: ReportDocument | unknown, pin: PinLike): number {
+  const doc = normalizeReportDocument(document);
+  const runId = String(pin.run_id || pin.runId || '').trim();
+  const pinId = String(pin.id || '').trim();
+  if (!runId && !pinId) return -1;
+  return doc.pages.findIndex(page =>
+    page.objects.some(obj => (runId && obj.runId === runId) || (pinId && obj.pinId === pinId))
+  );
+}
+
+/**
+ * Insert or refresh the slide for a pin without dropping the rest of the deck.
+ * Keeps the existing page id so deep links stay stable.
+ */
+export function upsertPinPage(
+  document: ReportDocument | unknown,
+  pin: PinLike
+): { document: ReportDocument; pageId: string } {
+  const doc = normalizeReportDocument(document);
+  const existingIndex = findPageIndexForPin(doc, pin);
+  const keptId = existingIndex >= 0 ? doc.pages[existingIndex]?.id : undefined;
+  const page = pageFromPin(pin, { pageId: keptId });
+  if (!page) {
+    return { document: doc, pageId: keptId || '' };
+  }
+  if (existingIndex >= 0) {
+    const pages = doc.pages.map((item, index) => (index === existingIndex ? page : item));
+    return { document: { ...doc, pages }, pageId: page.id };
+  }
+  const afterId = String(pin.after_id || pin.afterId || '').trim();
+  const pages = [...doc.pages];
+  if (afterId && afterId !== 'end' && afterId !== 'start') {
+    const afterIndex = pages.findIndex(
+      item =>
+        item.id === afterId ||
+        item.objects.some(obj => obj.pinId === afterId || obj.runId === afterId)
+    );
+    if (afterIndex >= 0) {
+      pages.splice(afterIndex + 1, 0, page);
+      return { document: { ...doc, pages }, pageId: page.id };
+    }
+  }
+  if (afterId === 'start') {
+    pages.unshift(page);
+    return { document: { ...doc, pages }, pageId: page.id };
+  }
+  pages.push(page);
+  return { document: { ...doc, pages }, pageId: page.id };
+}
+
+/** Each report pin becomes one live page (chart, table, or finding text). */
 export function documentFromPins(pins: PinLike[]): ReportDocument {
   const pages: ReportPage[] = [];
   for (const pin of pins || []) {
-    const headline = String(pin.headline || pin.title || '').trim();
-    if (!headline) continue;
-    const pinId = String(pin.id || '').trim() || newId('pin');
-    const runId = String(pin.run_id || pin.runId || '').trim() || null;
-    const support = String(pin.support || '').trim();
-    const hasChart =
-      Array.isArray(pin.bars) && pin.bars.some(bar => String(bar?.label || '').trim());
-    const layoutId = 'title_and_content';
-    const keepLive = pin.keep_live !== false && pin.keepLive !== false;
-    pages.push({
-      id: newId('page'),
-      title: headline,
-      layoutId,
-      section: null,
-      hideFromExport: pin.deck === false,
-      hideFromPublish: false,
-      objects: [
-        {
-          id: newId('obj'),
-          kind: 'text',
-          slotId: 'title',
-          frame: frameForSlot(layoutId, 'title') || normalizeFrame(null),
-          zIndex: 1,
-          hidden: false,
-          text: headline,
-          textStyle: { ...DEFAULT_TEXT_STYLE },
-          runs: [],
-          binding: null,
-          shapeType: null,
-          imageUrl: null,
-          runId,
-          pinId,
-          tableSpecId: null,
-          tableStyle: normalizeTableStyle({}),
-          tableRules: [],
-          tableEdits: normalizeTableEdits({}),
-          keepLive,
-        },
-        {
-          id: newId('obj'),
-          kind: hasChart ? 'chart' : 'text',
-          slotId: 'content',
-          frame: frameForSlot(layoutId, 'content') || normalizeFrame(null),
-          zIndex: 2,
-          hidden: false,
-          text: hasChart ? '' : support,
-          textStyle: { ...DEFAULT_TEXT_STYLE },
-          runs: [],
-          binding: null,
-          shapeType: null,
-          imageUrl: null,
-          runId,
-          pinId,
-          tableSpecId: null,
-          tableStyle: normalizeTableStyle({}),
-          tableRules: [],
-          tableEdits: normalizeTableEdits({}),
-          keepLive,
-        },
-      ],
-    });
+    const page = pageFromPin(pin);
+    if (page) pages.push(page);
   }
   return normalizeReportDocument({ pages });
 }

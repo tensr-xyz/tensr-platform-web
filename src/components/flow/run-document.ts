@@ -273,6 +273,22 @@ export function pinStory(document: RunDocument): { support: string; bars: Report
   return { support: document.summary.trim(), bars: shareBars(table) };
 }
 
+/**
+ * Prefer this run's own summary / share bars over chat takeaway text so a slide
+ * never picks up another output's commentary.
+ */
+export function enrichPinFromRunDocument(pin: ReportPin, document: RunDocument): ReportPin {
+  const story = pinStory(document);
+  const headline = (document.title || '').trim() || pin.headline;
+  const support = story.support || pin.support;
+  return {
+    ...pin,
+    headline,
+    support,
+    bars: story.bars.length ? story.bars : pin.bars || [],
+  };
+}
+
 function shareBars(table: RunTable | undefined): ReportPinBar[] {
   if (!table) return [];
   let percentAt = table.columns.findIndex(column => /%|percent|share/i.test(column));

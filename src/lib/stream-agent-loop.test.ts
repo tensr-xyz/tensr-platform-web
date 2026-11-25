@@ -246,11 +246,10 @@ describe('streamAgentLoop', () => {
   it('never returns a blank answer after continuing hops are exhausted', async () => {
     const emptyContinuing =
       'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-empty","answer_markdown":""}}\n\n';
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
-      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
-      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
-      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing));
+    // RESUME_HOP_LIMIT is 8 — need initial + 8 resumes, then the 9th continuing forces ok.
+    for (let i = 0; i < 10; i += 1) {
+      (global.fetch as jest.Mock).mockResolvedValueOnce(sseFetchResponse(emptyContinuing));
+    }
 
     const result = await streamAgentLoop({
       message: 'go ahead',
@@ -262,6 +261,25 @@ describe('streamAgentLoop', () => {
     expect(result.status).toBe('ok');
     expect(result.answer_markdown).toBe(EMPTY_TURN_ANSWER);
     expect(result.answer_markdown.trim()).not.toBe('');
+  });
+
+  it('TEN-192: hop exhaustion salvages a finished banner line over a blank stub', async () => {
+    const continuingWithTable =
+      'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-salvage","answer_markdown":"The run is status {{r1.ok}}.","tool_results":[{"procedure":"banner_table","summary":{"line":"Brand Alpha leads at 71.1%."}}]}}\n\n';
+    for (let i = 0; i < 10; i += 1) {
+      (global.fetch as jest.Mock).mockResolvedValueOnce(sseFetchResponse(continuingWithTable));
+    }
+
+    const result = await streamAgentLoop({
+      message: 'Show reach',
+      mode: 'agent',
+      agentVersion: 'v2',
+      sessionId: 'sess-salvage',
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.answer_markdown).toContain('71.1');
+    expect(result.answer_markdown).not.toContain('{{');
   });
 
   it('fills a visible message when the result has no text', async () => {

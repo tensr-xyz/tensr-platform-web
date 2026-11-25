@@ -153,7 +153,10 @@ export function isInvalidContractLead(text: string): boolean {
   const raw = String(text || '').trim();
   if (!raw) return true;
   const low = raw.toLowerCase();
+  if (/\{\{|\}\}/.test(raw)) return true;
   if (/building the (?:table|deck)/i.test(low)) return true;
+  if (/^done so far\b/i.test(low)) return true;
+  if (/the reply did not finish/i.test(low)) return true;
   if (/current status:\s*pending|status:\s*pending|status is pending/i.test(low)) return true;
   if (/once it finishes|once the table finishes/i.test(low)) return true;
   if (/i(?:'|’)?ll give you|i will give you/i.test(low)) return true;
@@ -172,12 +175,15 @@ export function isInvalidContractLead(text: string): boolean {
 
 /** Deferred promise / pending status is not chat prose once a result exists (TEN-192). */
 export function isDeferredResultProse(text: string): boolean {
-  const low = String(text || '')
-    .trim()
-    .toLowerCase();
-  if (!low) return false;
+  const raw = String(text || '').trim();
+  if (!raw) return false;
+  if (/\{\{|\}\}/.test(raw)) return true;
+  const low = raw.toLowerCase();
   if (isInvalidContractLead(low)) return true;
-  return /still building|table is still pending|pull (?:the body|its figures)/i.test(low);
+  // TEN-192: denial drafts written before the banner landed are not a reply.
+  return /still building|table is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending/i.test(
+    low
+  );
 }
 
 /** The statistic line from the result, else the one sentence of the answer that carries it. */
@@ -402,19 +408,50 @@ export const UNFINISHED_TURN_ANSWER =
 
 /** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
 export function visibleTurnAnswer(status: string | undefined, text: string): string {
-  const done = text.trim();
-  if (done) return done;
+  const raw = String(text || '').trim();
   if (status === 'awaiting_approval') return '';
+  // Placeholders / progress stubs are not a finished reply (TEN-40).
+  if (/\{\{|\}\}/.test(raw) || isDeferredResultProse(raw)) {
+    return status === 'continuing' ? CONTINUING_TURN_ANSWER : EMPTY_TURN_ANSWER;
+  }
+  const done = withoutResultTokens(raw).trim();
+  if (done) return done;
   if (status === 'continuing') return CONTINUING_TURN_ANSWER;
   return EMPTY_TURN_ANSWER;
 }
 
+/**
+ * TEN-242: prefer finished result lines over "did not finish" / placeholders
+ * when the card already has a summary.
+ */
+export function readableTurnAnswer(
+  status: string | undefined,
+  text: string,
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+): string {
+  const kept = visibleTurnAnswer(status, text);
+  if (status === 'awaiting_approval') return kept;
+  const unfinished =
+    !kept ||
+    kept === EMPTY_TURN_ANSWER ||
+    kept === CONTINUING_TURN_ANSWER ||
+    kept === UNFINISHED_TURN_ANSWER ||
+    /\{\{|\}\}/.test(kept) ||
+    isDeferredResultProse(kept);
+  if (!unfinished) return kept;
+  const salvaged = resultLead(kept, results).trim();
+  if (salvaged && salvaged !== EMPTY_TURN_ANSWER && !/\{\{|\}\}/.test(salvaged)) {
+    return salvaged;
+  }
+  return kept;
+}
+
 /** Keep the streamed answer when the finished text is only a procedure line. */
 export function keptModelAnswer(streamed: string, finalText: string): string {
-  const live = streamed.trim();
-  const done = finalText.trim();
+  const live = withoutResultTokens(streamed).trim();
+  const done = withoutResultTokens(finalText).trim();
   if (!done) return live;
-  if (!live || live.includes('{{')) return done;
+  if (!live || /\{\{|\}\}/.test(streamed)) return done;
   if (isBlandAnswer(done) && !isBlandAnswer(live)) return live;
   return done;
 }
@@ -752,6 +789,14 @@ export function analysisReportHref(projectHref: string, runId?: string | null): 
   return `${projectHref}/report?pane=outputs`;
 }
 
+/** Open Report › Slides on the page for a pinned analysis (or the deck shell). */
+export function analysisSlideHref(projectHref: string, runId?: string | null): string {
+  if (runId) {
+    return `${projectHref}/report?pane=slides&run=${encodeURIComponent(runId)}`;
+  }
+  return `${projectHref}/report?pane=slides`;
+}
+
 /** Open Report › Slides for a client deck. */
 export function clientDeckReportHref(projectHref: string): string {
   return `${projectHref}/report?pane=slides`;
@@ -1031,7 +1076,9 @@ export function outputBaseNote(answer: string): string {
 /** A result citation the server did not fill. The table comes from the result, not this token. */
 export function withoutResultTokens(answer: string): string {
   return String(answer || '')
+    .replace(/\{\{[^}]+\}\}/g, '')
     .replace(/\{+\s*table:\s*[^{}\n]+\}+/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

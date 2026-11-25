@@ -1,4 +1,8 @@
-import { chartFromFrequencyTables, chartsFromToolPayloads } from '@/lib/flow-result-charts';
+import {
+  chartFromBannerBook,
+  chartFromFrequencyTables,
+  chartsFromToolPayloads,
+} from '@/lib/flow-result-charts';
 
 describe('flow result charts', () => {
   it('builds a side-by-side yes% chart from several awareness frequency tables', () => {
@@ -162,5 +166,71 @@ describe('flow result charts', () => {
     });
     expect(charts[0].categories).toEqual(['General health', 'Nutrition']);
     expect(charts[0].categories).not.toContain('Base');
+  });
+
+  it('derives a side-by-side yes% chart from a brand-grid banner book', () => {
+    const book = {
+      title: 'Brand awareness',
+      weight: { column: 'w', weight_aware: true },
+      column_metadata: {
+        aware_a: { label: 'BrewCo', value_labels: { '0': 'No', '1': 'Yes' } },
+        aware_b: { label: 'BeanHouse', value_labels: { '0': 'No', '1': 'Yes' } },
+        aware_c: { label: 'Cuppa', value_labels: { '0': 'No', '1': 'Yes' } },
+      },
+      banner_columns: [{ id: 'total', label: 'Total' }],
+      rows: [
+        {
+          id: 'aware_a:0',
+          column: 'aware_a',
+          label: '0',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 30 }],
+        },
+        {
+          id: 'aware_a:1',
+          column: 'aware_a',
+          label: '1',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 70 }],
+        },
+        {
+          id: 'aware_b:0',
+          column: 'aware_b',
+          label: '0',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 48.3 }],
+        },
+        {
+          id: 'aware_b:1',
+          column: 'aware_b',
+          label: '1',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 51.7 }],
+        },
+        {
+          id: 'aware_c:0',
+          column: 'aware_c',
+          label: '0',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 33.3 }],
+        },
+        {
+          id: 'aware_c:1',
+          column: 'aware_c',
+          label: '1',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 66.7 }],
+        },
+      ],
+    };
+    expect(chartFromBannerBook(book, 'weighted')).toMatchObject({
+      kind: 'bar_grouped',
+      categories: ['BrewCo', 'BeanHouse', 'Cuppa'],
+      series: [{ name: 'Yes', values: [70, 51.7, 66.7] }],
+      weighting: 'weighted',
+    });
+    const charts = chartsFromToolPayloads({ result: book });
+    expect(charts[0]?.categories).toEqual(['BrewCo', 'BeanHouse', 'Cuppa']);
+    expect(charts[0]?.categories).not.toContain('aware_a');
   });
 });

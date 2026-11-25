@@ -321,9 +321,35 @@ describe('flow survey grid', () => {
     expect(chartFromBannerSeries(series, 'line')?.kind).toBe('line');
     expect(chartFromBannerSeries(series, 'area')?.kind).toBe('area');
 
+    expect(chartFromBannerSeries(series, 'stacked', { title: 'Awareness' })).toMatchObject({
+      kind: 'bar_stacked',
+      title: 'Awareness',
+      categories: ['East', 'North'],
+      series: [
+        { name: 'Yes', values: [60, 40] },
+        { name: 'No', values: [40, 60] },
+      ],
+    });
+    expect(chartFromBannerSeries(series, 'stacked_100')).toMatchObject({
+      kind: 'bar_stacked_100',
+      y_label: 'Percent',
+    });
+    expect(chartFromBannerSeries(series, 'horizontal')).toMatchObject({
+      kind: 'bar_horizontal',
+      x_label: 'Percent',
+      categories: ['East', 'North'],
+    });
+
     const pie = chartFromBannerSeries(series, 'pie', { title: 'Awareness' });
     expect(pie).toEqual({
       kind: 'pie',
+      title: 'Awareness',
+      categories: ['Yes', 'No'],
+      values: [60, 40],
+    });
+
+    expect(chartFromBannerSeries(series, 'donut', { title: 'Awareness' })).toEqual({
+      kind: 'donut',
       title: 'Awareness',
       categories: ['Yes', 'No'],
       values: [60, 40],
@@ -338,7 +364,7 @@ describe('flow survey grid', () => {
     });
   });
 
-  it('carries the same column letters onto bar, line, area, and pie charts', () => {
+  it('carries the same column letters onto bar, stacked, horizontal, line, area, pie and donut charts', () => {
     const book = {
       significance_display: 'letters',
       letter_test: 'Column proportions test at 95%',
@@ -397,11 +423,25 @@ describe('flow survey grid', () => {
       series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
     });
 
+    expect(chartFromBannerSeries(series, 'stacked', { significanceNote: note })).toMatchObject({
+      kind: 'bar_stacked',
+      series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+    });
+    expect(chartFromBannerSeries(series, 'horizontal', { significanceNote: note })).toMatchObject({
+      kind: 'bar_horizontal',
+      series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+    });
+
     const pie = chartFromBannerSeries([series[0]!], 'pie', { significanceNote: note });
     expect(pie).toMatchObject({
       kind: 'pie',
       categories: ['East', 'North'],
       values: [60, 40],
+      letters: ['B', ''],
+      significance_note: note,
+    });
+    expect(chartFromBannerSeries([series[0]!], 'donut', { significanceNote: note })).toMatchObject({
+      kind: 'donut',
       letters: ['B', ''],
       significance_note: note,
     });

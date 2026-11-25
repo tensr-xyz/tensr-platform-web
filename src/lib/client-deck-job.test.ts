@@ -1,11 +1,14 @@
 import {
   applyClientDeckJobSnapshot,
+  clientDeckExportRef,
   clientDeckJobIsLive,
   clientDeckProgressLine,
+  exportClientDeckAgain,
   pendingClientDeckFromToolResults,
   resolvePendingClientDeckInResponse,
   watchClientDeckJobInBackground,
 } from '@/lib/client-deck-job';
+import { downloadsFromToolResults } from '@/lib/excel-download';
 
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
@@ -15,13 +18,27 @@ jest.mock('@/lib/api-client', () => ({
   },
 }));
 
+jest.mock('@/components/flow/survey-screens', () => ({
+  downloadExport: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/lib/office-deck-job', () => ({
+  exportOfficeDeckAndDownload: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { apiClient } from '@/lib/api-client';
+import { downloadExport } from '@/components/flow/survey-screens';
+import { exportOfficeDeckAndDownload } from '@/lib/office-deck-job';
 
 const clientDeckJob = apiClient.datasets.clientDeckJob as jest.Mock;
+const downloadExportMock = downloadExport as jest.Mock;
+const exportOfficeMock = exportOfficeDeckAndDownload as jest.Mock;
 
 describe('client-deck-job', () => {
   beforeEach(() => {
     clientDeckJob.mockReset();
+    downloadExportMock.mockClear();
+    exportOfficeMock.mockClear();
   });
 
   it('finds a pending build_client_deck job', () => {
@@ -530,7 +547,7 @@ describe('client-deck-job', () => {
           key: 'exports/excel/x/client-deck.pptx',
           filename: 'client-deck.pptx',
           report_pages: 38,
-          n_slides: 38,
+          n_slides: 41,
           n_insights: 12,
           n_questions: 23,
           exec_summary_preview: [
@@ -540,9 +557,69 @@ describe('client-deck-job', () => {
         },
       }
     );
-    expect(out.answer_markdown).toContain('Done · 38 slides');
+    expect(out.answer_markdown).toContain('Done · 41 slides');
     expect(out.answer_markdown).toContain('• Dietitians are more likely to recommend whole foods.');
     expect(out.answer_markdown).toContain('Open in Report');
     expect(out.tool_results?.[0]?.result?.run_id).toBe('job-done');
+  });
+
+  it('hydrates Download from exports.key when downloads[] is missing (reopened turn)', () => {
+    const files = downloadsFromToolResults([
+      {
+        name: 'build_client_deck',
+        result: {
+          status: 'complete',
+          procedure: 'build_client_deck',
+          filename: 'client-deck.pptx',
+          key: 'exports/excel/x/client-deck.pptx',
+          exports: {
+            filename: 'client-deck.pptx',
+            key: 'exports/excel/x/client-deck.pptx',
+            export_id: 'exp-1',
+          },
+        },
+      },
+    ]);
+    expect(files).toEqual([
+      { filename: 'client-deck.pptx', key: 'exports/excel/x/client-deck.pptx', expires: undefined },
+    ]);
+  });
+
+  it('Export again prefers the stored export_id over rebuilding', async () => {
+    const results = [
+      {
+        name: 'build_client_deck',
+        result: {
+          status: 'complete',
+          procedure: 'build_client_deck',
+          export_id: 'exp-240',
+          filename: 'client-deck.pptx',
+          key: 'exports/excel/x/client-deck.pptx',
+        },
+      },
+    ];
+    expect(clientDeckExportRef(results)).toEqual({
+      exportId: 'exp-240',
+      key: 'exports/excel/x/client-deck.pptx',
+      filename: 'client-deck.pptx',
+    });
+    await exportClientDeckAgain('ds-1', results);
+    expect(downloadExportMock).toHaveBeenCalledWith('/exports/exp-240', 'client-deck.pptx');
+    expect(exportOfficeMock).not.toHaveBeenCalled();
+  });
+
+  it('Export again falls back to office deck when no export ref exists', async () => {
+    await exportClientDeckAgain('ds-1', [
+      {
+        name: 'build_client_deck',
+        result: { status: 'complete', procedure: 'build_client_deck' },
+      },
+    ]);
+    expect(exportOfficeMock).toHaveBeenCalledWith(
+      'ds-1',
+      'client-deck',
+      { fill_report: false },
+      undefined
+    );
   });
 });

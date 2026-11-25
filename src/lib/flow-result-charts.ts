@@ -1,4 +1,10 @@
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import {
+  chartFromBannerSeries,
+  chartSeriesFromBook,
+  type BannerColumn,
+  type BannerRow,
+} from '@/lib/flow-survey';
 
 const POSITIVE = new Set(['yes', 'y', 'true', '1', 'aware', 'selected', 'mentioned', 'ticked']);
 const NEGATIVE = new Set([
@@ -132,6 +138,128 @@ export function chartFromFrequencyTables(
   };
 }
 
+function bannerCellPercent(row: BannerRow, bannerId: string): number | null {
+  const found = (row.cells || []).find(item => item.banner_id === bannerId);
+  if (!found) return null;
+  if (typeof found.percent === 'number' && Number.isFinite(found.percent)) return found.percent;
+  return null;
+}
+
+function stubDisplayLabel(stub: string, meta: Record<string, unknown> | null): string {
+  if (!stub) return '';
+  const info = asRecord(meta?.[stub]);
+  const label = String(info?.label || info?.variable_label || '').trim();
+  return label || stub;
+}
+
+function valueDisplayLabel(
+  stub: string,
+  code: string,
+  meta: Record<string, unknown> | null
+): string {
+  const info = asRecord(meta?.[stub]);
+  const labels = asRecord(info?.value_labels) || {};
+  const text = code.trim();
+  if (!text) return '';
+  for (const key of [text, text.replace(/\.0$/, '')]) {
+    const labelled = labels[key];
+    if (labelled != null && String(labelled).trim()) return String(labelled).trim();
+  }
+  const asInt = Number(text);
+  if (Number.isFinite(asInt)) {
+    const labelled = labels[String(Math.trunc(asInt))];
+    if (labelled != null && String(labelled).trim()) return String(labelled).trim();
+  }
+  return text;
+}
+
+/**
+ * Labelled bar chart from a banner / reach book when the report has none.
+ * Several yes/no stubs on Total → one bar per question (% yes).
+ */
+export function chartFromBannerBook(
+  book: unknown,
+  weighting: 'weighted' | 'unweighted' | 'none' = 'none'
+): AnalysisReportChart | null {
+  const record = asRecord(book);
+  if (!record) return null;
+  const rows = (Array.isArray(record.rows) ? record.rows : []).filter((row): row is BannerRow =>
+    Boolean(row && typeof row === 'object')
+  );
+  const bannerColumns = (Array.isArray(record.banner_columns) ? record.banner_columns : []).filter(
+    (column): column is BannerColumn => Boolean(column && typeof column === 'object')
+  );
+  if (!rows.length || !bannerColumns.length) return null;
+
+  const valueRows = rows.filter(row => {
+    const kind = String(row.kind || 'value');
+    return (
+      !['header', 'mean', 'sd', 'base', 'net'].includes(kind) && String(row.label || '').trim()
+    );
+  });
+  if (!valueRows.length) return null;
+
+  const byStub = new Map<string, BannerRow[]>();
+  const stubOrder: string[] = [];
+  for (const row of valueRows) {
+    const stub = String(row.column || '').trim();
+    if (!stub) continue;
+    if (!byStub.has(stub)) {
+      stubOrder.push(stub);
+      byStub.set(stub, []);
+    }
+    byStub.get(stub)!.push(row);
+  }
+
+  const totalId =
+    bannerColumns.find(column => column.id === 'total')?.id ||
+    (bannerColumns.length === 1 ? bannerColumns[0]!.id : '');
+  const meta =
+    asRecord(record.column_metadata) ||
+    asRecord(asRecord(record.provenance)?.column_metadata) ||
+    null;
+
+  if (stubOrder.length >= 2 && totalId) {
+    const multi: Array<{ label: string; percent: number }> = [];
+    for (const stub of stubOrder) {
+      const shares: Array<{ label: string; percent: number }> = [];
+      for (const row of byStub.get(stub) || []) {
+        const code = String(row.label || '').trim();
+        const percent = bannerCellPercent(row, totalId);
+        if (percent == null) continue;
+        shares.push({ label: valueDisplayLabel(stub, code, meta), percent });
+      }
+      const yes = positiveShare(shares);
+      if (yes == null) {
+        multi.length = 0;
+        break;
+      }
+      multi.push({ label: stubDisplayLabel(stub, meta), percent: yes });
+    }
+    if (multi.length >= 2) {
+      const title = String(record.title || '').trim() || 'Percent yes';
+      return {
+        kind: 'bar_grouped',
+        title,
+        x_label: 'Question',
+        y_label: 'Percent',
+        categories: multi.map(item => item.label),
+        series: [{ name: 'Yes', values: multi.map(item => item.percent) }],
+        weighting,
+      };
+    }
+  }
+
+  const series = chartSeriesFromBook(record);
+  if (!series.length) return null;
+  const chart = chartFromBannerSeries(series, 'bar', {
+    title: String(record.title || '').trim(),
+    yLabel: 'Percent',
+  });
+  if (!chart || chart.kind !== 'bar_grouped') return null;
+  return { ...chart, weighting };
+}
+
 function pushChart(charts: AnalysisReportChart[], chart: unknown) {
   if (!chart || typeof chart !== 'object') return;
   const kind = String((chart as { kind?: unknown }).kind || '');
@@ -171,9 +299,19 @@ function chartsFromEnvelope(envelope: Record<string, unknown> | null): AnalysisR
         weight?.column || weight?.weight_aware || (stats && 'Weighted base' in stats)
           ? 'weighted'
           : 'none';
-      const derived = chartFromFrequencyTables(frequencyTables, weighting);
+      const derived =
+        chartFromFrequencyTables(frequencyTables, weighting) ||
+        chartFromBannerBook(nested, weighting) ||
+        chartFromBannerBook(envelope, weighting);
       if (derived) charts.push(derived);
     }
+  } else if (!charts.length) {
+    const weight = asRecord(envelope.weight);
+    const weighting = weight?.column || weight?.weight_aware ? 'weighted' : 'none';
+    const derived =
+      chartFromFrequencyTables(envelope.frequency_tables, weighting) ||
+      chartFromBannerBook(envelope, weighting);
+    if (derived) charts.push(derived);
   }
   return charts;
 }

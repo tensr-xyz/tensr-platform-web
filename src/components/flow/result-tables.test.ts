@@ -302,17 +302,19 @@ describe('result tables', () => {
     expect(view.weight).toBe('');
   });
 
-  it('states the audience definition, the wave, and the source', () => {
+  it('states the audience definition, the wave, the source, and the test', () => {
     const view = resultViewFromToolResults({
       result: {
         audience_label: 'Regular readers',
         audience_definition: 'People who read weekly',
         wave_label: 'Wave 2',
         source_label: 'readers.sav',
+        test_label: 'Paired test between titles',
       },
     });
     expect(view.audience).toBe('Regular readers');
     expect(view.audienceDefinition).toBe('People who read weekly');
+    expect(view.test).toBe('Paired test between titles');
     const foot = resultFootnote(view, 'Unweighted base 40.', 'Frequencies');
     expect(foot).toContain('Audience: Regular readers — People who read weekly');
     expect(foot).toContain('Wave: Wave 2');

@@ -336,4 +336,92 @@ describe('ReportChart palette kinds', () => {
     ).toBe('on');
     expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('B');
   });
+
+  it('stacks series and keeps column letters on stacked bars', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'bar_stacked',
+          title: 'Agreement',
+          x_label: '',
+          y_label: 'Percent',
+          categories: ['East', 'North'],
+          series: [
+            { name: 'Agree', values: [40, 30], letters: ['B', ''] },
+            { name: 'Neutral', values: [20, 20] },
+            { name: 'Disagree', values: [40, 50] },
+          ],
+          significance_note: 'Column proportions test at 95%',
+        }}
+        density="comfortable"
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="bar_stacked"]')).toBeTruthy();
+    expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('B');
+  });
+
+  it('normalises 100% stacked bars to a 0–100 axis', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'bar_stacked_100',
+          title: 'Mix',
+          x_label: '',
+          y_label: 'Percent',
+          categories: ['East'],
+          series: [
+            { name: 'A', values: [1] },
+            { name: 'B', values: [1] },
+            { name: 'C', values: [2] },
+          ],
+        }}
+        density="comfortable"
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="bar_stacked_100"]')).toBeTruthy();
+    expect(
+      Array.from(container.querySelectorAll('.chart-axes text')).some(node =>
+        (node.textContent || '').includes('100')
+      )
+    ).toBe(true);
+  });
+
+  it('draws horizontal bars with category labels on the left', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'bar_horizontal',
+          title: 'Reach',
+          x_label: 'Percent',
+          y_label: '',
+          categories: ['Brand A', 'Brand B'],
+          series: [{ name: 'Aware', values: [55, 40], letters: ['', 'A'] }],
+        }}
+        density="comfortable"
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="bar_horizontal"]')).toBeTruthy();
+    expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('A');
+    expect(container.textContent).toContain('Brand A');
+  });
+
+  it('draws a donut with an inner hole and column letters', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'donut',
+          title: 'Share',
+          categories: ['East', 'North'],
+          values: [60, 40],
+          letters: ['B', ''],
+        }}
+        density="comfortable"
+      />
+    );
+    expect(
+      container.querySelector('[data-chart-kind="donut"]')?.getAttribute('data-significance')
+    ).toBe('on');
+    expect(container.querySelectorAll('path').length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('B');
+  });
 });

@@ -5,6 +5,7 @@ import {
   withoutStrayEnding,
   outputChecks,
   isInvalidContractLead,
+  isDeferredResultProse,
   isProcedurePlaceholder,
   hasSummaryTable,
   outputCardReady,
@@ -15,6 +16,7 @@ import {
   EMPTY_TURN_ANSWER,
   CONTINUING_TURN_ANSWER,
   UNFINISHED_TURN_ANSWER,
+  readableTurnAnswer,
   visibleTurnAnswer,
   outputTakeaway,
   outputTitle,
@@ -27,6 +29,7 @@ import {
   outputRunIds,
   isClientDeckResult,
   clientDeckReportHref,
+  analysisSlideHref,
 } from './chat-output';
 
 const answer = [
@@ -645,6 +648,45 @@ describe('chat output panel', () => {
     expect(withoutResultTokens('See {{table:r2}}.')).toBe('See .');
   });
 
+  it('TEN-40: strips scalar placeholders and never shows them as the reply', () => {
+    expect(
+      withoutResultTokens('The run is status {{r1.ok}}, and no projected thousands came back.')
+    ).not.toContain('{{');
+    expect(isInvalidContractLead('The run is status {{r1.ok}}.')).toBe(true);
+    expect(isDeferredResultProse('The run is status {{r1.ok}}.')).toBe(true);
+    const finding = 'Brand Alpha leads at 71.1%, ahead of Brand Beta 58.3%.';
+    expect(
+      resultLead('The run is status {{r1.ok}}, and no figures came back.', [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
+    expect(visibleTurnAnswer('ok', 'status {{r1.ok}}')).toBe(EMPTY_TURN_ANSWER);
+    expect(keptModelAnswer('status {{r1.ok}}', finding)).toContain('71.1%');
+    expect(
+      readableTurnAnswer('ok', 'status {{r1.ok}}', [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
+    expect(
+      readableTurnAnswer('ok', EMPTY_TURN_ANSWER, [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('71.1%');
+  });
+
+  it('TEN-192: denial drafts before the banner lands are deferred prose', () => {
+    const denial =
+      'The engine has not returned any figures for this table. The run is status , and no projected thousands came back.';
+    expect(isDeferredResultProse(denial)).toBe(true);
+    expect(
+      isDeferredResultProse('Current status: pending. Once it finishes, I will give you the reach.')
+    ).toBe(true);
+    const finding = 'Brand Alpha leads at 71.1%.';
+    expect(
+      readableTurnAnswer('ok', denial, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('71.1%');
+  });
+
   it('names a funnel that follows a saved column as Funnel', () => {
     const results = [
       { procedure: 'compute', summary: { line: 'compute; n=800' } },
@@ -963,6 +1005,11 @@ describe('chat output panel', () => {
         { procedure: 'funnel', ok: true, result: { run_id: 'funnel' } },
       ])[0]
     ).toBe('funnel');
+  });
+
+  it('opens a pinned analysis on its slide', () => {
+    expect(analysisSlideHref('/flow/p/1', 'run-1')).toBe('/flow/p/1/report?pane=slides&run=run-1');
+    expect(analysisSlideHref('/flow/p/1')).toBe('/flow/p/1/report?pane=slides');
   });
 
   it('treats a finished client deck as a Report card, not Outputs', () => {

@@ -37,10 +37,14 @@ import {
   hasSummaryTable,
   isClientDeckResult,
   analysisReportHref,
+  analysisSlideHref,
   clientDeckReportHref,
   isProcedurePlaceholder,
   keptModelAnswer,
-  visibleTurnAnswer,
+  readableTurnAnswer,
+  EMPTY_TURN_ANSWER,
+  CONTINUING_TURN_ANSWER,
+  UNFINISHED_TURN_ANSWER,
   outputKind,
   outputRunIds,
   outputStat,
@@ -427,9 +431,10 @@ export function useAgentThread({
             if (watchToken !== turnTokenRef.current && !clientDeckStillPending(next)) {
               return;
             }
-            const nextAnswer = visibleTurnAnswer(
+            const nextAnswer = readableTurnAnswer(
               next.status,
-              keptModelAnswer('', next.answer_markdown || '')
+              keptModelAnswer('', next.answer_markdown || ''),
+              next.tool_results
             );
             shown(() => {
               setAnswer(nextAnswer);
@@ -746,9 +751,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = visibleTurnAnswer(
+        const kept = readableTurnAnswer(
           result.status,
-          keptModelAnswer(draft, result.answer_markdown || '')
+          keptModelAnswer(draft, result.answer_markdown || ''),
+          result.tool_results
         );
         const suggestions =
           result.status === 'awaiting_approval'
@@ -929,9 +935,10 @@ export function useAgentThread({
         const traced = replyLines(result);
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
-        const kept = visibleTurnAnswer(
+        const kept = readableTurnAnswer(
           result.status,
-          keptModelAnswer(streamedRef.current, result.answer_markdown || '')
+          keptModelAnswer(streamedRef.current, result.answer_markdown || ''),
+          result.tool_results
         );
         const suggestions =
           result.status === 'awaiting_approval'
@@ -1111,7 +1118,8 @@ export function useAgentThread({
                 ? nextStepsForResult(restoredTurn, columnLabels, reportPinsRef.current.length > 0)
                 : []
             );
-            setDownloads([]);
+            // Hydrate from exports.key even when the saved turn omitted downloads[].
+            setDownloads(restoredTurn && !pending ? downloadEntries(restoredTurn) : []);
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
@@ -1119,10 +1127,38 @@ export function useAgentThread({
             // Failed tool steps still leave tool_results; only a ready output opens the column.
             setPanelOpen(outputCardReady(restoredTurn, Boolean(pending)));
           });
-          // Resume deck progress polling when reopening a chat mid-build.
-          if (restoredTurn && !pending) {
+          // Reopen: resolve a finished job immediately, then keep watching if still live.
+          // Saved turns often stay on mid-build status after the job completed in the background.
+          if (restoredTurn && !pending && clientDeckStillPending(restoredTurn)) {
             const watchToken = ++turnTokenRef.current;
-            startDeckWatch(restoredTurn, watchToken);
+            void import('@/lib/client-deck-job').then(
+              async ({ resolvePendingClientDeckInResponse }) => {
+                if (token !== openToken.current || controller.signal.aborted) return;
+                const resolved = await resolvePendingClientDeckInResponse(restoredTurn, {
+                  datasetId: datasetIdRef.current,
+                  signal: controller.signal,
+                });
+                if (token !== openToken.current || controller.signal.aborted) return;
+                const nextAnswer = readableTurnAnswer(
+                  resolved.status,
+                  keptModelAnswer('', resolved.answer_markdown || ''),
+                  resolved.tool_results
+                );
+                shown(() => {
+                  setAnswer(nextAnswer);
+                  setTurn(resolved);
+                  setDownloads(downloadEntries(resolved));
+                  setNextSteps(
+                    nextStepsForResult(resolved, columnLabels, reportPinsRef.current.length > 0)
+                  );
+                  setPanelOpen(outputCardReady(resolved, false));
+                });
+                onFinishedRef.current?.(resolved);
+                if (clientDeckStillPending(resolved)) {
+                  startDeckWatch(resolved, watchToken);
+                }
+              }
+            );
           }
         })
         .catch(err => {
@@ -1198,6 +1234,29 @@ export function useAgentThread({
   }, [projectId, question]);
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
+  // TEN-192: when a pending banner finishes on poll, replace deferred chat prose with the lead.
+  useEffect(() => {
+    if (!toolResults?.length || runBusy) return;
+    const next = readableTurnAnswer(turn?.status || 'ok', answer, toolResults);
+    if (!next || next === answer) return;
+    if (
+      !isDeferredResultProse(answer) &&
+      answer !== EMPTY_TURN_ANSWER &&
+      answer !== CONTINUING_TURN_ANSWER &&
+      answer !== UNFINISHED_TURN_ANSWER &&
+      !/\{\{|\}\}/.test(answer)
+    ) {
+      return;
+    }
+    if (
+      isDeferredResultProse(next) ||
+      next === EMPTY_TURN_ANSWER ||
+      next === CONTINUING_TURN_ANSWER
+    ) {
+      return;
+    }
+    setAnswer(next);
+  }, [toolResults, answer, turn?.status, runBusy]);
   const kind = outputKind(toolResults);
   const clientDeck = isClientDeckResult(toolResults);
   const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);
@@ -1228,8 +1287,14 @@ export function useAgentThread({
       )
     )
   );
-  // Never leave a pending/deferred promise as the chat body after the run (TEN-192).
-  const prose = isDeferredResultProse(proseRaw) ? '' : proseRaw;
+  // Never leave a pending/deferred / "did not finish" stub as the chat body (TEN-242).
+  const prose =
+    proseRaw === EMPTY_TURN_ANSWER ||
+    proseRaw === CONTINUING_TURN_ANSWER ||
+    proseRaw === UNFINISHED_TURN_ANSWER ||
+    isDeferredResultProse(proseRaw)
+      ? ''
+      : proseRaw;
   const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
@@ -1640,6 +1705,7 @@ export function AgentThreadColumn({
                 ['Weight', thread.resultView.weight],
                 ['Wave', thread.resultView.wave],
                 ['Source', thread.resultView.source],
+                ['Test', thread.resultView.test],
               ] as const
             )
               .filter(([, value]) => Boolean(value))
@@ -1803,10 +1869,10 @@ export function AgentThreadColumn({
                       onClick={() => {
                         if (!thread.datasetId) return;
                         thread.setStatus('Exporting PowerPoint…');
-                        void import('@/lib/office-deck-job')
-                          .then(({ exportOfficeDeckAndDownload }) =>
-                            exportOfficeDeckAndDownload(thread.datasetId!, 'deck', {
-                              fill_report: false,
+                        void import('@/lib/client-deck-job')
+                          .then(({ exportClientDeckAgain }) =>
+                            exportClientDeckAgain(thread.datasetId!, thread.turn?.tool_results, {
+                              onProgress: message => thread.setStatus(message),
                             })
                           )
                           .then(() => thread.setStatus('PowerPoint downloaded.'))
@@ -1832,9 +1898,13 @@ export function AgentThreadColumn({
                   ) : (
                     <Link
                       className="flow-btn primary"
-                      href={analysisReportHref(projectHref, thread.runIds[0])}
+                      href={
+                        inReport
+                          ? analysisSlideHref(projectHref, thread.runIds[0])
+                          : analysisReportHref(projectHref, thread.runIds[0])
+                      }
                     >
-                      Open
+                      {inReport ? 'Open in report' : 'Open'}
                     </Link>
                   )}
                   {asker ? null : (
@@ -1846,25 +1916,44 @@ export function AgentThreadColumn({
                         onClick={() => {
                           if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
                           const runId = thread.runIds[0];
-                          void savePin(thread.projectId, thread.datasetId, {
-                            id: runId,
-                            runId,
-                            datasetId: thread.datasetId,
-                            headline: thread.title,
-                            support: thread.takeaway,
-                            citation: thread.kind,
-                            afterId: '',
-                            deck: true,
-                            topline: true,
-                            keepLive: true,
-                          })
-                            .then(() => {
-                              thread.setStatus('Added to the report.');
-                              router.push(analysisReportHref(projectHref, runId));
-                            })
-                            .catch(() =>
-                              thread.setStatus('That result could not be added to the report.')
-                            );
+                          const datasetId = thread.datasetId;
+                          const projectId = thread.projectId;
+                          void (async () => {
+                            const { fetchAnalysisRun } = await import('@/lib/analysis-runs');
+                            const { enrichPinFromRunDocument, runDocument } =
+                              await import('@/components/flow/run-document');
+                            let pin = {
+                              id: `pin-${runId}`,
+                              runId,
+                              datasetId,
+                              headline: thread.title,
+                              support: thread.takeaway,
+                              citation: thread.kind,
+                              afterId: '',
+                              deck: true,
+                              topline: true,
+                              keepLive: true,
+                            };
+                            const run = await fetchAnalysisRun(runId);
+                            if (run) {
+                              const enriched = enrichPinFromRunDocument(
+                                pin,
+                                runDocument({
+                                  op: run.op,
+                                  title: run.report?.meta?.title,
+                                  report: run.report,
+                                  result: run.result,
+                                  created_at: run.created_at,
+                                })
+                              );
+                              pin = { ...enriched, datasetId };
+                            }
+                            await savePin(projectId, datasetId, pin);
+                            thread.setStatus('Added to the report.');
+                            router.push(analysisSlideHref(projectHref, runId));
+                          })().catch(() =>
+                            thread.setStatus('That result could not be added to the report.')
+                          );
                         }}
                       >
                         {inReport ? 'In report' : 'Add to report'}

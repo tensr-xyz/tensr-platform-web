@@ -19,9 +19,11 @@ import { Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
+import { analysisSlideHref } from '@/components/flow/chat-output';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
 import {
   documentApa,
+  enrichPinFromRunDocument,
   runDocument,
   type ReportPin,
   type RunTable,
@@ -484,9 +486,21 @@ export function OutputPage({
             <div className="output-card">
               <span className="output-card-label">Used in</span>
               {pin ? (
-                <div className="output-used">
-                  <strong>Report · Key findings</strong>
-                  <span>{pin.headline}</span>
+                <div className="output-used-links">
+                  <Link
+                    className="output-used-link"
+                    href={`/flow/p/${projectId}/report?pane=overview`}
+                  >
+                    <strong>Report · Key findings</strong>
+                    <span>{pin.headline || 'Finding'}</span>
+                  </Link>
+                  <Link
+                    className="output-used-link"
+                    href={analysisSlideHref(`/flow/p/${projectId}`, runId)}
+                  >
+                    <strong>Client deck · slide</strong>
+                    <span>{pin.headline || document.title || 'Pinned output'}</span>
+                  </Link>
                 </div>
               ) : (
                 <p className="flow-muted">Not in the report yet.</p>
@@ -753,8 +767,29 @@ function AddToReport({
     };
     setSaving(true);
     setSaveError('');
-    void savePin(projectId, datasetId, pin)
-      .then(onClose)
+    void (async () => {
+      const { fetchAnalysisRun } = await import('@/lib/analysis-runs');
+      let next = pin;
+      const run = await fetchAnalysisRun(runId);
+      if (run) {
+        const document = runDocument({
+          op: run.op,
+          title: run.report?.meta?.title,
+          report: run.report,
+          result: run.result,
+          created_at: run.created_at,
+        });
+        // Keep the user's edited wording; only fill bars from the run.
+        const enriched = enrichPinFromRunDocument(next, document);
+        next = {
+          ...enriched,
+          headline: pin.headline,
+          support: pin.support || enriched.support,
+        };
+      }
+      await savePin(projectId, datasetId, next);
+      onClose();
+    })()
       .catch(err =>
         setSaveError(err instanceof Error ? err.message : 'Could not add to the report')
       )

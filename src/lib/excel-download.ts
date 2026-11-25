@@ -68,26 +68,53 @@ export type ExportDownload = {
   expires?: number;
 };
 
+function pushExportDownload(
+  found: ExportDownload[],
+  seen: Set<string>,
+  source: Record<string, unknown> | null | undefined
+): void {
+  if (!source) return;
+  const filename =
+    (typeof source.filename === 'string' && source.filename) ||
+    (typeof source.name === 'string' && source.name) ||
+    '';
+  const key = typeof source.key === 'string' ? source.key : '';
+  if (!filename || !key || seen.has(key)) return;
+  seen.add(key);
+  found.push({
+    filename,
+    key,
+    expires: typeof source.expires === 'number' ? source.expires : undefined,
+  });
+}
+
 /** Signed files on a tool result. The URL is left on the wire and is not kept. */
 export function downloadsFromToolResults(
   results: Array<Record<string, unknown>> | undefined
 ): ExportDownload[] {
   if (!results?.length) return [];
   const found: ExportDownload[] = [];
+  const seen = new Set<string>();
   for (const entry of results) {
     const downloads = entry.downloads;
-    if (!Array.isArray(downloads)) continue;
-    for (const item of downloads) {
-      if (!item || typeof item !== 'object') continue;
-      const file = item as Record<string, unknown>;
-      const filename = typeof file.filename === 'string' ? file.filename : '';
-      const key = typeof file.key === 'string' ? file.key : '';
-      if (!filename || !key) continue;
-      found.push({
-        filename,
-        key,
-        expires: typeof file.expires === 'number' ? file.expires : undefined,
-      });
+    if (Array.isArray(downloads)) {
+      for (const item of downloads) {
+        if (!item || typeof item !== 'object') continue;
+        pushExportDownload(found, seen, item as Record<string, unknown>);
+      }
+    }
+    // Finished client-deck turns often store the file on exports / top-level
+    // key (saved session) without a downloads[] array — still offer Download.
+    pushExportDownload(found, seen, entry);
+    if (entry.exports && typeof entry.exports === 'object') {
+      pushExportDownload(found, seen, entry.exports as Record<string, unknown>);
+    }
+    if (entry.result && typeof entry.result === 'object') {
+      const nested = entry.result as Record<string, unknown>;
+      pushExportDownload(found, seen, nested);
+      if (nested.exports && typeof nested.exports === 'object') {
+        pushExportDownload(found, seen, nested.exports as Record<string, unknown>);
+      }
     }
   }
   return found;

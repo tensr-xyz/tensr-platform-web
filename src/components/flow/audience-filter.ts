@@ -141,6 +141,17 @@ function valuePhrase(column: FlowColumn, value: unknown): string {
 
 function clauseText(item: StoredFilter, columns: FlowColumn[]): string {
   if (Array.isArray(item.filters) && !item.column) {
+    if (item.op === 'not' && item.filters.length === 1 && item.filters[0]?.column) {
+      const leaf = item.filters[0];
+      const column = columnByName(columns, leaf.column);
+      const label = column ? questionLabel(column) : '';
+      if (!column || !label || label === column.name) return '';
+      const shown = valuePhrase(column, leaf.value);
+      const head = [questionCode(column), questionLabel(column)].filter(Boolean).join(' ');
+      const multi = Array.isArray(leaf.value) && leaf.value.length > 1;
+      if (!shown) return head;
+      return multi ? `${head} excludes ${shown}` : `${head} is not ${shown}`;
+    }
     const inner = joinClauses(item.filters, item.combine === 'or' ? 'or' : 'and', columns);
     if (!inner) return '';
     return item.op === 'not' ? `not ${inner}` : inner;

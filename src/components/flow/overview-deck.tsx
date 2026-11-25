@@ -347,7 +347,15 @@ export function OverviewDeck({
             label: String(col.label || col.name || '').trim() || String(col.name || ''),
           }));
         setGroupOptions(next);
-        if (!groupColumn && next[0]) setGroupColumn(next[0].value);
+        if (!groupColumn && next[0]) {
+          // Prefer a Market / Region / Country column over Survey wave etc.
+          const marketLike = next.find(option =>
+            /\b(market|region|country|area|geo|territory|nation)\b/i.test(
+              `${option.label} ${option.value}`
+            )
+          );
+          setGroupColumn(marketLike?.value || next[0].value);
+        }
         const weight = String(body.active_weight_label || '').trim();
         if (weight) setMetaWeightLabel(weight);
         const file = String(body.original_filename || body.filename || '').trim();
@@ -367,8 +375,12 @@ export function OverviewDeck({
       return;
     }
     let live = true;
+    const audienceQuery =
+      chosenAudience && !/^total(\s+sample)?$/i.test(chosenAudience.trim())
+        ? `?audience=${encodeURIComponent(chosenAudience.trim())}`
+        : '';
     void flowJson<ColumnValues>(
-      `/datasets/${datasetId}/columns/${encodeURIComponent(groupColumn)}/values`
+      `/datasets/${datasetId}/columns/${encodeURIComponent(groupColumn)}/values${audienceQuery}`
     )
       .then(body => {
         if (!live) return;
@@ -398,7 +410,7 @@ export function OverviewDeck({
     return () => {
       live = false;
     };
-  }, [datasetId, perMarket, groupColumn]);
+  }, [datasetId, perMarket, groupColumn, chosenAudience]);
   const groupColumnLabel =
     groupOptions.find(option => option.value === groupColumn)?.label || 'Market';
   const marketRows = useMemo(() => {

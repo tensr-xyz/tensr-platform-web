@@ -519,3 +519,59 @@ export async function resolvePendingClientDeckInResponse(
   if (!job) return response;
   return applyClientDeckJobSnapshot(response, job, datasetId);
 }
+
+/** export_id / signed key from a finished build_client_deck tool result. */
+export function clientDeckExportRef(
+  results: AgentLoopToolResult[] | undefined
+): { exportId: string; key: string; filename: string } | null {
+  if (!results?.length) return null;
+  for (const entry of results) {
+    const payload =
+      entry?.result && typeof entry.result === 'object'
+        ? (entry.result as Record<string, unknown>)
+        : null;
+    if (!payload) continue;
+    const procedure = String(entry.name || payload.procedure || '');
+    if (procedure !== 'build_client_deck' && payload.procedure !== 'build_client_deck') {
+      continue;
+    }
+    const exports =
+      payload.exports && typeof payload.exports === 'object'
+        ? (payload.exports as Record<string, unknown>)
+        : null;
+    const exportId = String(payload.export_id || exports?.export_id || '').trim();
+    const key = String(payload.key || exports?.key || '').trim();
+    const filename =
+      String(payload.filename || exports?.filename || 'client-deck.pptx').trim() ||
+      'client-deck.pptx';
+    if (exportId || key) return { exportId, key, filename };
+  }
+  return null;
+}
+
+/**
+ * Download the finished client deck again. Prefer the stored export_id (stable),
+ * then the signed chat key, then rebuild from the Report via /export/deck.
+ */
+export async function exportClientDeckAgain(
+  datasetId: string,
+  results: AgentLoopToolResult[] | undefined,
+  opts?: { onProgress?: (message: string) => void }
+): Promise<void> {
+  const ref = clientDeckExportRef(results);
+  if (ref?.exportId) {
+    opts?.onProgress?.('Downloading PowerPoint…');
+    const { downloadExport } = await import('@/components/flow/survey-screens');
+    await downloadExport(`/exports/${ref.exportId}`, ref.filename);
+    return;
+  }
+  if (ref?.key) {
+    opts?.onProgress?.('Downloading PowerPoint…');
+    const { openSignedDownload } = await import('@/lib/excel-download');
+    await openSignedDownload({ filename: ref.filename, key: ref.key });
+    return;
+  }
+  opts?.onProgress?.('Building the PowerPoint file…');
+  const { exportOfficeDeckAndDownload } = await import('@/lib/office-deck-job');
+  await exportOfficeDeckAndDownload(datasetId, 'client-deck', { fill_report: false }, opts);
+}

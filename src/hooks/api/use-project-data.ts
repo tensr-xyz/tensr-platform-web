@@ -55,6 +55,17 @@ export function useDatasetColumns(datasetId: string | undefined | null) {
   });
 }
 
+/** 5xx: one retry. 4xx: never. Other network blips: up to three. */
+export function shouldRetryProjectQuery(failureCount: number, error: unknown): boolean {
+  const status =
+    error && typeof error === 'object' && 'status' in error
+      ? Number((error as { status?: unknown }).status)
+      : NaN;
+  if (status >= 400 && status < 500) return false;
+  if (status >= 500) return failureCount < 1;
+  return failureCount < 3;
+}
+
 export function useProjectOverview(
   projectId: string | undefined | null,
   fileKey: string,
@@ -66,6 +77,7 @@ export function useProjectOverview(
     enabled: Boolean(projectId) && enabled,
     staleTime: PROJECT_STALE_MS.tables,
     refetchOnMount: true,
+    retry: shouldRetryProjectQuery,
   });
 }
 
@@ -217,6 +229,7 @@ export async function prefetchProjectTab(
         queryKey: projectQueryKeys.overview(projectId, fileKey),
         queryFn: () => flowJson<ProjectOverviewPayload>(overviewPath(projectId, fileKey)),
         staleTime: PROJECT_STALE_MS.tables,
+        retry: shouldRetryProjectQuery,
       })
     );
     if (datasetId) {
@@ -283,6 +296,7 @@ export type DatasetAudiencesPayload = {
     share?: number;
     weighted_share?: number | null;
     projected_people?: number | null;
+    used_in?: number;
   }[];
   unmatched?: string[];
 };
