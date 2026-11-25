@@ -437,13 +437,15 @@ export function readableTurnAnswer(
 ): string {
   const kept = visibleTurnAnswer(status, text);
   if (status === 'awaiting_approval') return kept;
+  // TEN-242: "model call failed" is not a finished reply when the card has numbers.
   const unfinished =
     !kept ||
     kept === EMPTY_TURN_ANSWER ||
     kept === CONTINUING_TURN_ANSWER ||
     kept === UNFINISHED_TURN_ANSWER ||
     /\{\{|\}\}/.test(kept) ||
-    isDeferredResultProse(kept);
+    isDeferredResultProse(kept) ||
+    /model call failed|this turn stopped/i.test(kept);
   if (!unfinished) return kept;
   const salvaged = resultLead(kept, results).trim();
   if (salvaged && salvaged !== EMPTY_TURN_ANSWER && !/\{\{|\}\}/.test(salvaged)) {
@@ -894,6 +896,7 @@ function summaryLine(
         : undefined;
     const summary = item?.summary || nestedSummary;
     if (typeof summary?.line === 'string') push(summary.line);
+    if (typeof summary?.statistic === 'string') push(summary.statistic);
     // Report answer is the same contract when the summary line was stripped.
     for (const layer of [item?.result, nested]) {
       if (!layer || typeof layer !== 'object') continue;
@@ -902,6 +905,26 @@ function summaryLine(
       const block = report as { answer_from_result?: unknown; answer?: unknown };
       if (block.answer_from_result === true && typeof block.answer === 'string') {
         push(block.answer);
+      }
+    }
+    // TEN-242: empty line with a finished table still yields a readable lead.
+    if (!lines.length && summary && typeof summary === 'object') {
+      const tables = Array.isArray(summary.table) ? summary.table : [];
+      for (const table of tables) {
+        if (!table || typeof table !== 'object') continue;
+        const rows = Array.isArray((table as { rows?: unknown }).rows)
+          ? ((table as { rows: unknown[] }).rows as unknown[])
+          : [];
+        const bits: string[] = [];
+        for (const row of rows.slice(0, 6)) {
+          if (!Array.isArray(row) || row.length < 2) continue;
+          const label = String(row[0] ?? '').trim();
+          const value = String(row[1] ?? '').trim();
+          if (!label || !value || !/\d/.test(value)) continue;
+          if (/^(total|base|missing)$/i.test(label)) continue;
+          bits.push(`${label} ${value}`);
+        }
+        if (bits.length) push(bits.join('; ') + '.');
       }
     }
   }
@@ -1188,7 +1211,10 @@ export function outputCardReady(
   turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
   plan: boolean
 ): boolean {
-  if (!turn || turn.status !== 'ok') return false;
+  if (!turn) return false;
+  // TEN-242: model-unavailable with a finished table still opens the card (Paper 14b).
+  const statusOk = turn.status === 'ok' || turn.status === 'llm_unavailable';
+  if (!statusOk) return false;
   // A plan with no table yet is still the approval card. A table in the stream opens the panel.
   if (plan) return hasSummaryTable(turn.tool_results);
   if (outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results)) return true;

@@ -342,6 +342,51 @@ describe('chat output panel', () => {
     expect(failed.toLowerCase()).not.toContain('model call failed');
   });
 
+  it('TEN-242: salvages model-failed / empty replies and opens the card from a finished table', () => {
+    const finding = 'Reach is 21.3% for Title Alpha.';
+    expect(
+      readableTurnAnswer('llm_unavailable', 'The model call failed, so this turn stopped.', [
+        { procedure: 'banner_table', summary: { line: finding } },
+      ])
+    ).toContain('21.3');
+    expect(
+      readableTurnAnswer('ok', EMPTY_TURN_ANSWER, [
+        {
+          procedure: 'banner_table',
+          summary: {
+            line: '',
+            table: [
+              {
+                title: 'Reach',
+                columns: ['', 'Audience'],
+                rows: [
+                  ['Title Alpha', '21.3%'],
+                  ['Title Beta', '49.7%'],
+                ],
+              },
+            ],
+          },
+        },
+      ])
+    ).toMatch(/21\.3/);
+    expect(
+      outputCardReady(
+        {
+          status: 'llm_unavailable',
+          tool_results: [
+            {
+              ok: true,
+              procedure: 'banner_table',
+              run_id: 'run-1',
+              summary: { line: finding },
+            },
+          ],
+        },
+        false
+      )
+    ).toBe(true);
+  });
+
   it('titles a yes or no card with the question', () => {
     const results = [
       {
