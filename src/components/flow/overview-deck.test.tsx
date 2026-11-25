@@ -21,7 +21,8 @@ jest.mock('@/lib/flow-api', () => ({
     if (String(path).includes('/metadata')) {
       return {
         columns: [
-          { name: 'region', label: 'Region', measure: 'nominal' },
+          { name: 'wave', label: 'Survey wave', measure: 'nominal' },
+          { name: 'region', label: 'Market', measure: 'nominal' },
           { name: 'weight', label: 'Weight', measure: 'numeric' },
         ],
         active_weight_label: 'Projection weight (people)',
@@ -92,9 +93,12 @@ describe('the deck and refresh screens', () => {
 
   it('shows the market table and builds one deck per selected ready market', async () => {
     const onBuild = jest.fn(async () => undefined);
+    const { flowJson } = jest.requireMock('@/lib/flow-api') as {
+      flowJson: jest.Mock;
+    };
     render(
       <OverviewDeck
-        audience="Total sample"
+        audience="Weekday readers"
         datasetId="ds-1"
         dataLabel="audience_w2.sav"
         onBuild={onBuild}
@@ -107,6 +111,8 @@ describe('the deck and refresh screens', () => {
     expect(screen.getByText('Base under 50 · skipped')).toBeTruthy();
     expect(screen.getByText('Respondents')).toBeTruthy();
     expect(screen.getByText('Audience (people)')).toBeTruthy();
+    // Prefer Market over Survey wave when both are categorical.
+    await waitFor(() => expect(onBuild).not.toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Build 2 decks' }));
     await waitFor(() => expect(onBuild).toHaveBeenCalled());
     expect(onBuild.mock.calls[0][0].perMarket).toEqual({
@@ -114,7 +120,17 @@ describe('the deck and refresh screens', () => {
       values: ['North', 'South'],
     });
     expect(
-      await screen.findByText(/Downloaded 2 decks for Total sample\. Saved one recipe per market/)
+      flowJson.mock.calls.some(
+        (args: unknown[]) =>
+          typeof args[0] === 'string' &&
+          String(args[0]).includes('/values') &&
+          String(args[0]).includes('audience=Weekday%20readers')
+      )
+    ).toBe(true);
+    expect(
+      await screen.findByText(
+        /Downloaded 2 decks for Weekday readers\. Saved one recipe per market/
+      )
     ).toBeTruthy();
   });
 
