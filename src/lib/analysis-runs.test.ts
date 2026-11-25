@@ -1,5 +1,6 @@
 import {
   analysisEnvelopeFromStoredRun,
+  attachStoredRuns,
   canRevealConsumedRows,
   displayedProvenance,
   formatRunLabel,
@@ -16,6 +17,49 @@ import {
   sourceRowsUsedLabel,
 } from './analysis-runs';
 import type { StoredAnalysisRun } from './analysis-runs';
+
+describe('attachStoredRuns', () => {
+  it('TEN-192: rebuilds a pending summary from the finished report answer', () => {
+    const runs: StoredAnalysisRun[] = [
+      {
+        id: 'run-banner',
+        dataset_id: '11111111-1111-4111-8111-111111111111',
+        op: 'banner_table',
+        created_at: '2026-01-01T00:00:00.000Z',
+        status: 'complete',
+        result: {
+          title: 'Reach of FT, WSJ and NYT among US institutional investors',
+          letter_test:
+            'Column proportions test at 95%. A letter marks a value significantly higher than that column.',
+          banner_columns: [{ id: 'aud', label: 'US institutional investors' }],
+          rows: [],
+          cells: [],
+        },
+        report: {
+          answer: 'FT leads at 21.3% (1,029.1 thousand).',
+          answer_from_result: true,
+          meta: { title: 'Reach of FT, WSJ and NYT among US institutional investors' },
+        } as StoredAnalysisRun['report'],
+      },
+    ];
+    const attached = attachStoredRuns(
+      [
+        {
+          procedure: 'banner_table',
+          run_id: 'run-banner',
+          summary: { line: 'Current status: pending…', pending: true },
+          result: { run_id: 'run-banner', pending: true },
+        },
+      ],
+      runs
+    ) as Array<Record<string, unknown>>;
+    const summary = attached[0].summary as Record<string, unknown>;
+    expect(summary.pending).toBe(false);
+    expect(String(summary.line)).toContain('21.3%');
+    expect(String(summary.letter_test)).toContain('higher');
+    expect(String(summary.title)).toContain('Reach of');
+  });
+});
 
 describe('normalizeAnalysisRunSummary', () => {
   it('keeps the stored title and does not invent a report', () => {

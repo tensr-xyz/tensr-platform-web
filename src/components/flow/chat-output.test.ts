@@ -519,6 +519,17 @@ describe('chat output panel', () => {
     expect(resultLead('brand_duplication; flags: weight_in_use', [])).toBe('');
   });
 
+  it('TEN-192: deferred once-it-finishes prose is never the lead', () => {
+    const deferred =
+      "Current status: pending. Once it finishes, I'll give you the reach and index for each title.";
+    expect(isInvalidContractLead(deferred)).toBe(true);
+    const finding = 'FT leads at 21.3% (1,029.1 thousand), ahead of WSJ 49.7%.';
+    expect(
+      resultLead(deferred, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('21.3%');
+    expect(resultLead(deferred, [])).toBe('');
+  });
+
   it('keeps a funnel lead that already has conversion and high/low figures', () => {
     const apiLine =
       'Aware 100.0%, Tried 40.0% (40.0% from the previous stage), Bought 20.0% (50.0% from the previous stage). ' +

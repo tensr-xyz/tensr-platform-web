@@ -2,6 +2,7 @@ import type { RunTable } from '@/components/flow/run-document';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 import type { DuplicationPanelData } from '@/components/flow/duplication-panel';
+import { bannerHeading } from '@/lib/flow-survey';
 
 export type ResultView = {
   tables: RunTable[];
@@ -1140,9 +1141,25 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
       if (typeof cell.index === 'number') hasIndex = true;
     }
   }
+  const audienceLabel = cell(record.audience_label);
   const headers = ['Item'];
   for (const column of columns) {
-    const heading = cell(column.label) || 'Total';
+    const banner = column as {
+      id?: unknown;
+      label?: unknown;
+      column_label?: unknown;
+      codes?: { column?: string; code?: string }[];
+    };
+    const heading =
+      bannerHeading(
+        {
+          id: cell(banner.id) || 'total',
+          label: cell(banner.label) || undefined,
+          column_label: cell(banner.column_label) || undefined,
+          codes: banner.codes,
+        },
+        audienceLabel
+      ) || 'Total';
     headers.push(columns.length === 1 && heading.toLowerCase() === 'total' ? '%' : `${heading} %`);
     if (hasProjected) {
       headers.push(columns.length === 1 ? 'People (000s)' : `${heading} (000s)`);
@@ -1741,6 +1758,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       }
     }
     notes(record.notes);
+    // Book-level letter footnote (chat poll may refresh the book without summary).
+    if (!view.letterNote) {
+      const letter = cell(record.letter_test);
+      if (letter) view.letterNote = letter;
+    }
     if (!view.script && typeof record.r_syntax === 'string' && record.r_syntax.trim()) {
       view.script = record.r_syntax.trim();
     }

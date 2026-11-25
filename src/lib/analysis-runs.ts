@@ -504,16 +504,67 @@ export function attachStoredRuns(results: unknown, runs: StoredAnalysisRun[]): u
     const id = String(record.run_id || nested?.run_id || '');
     const stored = byId.get(id);
     if (!stored) return item;
+    const envelope = analysisEnvelopeFromStoredRun(
+      stored,
+      nested && typeof nested === 'object' ? nested : null
+    );
+    const finished = String(stored.status || '').toLowerCase() === 'complete';
+    const priorSummary =
+      record.summary && typeof record.summary === 'object'
+        ? (record.summary as Record<string, unknown>)
+        : {};
+    const rebuilt = finished ? summaryFromStoredRun(stored, priorSummary) : priorSummary;
     return {
       ...record,
       analysis_type: stored.op || record.analysis_type,
       procedure: stored.op || record.procedure,
-      result: analysisEnvelopeFromStoredRun(
-        stored,
-        nested && typeof nested === 'object' ? nested : null
-      ),
+      ...(Object.keys(rebuilt).length ? { summary: rebuilt } : {}),
+      result: envelope,
     };
   });
+}
+
+/** Prefer the finished report/book lead over a stale pending summary (TEN-192). */
+function summaryFromStoredRun(
+  stored: StoredAnalysisRun,
+  prior: Record<string, unknown>
+): Record<string, unknown> {
+  const report =
+    stored.report && typeof stored.report === 'object'
+      ? (stored.report as Record<string, unknown>)
+      : {};
+  const book =
+    stored.result && typeof stored.result === 'object'
+      ? (stored.result as Record<string, unknown>)
+      : {};
+  const answer =
+    (typeof report.answer === 'string' && report.answer_from_result === true
+      ? report.answer
+      : '') ||
+    (typeof report.answer === 'string' ? report.answer : '') ||
+    '';
+  const letter =
+    (typeof book.letter_test === 'string' && book.letter_test.trim()) ||
+    (typeof prior.letter_test === 'string' && prior.letter_test.trim()) ||
+    '';
+  const title =
+    (typeof book.title === 'string' && book.title.trim()) ||
+    (typeof (report.meta as { title?: unknown } | undefined)?.title === 'string'
+      ? String((report.meta as { title?: string }).title)
+      : '') ||
+    (typeof prior.title === 'string' ? prior.title : '');
+  const line =
+    answer.trim() ||
+    (typeof prior.line === 'string' && !/pending|building the table|banner_table/i.test(prior.line)
+      ? prior.line
+      : '');
+  return {
+    ...prior,
+    pending: false,
+    ...(line ? { line } : { line: '' }),
+    ...(title ? { title } : {}),
+    ...(letter ? { letter_test: letter } : {}),
+  };
 }
 
 export function analysisEnvelopeFromStoredRun(

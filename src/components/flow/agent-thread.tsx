@@ -48,6 +48,7 @@ import {
   outputTitle,
   resultLead,
   guardUserText,
+  isDeferredResultProse,
   titledWithQuestion,
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
@@ -1220,13 +1221,15 @@ export function useAgentThread({
     title: titledWithQuestion(table.title, columnLabels),
   }));
   const resultCharts = resultView.charts;
-  const prose = withoutStrayEnding(
+  const proseRaw = withoutStrayEnding(
     answerWithoutBase(
       withoutResultTokens(
         structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
       )
     )
   );
+  // Never leave a pending/deferred promise as the chat body after the run (TEN-192).
+  const prose = isDeferredResultProse(proseRaw) ? '' : proseRaw;
   const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
@@ -1606,9 +1609,22 @@ export function AgentThreadColumn({
               duplication={thread.resultView.duplication}
               audience={thread.resultView.audience}
             />
-          ) : (
-            <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
-          )
+          ) : thread.prose || thread.lead ? (
+            thread.prose ? (
+              <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
+            ) : (
+              <AnalysisResult
+                lead={thread.lead}
+                tables={[]}
+                footnote={thread.footnote}
+                checks={thread.resultChecks}
+                runId={thread.runIds[0]}
+                datasetId={thread.datasetId || undefined}
+                projectId={thread.projectId || undefined}
+                audience={thread.resultView.audience}
+              />
+            )
+          ) : null
         ) : null}
         {asker && thread.answer && !notInData && (!thread.plan || thread.approving) ? (
           <div className="asker-chips" aria-label="How this answer was worked out">

@@ -105,25 +105,38 @@ export type SurveyCell = {
   bannerId?: string;
 };
 
-export function bannerHeading(column: BannerColumn): string {
-  const raw = column.label || column.id;
-  const splitAt = raw.indexOf('=');
-  const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
-  const generic = value.trim().toLowerCase();
-  const variable = (column.column_label || '').trim();
-  // Affirmative 0/1 codes ("1", Selected, Yes) show the item label, not the code.
-  const affirmative =
+function isAffirmativeBannerToken(text: string): boolean {
+  const generic = text.trim().toLowerCase();
+  if (
     generic === 'selected' ||
     generic === 'yes' ||
     generic === 'y' ||
     generic === 'true' ||
-    generic === '1';
+    generic === '1' ||
+    generic === '1.0'
+  ) {
+    return true;
+  }
+  const asNumber = Number(generic);
+  return Number.isFinite(asNumber) && asNumber === 1;
+}
+
+/** Banner column label a person reads. Bare 0/1 codes use the variable / audience name. */
+export function bannerHeading(column: BannerColumn, audienceLabel = ''): string {
+  const raw = column.label || column.id;
+  const splitAt = raw.indexOf('=');
+  const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
+  const generic = value.trim().toLowerCase();
+  const variable = (column.column_label || audienceLabel || '').trim();
+  // Affirmative 0/1 codes ("1", "1.0", Selected, Yes) show the item label, not the code.
+  const affirmative = isAffirmativeBannerToken(value);
   const negative =
     generic === 'not selected' ||
     generic === 'no' ||
     generic === 'n' ||
     generic === 'false' ||
-    generic === '0';
+    generic === '0' ||
+    generic === '0.0';
   if (
     (affirmative || negative) &&
     variable &&
@@ -140,7 +153,10 @@ export function bannerHeading(column: BannerColumn): string {
     return split >= 0 ? label.slice(split + 1) : label;
   }
   const code = column.codes?.[0]?.code;
-  if (code != null && String(code).trim()) return String(code);
+  if (code != null && String(code).trim() && !isAffirmativeBannerToken(String(code))) {
+    return String(code);
+  }
+  if (audienceLabel.trim() && affirmative) return audienceLabel.trim();
   const split = label.indexOf('=');
   return split >= 0 ? label.slice(split + 1) : label;
 }

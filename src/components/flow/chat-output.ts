@@ -155,6 +155,8 @@ export function isInvalidContractLead(text: string): boolean {
   const low = raw.toLowerCase();
   if (/building the (?:table|deck)/i.test(low)) return true;
   if (/current status:\s*pending|status:\s*pending|status is pending/i.test(low)) return true;
+  if (/once it finishes|once the table finishes/i.test(low)) return true;
+  if (/i(?:'|’)?ll give you|i will give you/i.test(low)) return true;
   if (/here is the table\.?$/i.test(low)) return true;
   if (/^[a-z][a-z0-9_]*(?:\s*;\s*)?flags:\s*[\w,\s]+$/i.test(raw)) return true;
   if (
@@ -166,6 +168,16 @@ export function isInvalidContractLead(text: string): boolean {
     return true;
   }
   return false;
+}
+
+/** Deferred promise / pending status is not chat prose once a result exists (TEN-192). */
+export function isDeferredResultProse(text: string): boolean {
+  const low = String(text || '')
+    .trim()
+    .toLowerCase();
+  if (!low) return false;
+  if (isInvalidContractLead(low)) return true;
+  return /still building|table is still pending|pull (?:the body|its figures)/i.test(low);
 }
 
 /** The statistic line from the result, else the one sentence of the answer that carries it. */
@@ -509,9 +521,10 @@ export function resultLead(
       prose
     );
   if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
-  // TEN-188 / TEN-40: pending / failed-model prose must not beat a finished result line.
+  // TEN-188 / TEN-40 / TEN-192: pending / deferred / failed-model prose must not beat a finished result line.
   const pendingOrFailedProse =
-    /still building|current status:\s*pending|status:\s*pending|status is pending|flags:\s*\w|reports?\s+(?:banner_table|brand_duplication)|model call failed|this turn stopped|building the table/i.test(
+    isDeferredResultProse(prose) ||
+    /flags:\s*\w|reports?\s+(?:banner_table|brand_duplication)|model call failed|this turn stopped/i.test(
       prose
     );
   if (pendingOrFailedProse && finding) return guardUserText(withoutStrayEnding(finding));
