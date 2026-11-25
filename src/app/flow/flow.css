@@ -11298,7 +11298,31 @@ button.chat-result-top {
   gap: 2px;
 }
 
+.output-used-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.output-used-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.output-used-link:hover strong {
+  color: var(--color-accent);
+}
+
 .output-used strong,
+.output-used-link strong,
 .output-version strong,
 .output-auto strong {
   font-size: 13px;
@@ -11306,6 +11330,7 @@ button.chat-result-top {
 }
 
 .output-used span,
+.output-used-link span,
 .output-version span,
 .output-auto span {
   color: var(--color-muted);
@@ -16684,6 +16709,43 @@ button.audience-op {
 .report-editor-object-label {
   color: var(--color-muted);
   font-size: 12px;
+}
+
+.report-editor-chart-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-width: 0;
+  padding: 4px 2px;
+}
+
+.report-editor-chart-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.report-editor-chart-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-ink);
+  font-size: 11px;
+}
+
+.report-editor-chart-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-well, #f6f6f3);
+}
+
+.report-editor-chart-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
 }
 
 .report-editor-live-value {

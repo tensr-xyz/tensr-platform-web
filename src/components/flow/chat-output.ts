@@ -789,6 +789,14 @@ export function analysisReportHref(projectHref: string, runId?: string | null): 
   return `${projectHref}/report?pane=outputs`;
 }
 
+/** Open Report › Slides on the page for a pinned analysis (or the deck shell). */
+export function analysisSlideHref(projectHref: string, runId?: string | null): string {
+  if (runId) {
+    return `${projectHref}/report?pane=slides&run=${encodeURIComponent(runId)}`;
+  }
+  return `${projectHref}/report?pane=slides`;
+}
+
 /** Open Report › Slides for a client deck. */
 export function clientDeckReportHref(projectHref: string): string {
   return `${projectHref}/report?pane=slides`;

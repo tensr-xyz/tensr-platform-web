@@ -29,6 +29,7 @@ import {
   outputRunIds,
   isClientDeckResult,
   clientDeckReportHref,
+  analysisSlideHref,
 } from './chat-output';
 
 const answer = [
@@ -1004,6 +1005,11 @@ describe('chat output panel', () => {
         { procedure: 'funnel', ok: true, result: { run_id: 'funnel' } },
       ])[0]
     ).toBe('funnel');
+  });
+
+  it('opens a pinned analysis on its slide', () => {
+    expect(analysisSlideHref('/flow/p/1', 'run-1')).toBe('/flow/p/1/report?pane=slides&run=run-1');
+    expect(analysisSlideHref('/flow/p/1')).toBe('/flow/p/1/report?pane=slides');
   });
 
   it('treats a finished client deck as a Report card, not Outputs', () => {

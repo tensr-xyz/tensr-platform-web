@@ -61,6 +61,7 @@ import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import {
   analysisReportHref,
+  analysisSlideHref,
   baseCount,
   outputOpenHref,
   outputTableTabLabel,
@@ -131,6 +132,7 @@ import { RecipeEditorDialog } from '@/components/flow/recipe-editor-dialog';
 import { ProjectPresenceAvatars, useProjectPresence } from '@/components/flow/project-presence';
 import {
   documentApa,
+  enrichPinFromRunDocument,
   pinIsThin,
   pinStory,
   placePins,
@@ -3048,24 +3050,37 @@ function ChatScreen({
       setStatus('That result could not be added to the report.');
       return;
     }
-    void savePin(chatProjectId, datasetId, {
-      id: runId,
-      runId,
-      datasetId,
-      headline: title,
-      support: takeaway,
-      citation: kind,
-      afterId: '',
-      deck: true,
-      topline: true,
-      keepLive: true,
-    })
-      .then(() => {
-        setReportedRun(runId);
-        setStatus('Added to the report.');
-        router.push(analysisReportHref(projectHref, runId));
-      })
-      .catch(() => setStatus('That result could not be added to the report.'));
+    void (async () => {
+      let pin = {
+        id: `pin-${runId}`,
+        runId,
+        datasetId,
+        headline: title,
+        support: takeaway,
+        citation: kind,
+        afterId: '',
+        deck: true,
+        topline: true,
+        keepLive: true,
+        bars: [] as { label: string; percent: number }[],
+      };
+      const run = await fetchAnalysisRun(runId);
+      if (run) {
+        const document = runDocument({
+          op: run.op,
+          title: run.report?.meta?.title,
+          report: run.report,
+          result: run.result,
+          created_at: run.created_at,
+        });
+        const enriched = enrichPinFromRunDocument(pin, document);
+        pin = { ...enriched, datasetId, bars: enriched.bars || [] };
+      }
+      await savePin(chatProjectId, datasetId, pin);
+      setReportedRun(runId);
+      setStatus('Added to the report.');
+      router.push(analysisSlideHref(projectHref, runId));
+    })().catch(() => setStatus('That result could not be added to the report.'));
   };
   const exportRun = (format: 'pdf' | 'docx' | 'html' | 'pptx', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
@@ -3481,12 +3496,14 @@ function ChatScreen({
                     <Link
                       className="flow-btn primary"
                       href={
-                        runIds[0]
-                          ? analysisReportHref(projectHref, runIds[0])
-                          : analysisReportHref(projectHref)
+                        inReport && runIds[0]
+                          ? analysisSlideHref(projectHref, runIds[0])
+                          : runIds[0]
+                            ? analysisReportHref(projectHref, runIds[0])
+                            : analysisReportHref(projectHref)
                       }
                     >
-                      Open
+                      {inReport ? 'Open in report' : 'Open'}
                     </Link>
                     {structuredTables.length ? (
                       <Button
@@ -3513,9 +3530,26 @@ function ChatScreen({
                   </div>
                   <div>
                     <div className="flow-muted">Used in</div>
-                    <span className="output-badge">
-                      {inReport ? 'This chat · in the report' : 'This chat · not in the report yet'}
-                    </span>
+                    {inReport && runIds[0] ? (
+                      <div className="output-used-links">
+                        <Link
+                          className="output-used-link"
+                          href={`/flow/p/${chatProjectId}/report?pane=overview`}
+                        >
+                          <strong>Report · Key findings</strong>
+                          <span>{title || 'Finding'}</span>
+                        </Link>
+                        <Link
+                          className="output-used-link"
+                          href={analysisSlideHref(projectHref, runIds[0])}
+                        >
+                          <strong>Client deck · slide</strong>
+                          <span>{title || 'Pinned output'}</span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <span className="output-badge">This chat · not in the report yet</span>
+                    )}
                   </div>
                   {downloads.length > 0 || runIds.length > 0 ? (
                     <div className="output-export">
@@ -6313,6 +6347,7 @@ function ReportScreen({
           datasetId={exportFileId || null}
           pins={reportPins}
           labelsRevision={labelsRevision}
+          focusRunId={openRunId}
         />
       </section>
     );

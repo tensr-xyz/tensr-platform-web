@@ -60,14 +60,14 @@ export function initialReportView(projectId: string, paneParam: string | null): 
   return reportViewFromPaneParam(paneParam) || readStoredReportView(projectId) || 'overview';
 }
 
-/** Report URL for a specific view (and optional output run to select). */
+/** Report URL for a specific view (and optional output/slide run to select). */
 export function reportViewHref(
   projectHref: string,
   view: ReportView,
   runId?: string | null
 ): string {
   const base = `${projectHref}/report?pane=${view}`;
-  if (view === 'outputs' && runId) {
+  if (runId && (view === 'outputs' || view === 'slides')) {
     return `${base}&run=${encodeURIComponent(runId)}`;
   }
   return base;

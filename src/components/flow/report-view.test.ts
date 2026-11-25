@@ -52,6 +52,9 @@ describe('report view storage', () => {
     expect(reportViewHref('/flow/p/1', 'outputs', 'run-9')).toBe(
       '/flow/p/1/report?pane=outputs&run=run-9'
     );
+    expect(reportViewHref('/flow/p/1', 'slides', 'run-9')).toBe(
+      '/flow/p/1/report?pane=slides&run=run-9'
+    );
     expect(reportViewHref('/flow/p/1', 'overview', 'run-9')).toBe('/flow/p/1/report?pane=overview');
   });
 });

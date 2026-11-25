@@ -37,6 +37,7 @@ import {
   hasSummaryTable,
   isClientDeckResult,
   analysisReportHref,
+  analysisSlideHref,
   clientDeckReportHref,
   isProcedurePlaceholder,
   keptModelAnswer,
@@ -1867,9 +1868,13 @@ export function AgentThreadColumn({
                   ) : (
                     <Link
                       className="flow-btn primary"
-                      href={analysisReportHref(projectHref, thread.runIds[0])}
+                      href={
+                        inReport
+                          ? analysisSlideHref(projectHref, thread.runIds[0])
+                          : analysisReportHref(projectHref, thread.runIds[0])
+                      }
                     >
-                      Open
+                      {inReport ? 'Open in report' : 'Open'}
                     </Link>
                   )}
                   {asker ? null : (
@@ -1881,25 +1886,44 @@ export function AgentThreadColumn({
                         onClick={() => {
                           if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
                           const runId = thread.runIds[0];
-                          void savePin(thread.projectId, thread.datasetId, {
-                            id: runId,
-                            runId,
-                            datasetId: thread.datasetId,
-                            headline: thread.title,
-                            support: thread.takeaway,
-                            citation: thread.kind,
-                            afterId: '',
-                            deck: true,
-                            topline: true,
-                            keepLive: true,
-                          })
-                            .then(() => {
-                              thread.setStatus('Added to the report.');
-                              router.push(analysisReportHref(projectHref, runId));
-                            })
-                            .catch(() =>
-                              thread.setStatus('That result could not be added to the report.')
-                            );
+                          const datasetId = thread.datasetId;
+                          const projectId = thread.projectId;
+                          void (async () => {
+                            const { fetchAnalysisRun } = await import('@/lib/analysis-runs');
+                            const { enrichPinFromRunDocument, runDocument } =
+                              await import('@/components/flow/run-document');
+                            let pin = {
+                              id: `pin-${runId}`,
+                              runId,
+                              datasetId,
+                              headline: thread.title,
+                              support: thread.takeaway,
+                              citation: thread.kind,
+                              afterId: '',
+                              deck: true,
+                              topline: true,
+                              keepLive: true,
+                            };
+                            const run = await fetchAnalysisRun(runId);
+                            if (run) {
+                              const enriched = enrichPinFromRunDocument(
+                                pin,
+                                runDocument({
+                                  op: run.op,
+                                  title: run.report?.meta?.title,
+                                  report: run.report,
+                                  result: run.result,
+                                  created_at: run.created_at,
+                                })
+                              );
+                              pin = { ...enriched, datasetId };
+                            }
+                            await savePin(projectId, datasetId, pin);
+                            thread.setStatus('Added to the report.');
+                            router.push(analysisSlideHref(projectHref, runId));
+                          })().catch(() =>
+                            thread.setStatus('That result could not be added to the report.')
+                          );
                         }}
                       >
                         {inReport ? 'In report' : 'Add to report'}
