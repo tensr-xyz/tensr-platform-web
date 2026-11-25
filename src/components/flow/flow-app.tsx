@@ -3258,13 +3258,19 @@ function ChatScreen({
           <Skeleton className="h-8 w-full" />
         ) : (
           <>
-            {recipes.map(recipe => {
+            {recipes.map((recipe, recipeIndex) => {
               const steps = Array.isArray(recipe.ops)
                 ? recipe.ops.filter(step => (step as { op?: string } | null)?.op !== 'import')
                     .length
                 : 0;
               return (
-                <div key={recipe.recipe_id}>
+                <div
+                  key={
+                    recipe.recipe_id
+                      ? `${recipe.recipe_id}:${recipeIndex}`
+                      : `recipe-${recipeIndex}`
+                  }
+                >
                   <div className="chat-recipe-row">
                     <Button
                       className="chat-recipe"

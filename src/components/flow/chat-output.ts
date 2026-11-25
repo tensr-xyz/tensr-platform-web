@@ -181,8 +181,12 @@ export function isDeferredResultProse(text: string): boolean {
   if (/\{\{|\}\}/.test(raw)) return true;
   const low = raw.toLowerCase();
   if (isInvalidContractLead(low)) return true;
+  // TEN-40: internal run ids must never appear as the chat reply.
+  if (/\brun\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(raw)) {
+    return true;
+  }
   // TEN-192: denial drafts written before the banner landed are not a reply.
-  return /still building|table is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending/i.test(
+  return /still building|table is still pending|is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending|no column percentages/i.test(
     low
   );
 }

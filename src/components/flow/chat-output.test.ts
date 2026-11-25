@@ -707,6 +707,19 @@ describe('chat output panel', () => {
     ).toContain('71.1%');
   });
 
+  it('TEN-40: a reply that names a pending run id is deferred prose', () => {
+    const leaked =
+      'Run 7b5bf2b3-af60-4794-8cac-ce83b7d42756 is still pending: it has no column percentages.';
+    expect(isDeferredResultProse(leaked)).toBe(true);
+    const finding = 'Brand Alpha leads at 71.1%.';
+    expect(
+      readableTurnAnswer('ok', leaked, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('71.1%');
+    expect(
+      readableTurnAnswer('ok', leaked, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).not.toMatch(/7b5bf2b3/i);
+  });
+
   it('names a funnel that follows a saved column as Funnel', () => {
     const results = [
       { procedure: 'compute', summary: { line: 'compute; n=800' } },
