@@ -8,6 +8,7 @@ import {
   overviewDeckPayload,
   overviewMarketBatchPayload,
   refreshDecksBatchPayload,
+  withOverviewSlideSupport,
 } from './overview-deck';
 
 jest.mock('@/lib/output-pptx', () => ({
@@ -42,6 +43,15 @@ jest.mock('@/lib/flow-api', () => ({
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
 
 describe('the deck and refresh screens', () => {
+  it('greys the audience profile slide when no audience is selected', () => {
+    const slides = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Total sample');
+    const profile = slides.find(slide => slide.id === 'profile');
+    expect(profile?.unsupported).toBe(true);
+    expect(profile?.reason).toMatch(/audience/i);
+    const ready = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Weekday readers');
+    expect(ready.find(slide => slide.id === 'profile')?.unsupported).toBeFalsy();
+  });
+
   it('lists the template slides, the low-base flag, and the saved recipe', async () => {
     const onBuild = jest.fn(async () => undefined);
     render(
@@ -67,6 +77,7 @@ describe('the deck and refresh screens', () => {
     expect(screen.getByText('9 layouts · theme colours found')).toBeTruthy();
     expect(screen.getByText('Saved as a recipe')).toBeTruthy();
     expect(screen.getByText('Reach by market')).toBeTruthy();
+    expect(screen.getByText('Audience profile')).toBeTruthy();
     expect(screen.getByText(/base of 38/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: `Build ${OVERVIEW_SLIDES.length} slides` }));
     await waitFor(() => expect(onBuild).toHaveBeenCalled());

@@ -16128,8 +16128,17 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   border-left: 3px solid var(--color-warn);
 }
 
+.deck-slides li.deck-slide-unsupported {
+  opacity: 0.55;
+  background: var(--color-well);
+}
+
 .deck-low-note {
   color: var(--color-warn);
+}
+
+.deck-unsupported-note {
+  color: var(--color-muted);
 }
 
 .analysis-export-menu {
