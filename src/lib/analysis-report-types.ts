@@ -131,7 +131,7 @@ export type AnalysisReportChart =
       }[];
     } & ChartAxisHints)
   | ({
-      kind: 'bar_grouped';
+      kind: 'bar_grouped' | 'bar_stacked' | 'bar_stacked_100' | 'bar_horizontal';
       title: string;
       x_label: string;
       y_label: string;
@@ -177,7 +177,7 @@ export type AnalysisReportChart =
       }[];
     } & ChartAxisHints)
   | ({
-      kind: 'pie';
+      kind: 'pie' | 'donut';
       title: string;
       categories: string[];
       values: number[];

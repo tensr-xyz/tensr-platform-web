@@ -657,24 +657,194 @@ function ChartBody({
     );
   }
 
-  if (
-    chart.kind === 'bar_grouped' ||
-    chart.kind === 'line' ||
-    chart.kind === 'bar' ||
-    chart.kind === 'area'
-  ) {
+  if (chart.kind === 'bar_horizontal') {
     const { categories, series } = chart;
+    const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
+    // Grouped horizontal: each series is a parallel bar; use max absolute for scale.
     const ySamples = series.flatMap(s =>
       s.values.flatMap((value, index) => {
         const error = s.errors?.[index];
         return error ? [value - error, value, value + error] : [value];
       })
     );
-    const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
     const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
     const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
     const minV = Math.min(0, dataMin);
     const maxRaw = Math.max(dataMax, minV === 0 ? 1 : 0);
+    const maxV = hasLetters ? maxRaw + Math.max(0.5, (maxRaw - minV) * 0.08) : maxRaw;
+    const legendMax = baseLayout.density === 'comfortable' ? 28 : 16;
+    const labelChars = baseLayout.density === 'comfortable' ? 28 : 18;
+    const labelPad = Math.min(
+      180,
+      Math.max(
+        72,
+        Math.round(
+          Math.max(...categories.map(c => Math.min(c.length, labelChars))) *
+            baseLayout.fontSize *
+            0.55 +
+            16
+        )
+      )
+    );
+    const legendGutter = Math.min(
+      160,
+      Math.max(72, Math.round(legendMax * baseLayout.fontSize * 0.6 + 20))
+    );
+    const layout = {
+      ...baseLayout,
+      padL: Math.max(baseLayout.padL, labelPad),
+      padR: Math.max(baseLayout.padR, legendGutter),
+      padB: Math.max(baseLayout.padB, chart.x_label ? 36 : 28),
+      plotW:
+        baseLayout.width -
+        Math.max(baseLayout.padL, labelPad) -
+        Math.max(baseLayout.padR, legendGutter),
+      plotH:
+        baseLayout.height - baseLayout.padT - Math.max(baseLayout.padB, chart.x_label ? 36 : 28),
+    };
+    const { padL, padT, plotW, plotH } = layout;
+    const sx = scaleLinear(minV, maxV, padL, padL + plotW);
+    const xZero = sx(0);
+    const ng = categories.length;
+    const ns = series.length;
+    const groupH = plotH / Math.max(1, ng);
+    const inner = groupH * 0.82;
+    const barH = inner / Math.max(1, ns);
+    const gap = groupH * 0.09;
+    const xTicks = ticksInDomain(minV, maxV, layout.maxTicksX).map(v => ({
+      value: v,
+      x: sx(v),
+    }));
+    const footnoteLines = chartFootnoteLines(chart);
+    const footnoteLineH = layout.fontSize + 4;
+    const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
+    const letterSize = Math.max(9, layout.fontSize - 1);
+
+    return (
+      <svg
+        data-chart-kind="bar_horizontal"
+        data-error-bars={errorBarFootnoteLines(chart).length ? 'on' : undefined}
+        data-significance={hasLetters ? 'on' : undefined}
+        viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={layout} title={chart.title} />
+        {categories.flatMap((cat, gi) =>
+          series.map((ser, si) => {
+            const v = ser.values[gi] ?? 0;
+            const y = padT + gi * groupH + gap + si * barH;
+            const xVal = sx(v);
+            const x = Math.min(xZero, xVal);
+            const letter = String(ser.letters?.[gi] || '').trim();
+            const yMid = y + barH / 2;
+            return (
+              <g key={`${gi}-${si}`}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={Math.max(0, Math.abs(xVal - xZero))}
+                  height={Math.max(1, barH - 1)}
+                  fill={seriesFill[si % seriesFill.length]}
+                  rx={1}
+                />
+                {letter ? (
+                  <text
+                    data-chart-letter
+                    x={Math.max(xVal, xZero) + 6}
+                    y={yMid + letterSize * 0.35}
+                    textAnchor="start"
+                    fill="#27272a"
+                    style={{ fontSize: letterSize, fontWeight: 600 }}
+                  >
+                    {letter}
+                  </text>
+                ) : null}
+                {si === 0 ? (
+                  <text
+                    x={padL - 8}
+                    y={padT + gi * groupH + groupH / 2 + layout.fontSize * 0.35}
+                    textAnchor="end"
+                    fill="#71717a"
+                    style={{ fontSize: layout.fontSize }}
+                  >
+                    {truncateLabel(cat, labelChars)}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })
+        )}
+        <AxisFrame
+          layout={layout}
+          xTicks={xTicks}
+          xFormatter={v => formatNumberTick(v, ySamples)}
+          xAxisLabel={chart.x_label}
+          yAxisLabel={chart.y_label}
+        />
+        <g transform={`translate(${padL + plotW + 10} ${padT + 4})`}>
+          {series.map((ser, si) => (
+            <g key={ser.name} transform={`translate(0 ${si * (layout.fontSize + 4)})`}>
+              <rect width={8} height={8} fill={seriesFill[si % seriesFill.length]} rx={1} />
+              <text x={12} y={7} fill="#52525b" style={{ fontSize: layout.fontSize }}>
+                {truncateLabel(ser.name, legendMax)}
+              </text>
+            </g>
+          ))}
+        </g>
+        {footnoteLines.map((line, index) => (
+          <text
+            key={line}
+            data-chart-footnote
+            x={layout.padL}
+            y={layout.height + 2 + (index + 1) * footnoteLineH}
+            fill="#71717a"
+            style={{ fontSize: layout.fontSize }}
+          >
+            {line}
+          </text>
+        ))}
+      </svg>
+    );
+  }
+
+  if (
+    chart.kind === 'bar_grouped' ||
+    chart.kind === 'bar_stacked' ||
+    chart.kind === 'bar_stacked_100' ||
+    chart.kind === 'line' ||
+    chart.kind === 'bar' ||
+    chart.kind === 'area'
+  ) {
+    const { categories, series } = chart;
+    const isStacked = chart.kind === 'bar_stacked' || chart.kind === 'bar_stacked_100';
+    const isPercentStack = chart.kind === 'bar_stacked_100';
+    const stackTotals = categories.map((_, gi) =>
+      series.reduce((sum, ser) => sum + Math.max(0, ser.values[gi] ?? 0), 0)
+    );
+    const stackedValues = series.map(ser =>
+      ser.values.map((value, gi) => {
+        const raw = Math.max(0, value ?? 0);
+        if (!isPercentStack) return raw;
+        const total = stackTotals[gi] || 0;
+        return total > 0 ? (raw / total) * 100 : 0;
+      })
+    );
+    const ySamples = isStacked
+      ? isPercentStack
+        ? [0, 100]
+        : stackTotals
+      : series.flatMap(s =>
+          s.values.flatMap((value, index) => {
+            const error = s.errors?.[index];
+            return error ? [value - error, value, value + error] : [value];
+          })
+        );
+    const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
+    const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
+    const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
+    const minV = Math.min(0, dataMin);
+    const maxRaw = isPercentStack ? 100 : Math.max(dataMax, minV === 0 ? 1 : 0);
     // Leave room above the tallest bar/point for column letters.
     const maxV = hasLetters ? maxRaw + Math.max(0.5, (maxRaw - minV) * 0.1) : maxRaw;
     const catsAreDates =
@@ -715,7 +885,7 @@ function ChartBody({
     const ns = series.length;
     const groupW = plotW / Math.max(1, ng);
     const inner = groupW * 0.88;
-    const barW = inner / Math.max(1, ns);
+    const barW = isStacked ? inner : inner / Math.max(1, ns);
     const gap = groupW * 0.06;
     const isArea = chart.kind === 'area';
     const isLine = chart.kind === 'line' || isArea;
@@ -803,59 +973,108 @@ function ChartBody({
                 </g>
               );
             })
-          : categories.flatMap((_, gi) =>
-              series.map((ser, si) => {
-                const v = ser.values[gi] ?? 0;
-                const x = padL + gi * groupW + gap + si * barW;
-                const yVal = sy(v);
-                const y = Math.min(yZero, yVal);
-                const error = ser.errors?.[gi];
+          : isStacked
+            ? categories.flatMap((_, gi) => {
+                let cursor = 0;
+                const x = padL + gi * groupW + gap;
                 const xMid = x + barW / 2;
-                const letter = String(ser.letters?.[gi] || '').trim();
-                const letterY = Math.min(yVal, yZero) - 4;
-                return (
-                  <g key={`${gi}-${si}`}>
-                    <rect
-                      x={x}
-                      y={y}
-                      width={Math.max(1, barW - 1)}
-                      height={Math.max(0, Math.abs(yZero - yVal))}
-                      fill={seriesFill[si % seriesFill.length]}
-                      rx={1}
-                    />
-                    {error ? (
-                      <g stroke="#27272a" strokeWidth={1.2}>
-                        <line x1={xMid} x2={xMid} y1={sy(v - error)} y2={sy(v + error)} />
-                        <line
-                          x1={xMid - capHalf}
-                          x2={xMid + capHalf}
-                          y1={sy(v - error)}
-                          y2={sy(v - error)}
-                        />
-                        <line
-                          x1={xMid - capHalf}
-                          x2={xMid + capHalf}
-                          y1={sy(v + error)}
-                          y2={sy(v + error)}
-                        />
-                      </g>
-                    ) : null}
-                    {letter ? (
-                      <text
-                        data-chart-letter
-                        x={xMid}
-                        y={letterY}
-                        textAnchor="middle"
-                        fill="#27272a"
-                        style={{ fontSize: letterSize, fontWeight: 600 }}
-                      >
-                        {letter}
-                      </text>
-                    ) : null}
-                  </g>
-                );
+                return series.map((ser, si) => {
+                  const v = stackedValues[si]?.[gi] ?? 0;
+                  const yBottom = sy(cursor);
+                  cursor += v;
+                  const yTop = sy(cursor);
+                  const letter = String(ser.letters?.[gi] || '').trim();
+                  const segH = Math.abs(yBottom - yTop);
+                  return (
+                    <g key={`${gi}-${si}`}>
+                      <rect
+                        x={x}
+                        y={Math.min(yTop, yBottom)}
+                        width={Math.max(1, barW - 1)}
+                        height={Math.max(0, segH)}
+                        fill={seriesFill[si % seriesFill.length]}
+                        rx={si === ns - 1 || si === 0 ? 1 : 0}
+                      />
+                      {letter && segH >= letterSize + 2 ? (
+                        <text
+                          data-chart-letter
+                          x={xMid}
+                          y={(yTop + yBottom) / 2 + letterSize * 0.35}
+                          textAnchor="middle"
+                          fill="#27272a"
+                          style={{ fontSize: letterSize, fontWeight: 600 }}
+                        >
+                          {letter}
+                        </text>
+                      ) : letter ? (
+                        <text
+                          data-chart-letter
+                          x={xMid}
+                          y={Math.min(yTop, yBottom) - 4}
+                          textAnchor="middle"
+                          fill="#27272a"
+                          style={{ fontSize: letterSize, fontWeight: 600 }}
+                        >
+                          {letter}
+                        </text>
+                      ) : null}
+                    </g>
+                  );
+                });
               })
-            )}
+            : categories.flatMap((_, gi) =>
+                series.map((ser, si) => {
+                  const v = ser.values[gi] ?? 0;
+                  const x = padL + gi * groupW + gap + si * barW;
+                  const yVal = sy(v);
+                  const y = Math.min(yZero, yVal);
+                  const error = ser.errors?.[gi];
+                  const xMid = x + barW / 2;
+                  const letter = String(ser.letters?.[gi] || '').trim();
+                  const letterY = Math.min(yVal, yZero) - 4;
+                  return (
+                    <g key={`${gi}-${si}`}>
+                      <rect
+                        x={x}
+                        y={y}
+                        width={Math.max(1, barW - 1)}
+                        height={Math.max(0, Math.abs(yZero - yVal))}
+                        fill={seriesFill[si % seriesFill.length]}
+                        rx={1}
+                      />
+                      {error ? (
+                        <g stroke="#27272a" strokeWidth={1.2}>
+                          <line x1={xMid} x2={xMid} y1={sy(v - error)} y2={sy(v + error)} />
+                          <line
+                            x1={xMid - capHalf}
+                            x2={xMid + capHalf}
+                            y1={sy(v - error)}
+                            y2={sy(v - error)}
+                          />
+                          <line
+                            x1={xMid - capHalf}
+                            x2={xMid + capHalf}
+                            y1={sy(v + error)}
+                            y2={sy(v + error)}
+                          />
+                        </g>
+                      ) : null}
+                      {letter ? (
+                        <text
+                          data-chart-letter
+                          x={xMid}
+                          y={letterY}
+                          textAnchor="middle"
+                          fill="#27272a"
+                          style={{ fontSize: letterSize, fontWeight: 600 }}
+                        >
+                          {letter}
+                        </text>
+                      ) : null}
+                    </g>
+                  );
+                })
+              )}
         {minV < 0 ? (
           <line
             x1={padL}
@@ -1159,12 +1378,14 @@ function ChartBody({
     );
   }
 
-  if (chart.kind === 'pie') {
+  if (chart.kind === 'pie' || chart.kind === 'donut') {
     const layout = baseLayout;
+    const isDonut = chart.kind === 'donut';
     const total = chart.values.reduce((sum, value) => sum + Math.max(0, value), 0);
     const cx = layout.padL + layout.plotW / 2;
     const cy = layout.padT + layout.plotH / 2;
     const r = Math.max(8, Math.min(layout.plotW, layout.plotH) / 2 - 8);
+    const innerR = isDonut ? r * 0.55 : 0;
     const hasLetters = (chart.letters || []).some(letter => String(letter || '').trim());
     const footnoteLines = chartFootnoteLines(chart);
     const footnoteLineH = layout.fontSize + 4;
@@ -1180,26 +1401,37 @@ function ChartBody({
       const y1 = cy + r * Math.sin(start);
       const x2 = cx + r * Math.cos(start + sweep);
       const y2 = cy + r * Math.sin(start + sweep);
+      const ix1 = cx + innerR * Math.cos(start + sweep);
+      const iy1 = cy + innerR * Math.sin(start + sweep);
+      const ix2 = cx + innerR * Math.cos(start);
+      const iy2 = cy + innerR * Math.sin(start);
       const mid = start + sweep / 2;
       const letter = String(chart.letters?.[i] || '').trim();
+      const labelR = isDonut ? (r + innerR) / 2 : r + 14;
       const d =
         sweep <= 0
           ? ''
-          : sweep >= Math.PI * 2 - 0.0001
-            ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
-            : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+          : isDonut
+            ? sweep >= Math.PI * 2 - 0.0001
+              ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} ` +
+                `L ${cx - 0.01} ${cy - innerR} A ${innerR} ${innerR} 0 1 0 ${cx} ${cy - innerR} Z`
+              : `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} ` +
+                `L ${ix1} ${iy1} A ${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2} Z`
+            : sweep >= Math.PI * 2 - 0.0001
+              ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
+              : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
       return {
         d,
         label,
         fill: seriesFill[i % seriesFill.length],
         letter,
-        lx: cx + (r + 14) * Math.cos(mid),
-        ly: cy + (r + 14) * Math.sin(mid),
+        lx: cx + labelR * Math.cos(mid),
+        ly: cy + labelR * Math.sin(mid),
       };
     });
     return (
       <svg
-        data-chart-kind="pie"
+        data-chart-kind={chart.kind}
         data-significance={hasLetters ? 'on' : undefined}
         viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"

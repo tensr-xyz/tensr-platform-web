@@ -241,7 +241,14 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
         nodeLabels ? `: ${nodeLabels}` : ''
       }.</p></figure>`;
   }
-  if (chart.kind === 'bar_grouped' || chart.kind === 'bar' || chart.kind === 'line') {
+  if (
+    chart.kind === 'bar_grouped' ||
+    chart.kind === 'bar_stacked' ||
+    chart.kind === 'bar_stacked_100' ||
+    chart.kind === 'bar_horizontal' ||
+    chart.kind === 'bar' ||
+    chart.kind === 'line'
+  ) {
     const series = chart.series?.[0];
     const values = series?.values ?? [];
     const max = Math.max(...values.map(v => Math.abs(Number(v) || 0)), 1);
