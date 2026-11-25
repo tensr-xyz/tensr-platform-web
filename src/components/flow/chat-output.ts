@@ -148,6 +148,38 @@ export function isProcedurePlaceholder(text: string): boolean {
   return lines.length > 0 && lines.every(line => /^compute(?:\s*;\s*n=\d+)?\.?$/i.test(line));
 }
 
+/** Empty / tool-name / progress / flags stubs are never a finished lead (TEN-40). */
+export function isInvalidContractLead(text: string): boolean {
+  const raw = String(text || '').trim();
+  if (!raw) return true;
+  const low = raw.toLowerCase();
+  if (/building the (?:table|deck)/i.test(low)) return true;
+  if (/current status:\s*pending|status:\s*pending|status is pending/i.test(low)) return true;
+  if (/once it finishes|once the table finishes/i.test(low)) return true;
+  if (/i(?:'|’)?ll give you|i will give you/i.test(low)) return true;
+  if (/here is the table\.?$/i.test(low)) return true;
+  if (/^[a-z][a-z0-9_]*(?:\s*;\s*)?flags:\s*[\w,\s]+$/i.test(raw)) return true;
+  if (
+    /^(?:banner_table|brand_duplication|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
+      raw
+    ) &&
+    !/\d/.test(raw)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Deferred promise / pending status is not chat prose once a result exists (TEN-192). */
+export function isDeferredResultProse(text: string): boolean {
+  const low = String(text || '')
+    .trim()
+    .toLowerCase();
+  if (!low) return false;
+  if (isInvalidContractLead(low)) return true;
+  return /still building|table is still pending|pull (?:the body|its figures)/i.test(low);
+}
+
 /** The statistic line from the result, else the one sentence of the answer that carries it. */
 export function outputStat(results: ToolResult[] | undefined, answer: string, skip = ''): string {
   for (const item of analysisItems(results)) {
@@ -489,9 +521,10 @@ export function resultLead(
       prose
     );
   if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
-  // TEN-188: pending / failed-model prose must not beat a finished result line.
+  // TEN-188 / TEN-40 / TEN-192: pending / deferred / failed-model prose must not beat a finished result line.
   const pendingOrFailedProse =
-    /still building|status is pending|flags:\s*\w|reports?\s+banner_table|model call failed|this turn stopped|building the table/i.test(
+    isDeferredResultProse(prose) ||
+    /flags:\s*\w|reports?\s+(?:banner_table|brand_duplication)|model call failed|this turn stopped/i.test(
       prose
     );
   if (pendingOrFailedProse && finding) return guardUserText(withoutStrayEnding(finding));
@@ -534,17 +567,16 @@ export function resultLead(
     finding ||
     (pendingOrFailedProse || unfinishedStub ? '' : prose) ||
     (unfinishedStub ? '' : outputTakeaway(answer));
-  // TEN-40: a tool name or progress stub is never the card lead.
+  // TEN-40: a tool name, flags stub, or progress line is never the card lead.
   const stubLead =
-    /^(?:banner_table|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations)\b/i.test(
+    /^(?:banner_table|brand_duplication|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
       text.trim()
-    ) || /building the (?:table|deck)/i.test(text);
+    ) ||
+    /building the (?:table|deck)/i.test(text) ||
+    /current status:\s*pending/i.test(text) ||
+    /^[a-z][a-z0-9_]*(?:\s*;\s*)?flags:\s*[\w,\s]+$/i.test(text.trim());
   const usable =
-    stubLead && finding && !/building the (?:table|deck)/i.test(finding)
-      ? finding
-      : stubLead
-        ? ''
-        : text;
+    stubLead && finding && !isInvalidContractLead(finding) ? finding : stubLead ? '' : text;
   const cleaned = guardUserText(withoutStrayEnding(collapseRepeatedLead(usable)));
   const headline = tables ? funnelHeadline(tables) : '';
   const figures = cleaned.match(/%/g)?.length ?? 0;
@@ -774,7 +806,13 @@ function summaryLine(
     const text = line.trim();
     if (!text || !/[A-Za-z]/.test(text) || !/\d/.test(text)) return;
     // The default summarize stub is the procedure name; it is not a lead.
-    if (/^(banner_table|rake|frequencies|funnel|nps|chi_square|descriptives)\b/i.test(text)) return;
+    if (isInvalidContractLead(text)) return;
+    if (
+      /^(banner_table|brand_duplication|paired_brand_test|rake|frequencies|funnel|nps|chi_square|descriptives)\b/i.test(
+        text
+      )
+    )
+      return;
     if (/flags:\s*\w/i.test(text) || /building the table/i.test(text)) return;
     if (seen.has(text)) return;
     seen.add(text);

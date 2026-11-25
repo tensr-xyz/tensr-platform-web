@@ -4,6 +4,7 @@ import {
   withoutResultTokens,
   withoutStrayEnding,
   outputChecks,
+  isInvalidContractLead,
   isProcedurePlaceholder,
   hasSummaryTable,
   outputCardReady,
@@ -486,6 +487,47 @@ describe('chat output panel', () => {
     expect(
       resultLead('banner_table', [{ procedure: 'banner_table', summary: { line: finding } }])
     ).toContain('leads');
+  });
+
+  it('TEN-40: rejects progress status, tool flags, and prefers finished fields', () => {
+    expect(isInvalidContractLead('Current status: pending…')).toBe(true);
+    expect(isInvalidContractLead('brand_duplication; flags: weight_in_use')).toBe(true);
+    expect(isInvalidContractLead('Title A and Title B share 12k readers.')).toBe(false);
+
+    const bannerFinding = 'Brand Alpha leads at 71.1%, ahead of Brand Beta 58.3%.';
+    expect(
+      resultLead('Current status: pending…', [
+        { procedure: 'banner_table', summary: { line: bannerFinding } },
+      ])
+    ).toContain('leads');
+    expect(
+      resultLead('Current status: pending…', [
+        { procedure: 'banner_table', summary: { line: 'Current status: pending…' } },
+      ])
+    ).toBe('');
+
+    const dupFinding = 'Title A and Title B share 12k readers; together they reach 42.5%.';
+    expect(
+      resultLead('brand_duplication; flags: weight_in_use', [
+        {
+          procedure: 'brand_duplication',
+          summary: { line: dupFinding },
+          result: { kind: 'brand_duplication', summary: { line: dupFinding } },
+        },
+      ])
+    ).toContain('42.5%');
+    expect(resultLead('brand_duplication; flags: weight_in_use', [])).toBe('');
+  });
+
+  it('TEN-192: deferred once-it-finishes prose is never the lead', () => {
+    const deferred =
+      "Current status: pending. Once it finishes, I'll give you the reach and index for each title.";
+    expect(isInvalidContractLead(deferred)).toBe(true);
+    const finding = 'FT leads at 21.3% (1,029.1 thousand), ahead of WSJ 49.7%.';
+    expect(
+      resultLead(deferred, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('21.3%');
+    expect(resultLead(deferred, [])).toBe('');
   });
 
   it('keeps a funnel lead that already has conversion and high/low figures', () => {

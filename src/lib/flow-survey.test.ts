@@ -127,6 +127,16 @@ describe('flow survey grid', () => {
         letter_slot: 'A',
       })
     ).toBe('Institutional investor');
+    expect(
+      bannerHeading(
+        {
+          id: 'inv=1',
+          label: '1.0',
+          letter_slot: 'A',
+        },
+        'US institutional investors'
+      )
+    ).toBe('US institutional investors');
   });
 
   it('shows rake efficiency as a percent', () => {

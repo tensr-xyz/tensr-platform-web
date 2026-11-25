@@ -12,6 +12,7 @@ import { AnalysisResult } from '@/components/flow/analysis-result';
 import {
   answerWithoutBase,
   answerWithoutTables,
+  isDeferredResultProse,
   outputBaseClause,
   outputKind,
   outputRunIds,
@@ -102,9 +103,11 @@ export function ThreadResult({
   const prose = answerWithoutBase(
     withoutResultTokens(tables.length || charts.length ? answerWithoutTables(answer) : answer)
   );
+  // Pending / "once it finishes" promises are not a finished reply (TEN-192).
+  const readable = isDeferredResultProse(prose) ? '' : prose;
   if (!tables.length && !charts.length && !view.duplication) {
-    if (!prose) return null;
-    return <FlowMarkdown className="chat-prose">{prose}</FlowMarkdown>;
+    if (!readable) return null;
+    return <FlowMarkdown className="chat-prose">{readable}</FlowMarkdown>;
   }
   return (
     <AnalysisResult

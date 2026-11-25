@@ -320,7 +320,7 @@ export function significanceFootnoteLine(
   const named = String(book.letter_test || '').trim();
   if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
     // Rebuild from the live confidence so a hard-coded engine string cannot drift.
-    return `Paired McNemar test at ${confidence}%`;
+    return `Paired McNemar test at ${confidence}%. A letter marks a value significantly higher than that column.`;
   }
   const correction =
     mcc === 'none'

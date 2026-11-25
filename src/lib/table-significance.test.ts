@@ -138,6 +138,8 @@ describe('table significance settings', () => {
         },
         { ...DEFAULT_TABLE_SIGNIFICANCE, showAs: 'letters', confidence: 90 }
       )
-    ).toBe('Paired McNemar test at 90%');
+    ).toBe(
+      'Paired McNemar test at 90%. A letter marks a value significantly higher than that column.'
+    );
   });
 });
