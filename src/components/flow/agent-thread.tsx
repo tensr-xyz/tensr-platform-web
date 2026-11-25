@@ -1204,6 +1204,29 @@ export function useAgentThread({
   }, [projectId, question]);
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
+  // TEN-192: when a pending banner finishes on poll, replace deferred chat prose with the lead.
+  useEffect(() => {
+    if (!toolResults?.length || runBusy) return;
+    const next = readableTurnAnswer(turn?.status || 'ok', answer, toolResults);
+    if (!next || next === answer) return;
+    if (
+      !isDeferredResultProse(answer) &&
+      answer !== EMPTY_TURN_ANSWER &&
+      answer !== CONTINUING_TURN_ANSWER &&
+      answer !== UNFINISHED_TURN_ANSWER &&
+      !/\{\{|\}\}/.test(answer)
+    ) {
+      return;
+    }
+    if (
+      isDeferredResultProse(next) ||
+      next === EMPTY_TURN_ANSWER ||
+      next === CONTINUING_TURN_ANSWER
+    ) {
+      return;
+    }
+    setAnswer(next);
+  }, [toolResults, answer, turn?.status, runBusy]);
   const kind = outputKind(toolResults);
   const clientDeck = isClientDeckResult(toolResults);
   const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);

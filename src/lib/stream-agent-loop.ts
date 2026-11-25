@@ -5,8 +5,15 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { AgentLoopResponse, RunAgentLoopParams } from '@/lib/run-agent-loop';
-import { CONTINUING_TURN_ANSWER, visibleTurnAnswer } from '@/components/flow/chat-output';
+import {
+  CONTINUING_TURN_ANSWER,
+  readableTurnAnswer,
+  visibleTurnAnswer,
+} from '@/components/flow/chat-output';
 import { isColdStartStatus } from '@/lib/cold-start-fetch';
+
+/** Match API `_RESUME_HOP_LIMIT` — banners often need more than three polls (TEN-192). */
+const RESUME_HOP_LIMIT = 8;
 
 export type AgentLoopStreamProgress = {
   type: string;
@@ -412,8 +419,11 @@ export async function streamAgentLoop(
 
   if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
     const hops = (params.resumeHops ?? 0) + 1;
-    if (hops > 3) {
-      return withVisibleAnswer({ ...acc.result, status: 'ok' });
+    if (hops > RESUME_HOP_LIMIT) {
+      // Prefer finished summary lines over a blank / deferred stub (TEN-192).
+      const forced = { ...acc.result, status: 'ok' as const };
+      const salvaged = readableTurnAnswer('ok', forced.answer_markdown || '', forced.tool_results);
+      return { ...forced, answer_markdown: salvaged };
     }
     handlers.onDelta?.('\n\n');
     handlers.onProgress?.({

@@ -673,6 +673,19 @@ describe('chat output panel', () => {
     ).toContain('71.1%');
   });
 
+  it('TEN-192: denial drafts before the banner lands are deferred prose', () => {
+    const denial =
+      'The engine has not returned any figures for this table. The run is status , and no projected thousands came back.';
+    expect(isDeferredResultProse(denial)).toBe(true);
+    expect(
+      isDeferredResultProse('Current status: pending. Once it finishes, I will give you the reach.')
+    ).toBe(true);
+    const finding = 'Brand Alpha leads at 71.1%.';
+    expect(
+      readableTurnAnswer('ok', denial, [{ procedure: 'banner_table', summary: { line: finding } }])
+    ).toContain('71.1%');
+  });
+
   it('names a funnel that follows a saved column as Funnel', () => {
     const results = [
       { procedure: 'compute', summary: { line: 'compute; n=800' } },

@@ -180,7 +180,10 @@ export function isDeferredResultProse(text: string): boolean {
   if (/\{\{|\}\}/.test(raw)) return true;
   const low = raw.toLowerCase();
   if (isInvalidContractLead(low)) return true;
-  return /still building|table is still pending|pull (?:the body|its figures)/i.test(low);
+  // TEN-192: denial drafts written before the banner landed are not a reply.
+  return /still building|table is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending/i.test(
+    low
+  );
 }
 
 /** The statistic line from the result, else the one sentence of the answer that carries it. */
