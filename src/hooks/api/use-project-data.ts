@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { shareRequest } from '@/components/flow/report-pins';
 import { flowJson } from '@/lib/flow-api';
 import { PROJECT_STALE_MS, projectQueryKeys } from '@/lib/project-query-cache';
+import { getSessionMe } from '@/lib/session-me-cache';
 
 export type DatasetColumnsPayload = {
   columns?: {
@@ -314,7 +315,8 @@ export type ProjectDetailPayload = {
 
 /** Shared fetchers so every caller hits the same TanStack Query key. */
 export function fetchMe(): Promise<MePayload> {
-  return flowJson<MePayload>('/me');
+  // Same session slot as auth fetchMeProfile — one /api/me on the wire.
+  return getSessionMe(() => flowJson<MePayload>('/api/me'));
 }
 
 export async function fetchProjectMembers(projectId: string): Promise<ProjectMemberRow[]> {
@@ -348,6 +350,20 @@ export function fetchDatasetPreview(datasetId: string): Promise<DatasetPreviewPa
 
 export function fetchProjectDetail(projectId: string): Promise<ProjectDetailPayload> {
   return flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`);
+}
+
+/** Tips-only workspace file list. Shared across home / Datasets; skipped on project tabs. */
+export async function fetchWorkspaceDatasets(): Promise<unknown[]> {
+  const page = await flowJson<unknown[] | { datasets?: unknown[] }>('/datasets?scope=all');
+  return Array.isArray(page) ? page : page.datasets || [];
+}
+
+export function ensureWorkspaceDatasets(client: QueryClient): Promise<unknown[]> {
+  return client.ensureQueryData({
+    queryKey: projectQueryKeys.workspaceDatasets(),
+    queryFn: fetchWorkspaceDatasets,
+    staleTime: PROJECT_STALE_MS.details,
+  });
 }
 
 /** Ensure one in-flight / cached read for session profile. */

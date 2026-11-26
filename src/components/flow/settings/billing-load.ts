@@ -1,5 +1,6 @@
 import { flowJson } from '@/lib/flow-api';
-import { cacheKey, settingsCache } from './settings-cache';
+import { getSessionMe } from '@/lib/session-me-cache';
+import { cacheKey, settingsCache, workspaceKey } from './settings-cache';
 import type { ApiPlan, Invoice, LegacySubscription, MePage } from './settings-data';
 
 export type PlanCatalog = { currency: string; plans: ApiPlan[] };
@@ -29,7 +30,10 @@ export function loadSubscription(): Promise<LegacySubscription | null> {
 }
 
 export function loadMe(): Promise<MePage> {
-  return settingsCache.get(cacheKey('me'), () => flowJson<MePage>('/api/me'));
+  // Same session /me slot as auth + project hooks (settingsCache is a second layer).
+  return settingsCache.get(cacheKey('me'), () =>
+    getSessionMe(() => flowJson<MePage>('/api/me'), { workspaceKey: workspaceKey() })
+  );
 }
 
 export type UsagePage = {

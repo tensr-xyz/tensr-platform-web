@@ -17,6 +17,7 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
 import { Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { fetchMe } from '@/hooks/api/use-project-data';
 import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
 import { analysisSlideHref } from '@/components/flow/chat-output';
@@ -202,7 +203,7 @@ export function OutputPage({
 
   useEffect(() => {
     let live = true;
-    void flowJson<{ active_organization?: { id?: string } }>('/me')
+    void fetchMe()
       .then(async me => {
         const orgId = me.active_organization?.id || '';
         const [members, workspace] = await Promise.all([

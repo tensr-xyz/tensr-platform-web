@@ -88,39 +88,63 @@ export function themeQuestionStem(label: string): string {
     .trim();
 }
 
-/** True when a coded open end stores every mentioned theme (pipe-joined). */
+/**
+ * True when a coded open end stores every mentioned theme (pipe-joined).
+ * Prefer the outline kind (single vs multi) over the column name: a main-theme
+ * column can still end in ``_themes`` when coding did not set ``_first_theme``.
+ */
 export function isCodedMultiThemeColumn(
   column: Pick<
     FlowColumn,
-    'name' | 'label' | 'coded_multi' | 'multi_response' | 'source_text_column' | 'codeframe'
-  >
+    | 'name'
+    | 'label'
+    | 'coded_multi'
+    | 'multi_response'
+    | 'code_delimiter'
+    | 'source_text_column'
+    | 'codeframe'
+  >,
+  kind?: string
 ): boolean {
   if (isMainThemeColumnName(column.name)) return false;
   const label = String(column.label || '');
   if (/\bfirst theme$/i.test(label) || /\bthemes \(main theme\)$/i.test(label)) {
     return false;
   }
-  if (column.coded_multi || column.multi_response) return true;
-  if (isCodedColumnName(column.name)) return true;
-  // Open-end coding defaults to multi-response when flags are absent.
-  return true;
+  const kindKey = String(kind || '')
+    .trim()
+    .toLowerCase();
+  // Outline / picker type wins: single-code themes are never "all mentioned".
+  if (kindKey === 'single' || kindKey.startsWith('scale')) return false;
+  if (kindKey === 'multi') return true;
+  if (column.coded_multi || column.multi_response || column.code_delimiter) return true;
+  // ``*_themes`` / ``*_codes`` without multi flags is often a main-theme column.
+  if (isCodedColumnName(column.name)) return false;
+  return false;
 }
 
 /**
  * Outline title for a coded themes column. Single vs multi always differ, including
- * older files that still store the same ``…themes`` label on both.
+ * older files that still store the same ``…themes`` / ``…(all mentioned)`` label on both.
  */
 export function outlineCodedThemeLabel(
   column: Pick<
     FlowColumn,
-    'name' | 'label' | 'source_text_column' | 'coded_multi' | 'multi_response' | 'codeframe'
-  >
+    | 'name'
+    | 'label'
+    | 'source_text_column'
+    | 'coded_multi'
+    | 'multi_response'
+    | 'code_delimiter'
+    | 'codeframe'
+  >,
+  kind?: string
 ): string {
   const raw = String(column.label || column.name || '').trim();
   if (!isCodedOpenEndColumn(column) && !isMainThemeColumnName(column.name)) {
     return raw;
   }
-  const multi = isCodedMultiThemeColumn(column);
+  const multi = isCodedMultiThemeColumn(column, kind);
   const suffix = multi ? 'themes (all mentioned)' : 'themes (main theme)';
   if (multi && /\bthemes \(all mentioned\)$/i.test(raw)) return raw;
   if (!multi && /\bthemes \(main theme\)$/i.test(raw)) return raw;
@@ -605,14 +629,15 @@ export function questionnaireOutline(
       });
       continue;
     }
+    const kind = kinds[column.name] || questionKind(column, []);
     const outlineLabel =
       isCodedOpenEndColumn(column) || isMainThemeColumnName(column.name)
-        ? outlineCodedThemeLabel(column)
+        ? outlineCodedThemeLabel(column, kind)
         : String(column.label || column.name);
     units.push({
       key: column.name,
       label: outlineLabel,
-      kind: kinds[column.name] || questionKind(column, []),
+      kind,
       columns: [column.name],
       stubValue: column.name,
       measureColumn: column.name,

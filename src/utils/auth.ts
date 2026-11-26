@@ -1,5 +1,6 @@
 import { PERSONAL_ACCOUNT_KEY } from '@/lib/active-organisation';
 import { devLog } from '@/lib/dev-log';
+import { clearSessionMe } from '@/lib/session-me-cache';
 import { STYTCH_SESSION_COOKIE_DAYS } from '@/lib/stytch-session';
 const SESSION_TOKEN_KEY = 'stytch_session_token';
 const SESSION_JWT_KEY = 'stytch_session_jwt';
@@ -199,6 +200,8 @@ export const clearAuthData = () => {
     removeCookie('stytch_id_token');
     removeCookie('stytch_refresh_token');
     sessionStorage.clear();
+    // Drop the shared /me session so the next sign-in loads a fresh profile.
+    clearSessionMe();
   }
 };
 

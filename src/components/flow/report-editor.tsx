@@ -336,6 +336,47 @@ function RunTableGrid({
   );
 }
 
+/**
+ * Page-table grid from analysis-run tables: axes show variable labels, never
+ * bare indexes. Expands a legacy Columns key when the matrix was numbered.
+ */
+export function labelledPageTableFromRunTables(
+  tables: Array<{ title?: string; columns?: string[]; rows?: string[][] }> | null | undefined
+): { title: string; rows: string[][] } | null {
+  if (!Array.isArray(tables) || !tables.length) return null;
+  const keyMap = new Map<string, string>();
+  for (const table of tables) {
+    if (String(table?.title || '').trim() !== 'Columns') continue;
+    for (const row of table.rows || []) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      const number = String(row[0] ?? '').trim();
+      const label = String(row[1] ?? '').trim();
+      if (number && label) keyMap.set(number, label);
+    }
+  }
+  const primary =
+    tables.find(table => {
+      const title = String(table?.title || '').trim();
+      return title && title !== 'Columns';
+    }) || tables[0];
+  if (!primary) return null;
+  const resolve = (cell: unknown): string => {
+    const text = cell == null ? '' : String(cell);
+    const trimmed = text.trim();
+    return keyMap.get(trimmed) || text;
+  };
+  const columns = (primary.columns || []).map(resolve);
+  const body = (primary.rows || []).map(row => {
+    if (!Array.isArray(row) || !row.length) return [] as string[];
+    return [resolve(row[0]), ...row.slice(1).map(cell => (cell == null ? '' : String(cell)))];
+  });
+  if (!columns.length && !body.length) return null;
+  return {
+    title: String(primary.title || '').trim(),
+    rows: columns.length ? [columns, ...body] : body,
+  };
+}
+
 function AnalysisRunTablePreview({
   runId,
   style,
@@ -368,13 +409,13 @@ function AnalysisRunTablePreview({
             result: run.result,
             created_at: run.created_at,
           });
-          const table = document.tables[0];
-          if (!table) {
+          const labelled = labelledPageTableFromRunTables(document.tables);
+          if (!labelled?.rows.length) {
             setPhase('error');
             return;
           }
-          setTitle(table.title || document.title || '');
-          setRows([table.columns, ...table.rows.map(row => [...row])]);
+          setTitle(labelled.title || document.title || '');
+          setRows(labelled.rows);
           setPhase('ready');
         });
       })

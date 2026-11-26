@@ -90,7 +90,7 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
       const poll = async () => {
         attempts += 1;
         try {
-          const profile = await fetchMeProfile();
+          const profile = await fetchMeProfile({ force: true });
           if (cancelled) return;
           setEntitlements(profile.entitlements);
           if (hasActiveSubscription(profile.entitlements)) {
@@ -128,7 +128,9 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
       if (verifyingRef.current) return;
       verifyingRef.current = true;
       try {
-        const profile = await fetchMeProfile();
+        // Paid sessions already have a cached /me from AuthProvider — skip the wire.
+        // Unpaid / unresolved still force a re-check before bouncing to /subscription.
+        const profile = await fetchMeProfile({ force: true });
         if (cancelled) return;
         setProfileError(null);
         setEntitlements(profile.entitlements);

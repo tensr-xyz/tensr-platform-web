@@ -1,6 +1,7 @@
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import { getSessionMe } from '@/lib/session-me-cache';
 import { User } from '@/types/user';
 import { Entitlements } from '@/types/entitlements';
 
@@ -108,22 +109,27 @@ export function storePendingInviteToken(token: string): void {
   sessionStorage.setItem(PENDING_INVITE_TOKEN_KEY, token);
 }
 
-export async function fetchMeProfile(): Promise<MeProfile> {
+export async function fetchMeProfile(options?: { force?: boolean }): Promise<MeProfile> {
+  // One network GET /api/me per workspace session (shared with flow ensureMe / useMe).
   // Use tensrApiUrl so browser calls go through the same-origin /api/tensr proxy
   // (avoids CORS failures that leave entitlements null and trap users on /subscription).
-  // cache: 'no-store' — never reuse a cached /me after session refresh/expiry.
-  const r = await fetch(tensrApiUrl('/api/me'), {
-    headers: authHeaders(),
-    cache: 'no-store',
-  });
-  if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
-  if (!r.ok) {
-    const text = await r.text();
-    const needsEmail = needsEmailFromResponse(r.status, text);
-    if (needsEmail) throw needsEmail;
-    throw new Error(formatApiError(text));
-  }
-  return (await r.json()) as MeProfile;
+  return getSessionMe(
+    async () => {
+      const r = await fetch(tensrApiUrl('/api/me'), {
+        headers: authHeaders(),
+        cache: 'no-store',
+      });
+      if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
+      if (!r.ok) {
+        const text = await r.text();
+        const needsEmail = needsEmailFromResponse(r.status, text);
+        if (needsEmail) throw needsEmail;
+        throw new Error(formatApiError(text));
+      }
+      return (await r.json()) as MeProfile;
+    },
+    { force: options?.force }
+  );
 }
 
 export async function sendSessionEmailCode(

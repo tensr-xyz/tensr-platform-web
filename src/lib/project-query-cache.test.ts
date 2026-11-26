@@ -49,6 +49,7 @@ describe('projectQueryKeys', () => {
     expect(projectQueryKeys.audiences('d1')).toEqual(['project-data', 'audiences', 'd1']);
     expect(projectQueryKeys.detail('p1')).toEqual(['project-data', 'detail', 'p1']);
     expect(projectQueryKeys.datasets('p1')).toEqual(['project-data', 'datasets', 'p1']);
+    expect(projectQueryKeys.workspaceDatasets()).toEqual(['project-data', 'workspaceDatasets']);
   });
 
   it('matches a project id anywhere in the key', () => {

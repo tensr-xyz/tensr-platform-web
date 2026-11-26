@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import { clearSessionMe } from '@/lib/session-me-cache';
 import { ShareDialog } from './share-dialog';
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn((path: string) => {
-    if (path === '/me') {
+    if (path === '/api/me') {
       return Promise.resolve({ active_organization: { id: 'org-1' } });
     }
     if (path.includes('/members') && path.includes('/projects/')) {
@@ -27,6 +28,10 @@ function renderShare(ui: ReactElement) {
 }
 
 describe('ShareDialog', () => {
+  beforeEach(() => {
+    clearSessionMe();
+  });
+
   it('shows Anyone with the link and Share one output only', async () => {
     renderShare(
       <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
@@ -42,7 +47,7 @@ describe('ShareDialog', () => {
       flowJson: jest.Mock;
     };
     flowJson.mockImplementation((path: string) => {
-      if (path === '/me') {
+      if (path === '/api/me') {
         return Promise.resolve({ active_organization: { id: 'org-1', name: 'Acme' } });
       }
       if (path.includes('/members') && path.includes('/projects/')) {
@@ -94,7 +99,7 @@ describe('ShareDialog', () => {
       flowJson: jest.Mock;
     };
     flowJson.mockImplementation((path: string) => {
-      if (path === '/me') {
+      if (path === '/api/me') {
         return Promise.resolve({ active_organization: { id: 'org-1', name: 'Acme' } });
       }
       if (path.includes('/members') && path.includes('/projects/')) {
@@ -163,7 +168,7 @@ describe('ShareDialog', () => {
     const calls: { path: string; init?: RequestInit }[] = [];
     flowJson.mockImplementation((path: string, init?: RequestInit) => {
       calls.push({ path, init });
-      if (path === '/me') {
+      if (path === '/api/me') {
         return Promise.resolve({ active_organization: { id: 'org-1' } });
       }
       if (path.includes('/members') && path.includes('/projects/')) {
@@ -222,7 +227,7 @@ describe('ShareDialog', () => {
       flowJson: jest.Mock;
     };
     flowJson.mockImplementation((path: string) => {
-      if (path === '/me') {
+      if (path === '/api/me') {
         return Promise.resolve({ active_organization: { id: 'org-1' } });
       }
       if (path.includes('/members') && path.includes('/projects/')) {
@@ -262,7 +267,7 @@ describe('ShareDialog', () => {
       flowJson: jest.Mock;
     };
     flowJson.mockImplementation((path: string) => {
-      if (path === '/me') {
+      if (path === '/api/me') {
         return Promise.resolve({ active_organization: { id: 'org-1' } });
       }
       if (path.includes('/members') && path.includes('/projects/')) {
