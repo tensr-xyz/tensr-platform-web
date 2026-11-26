@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ChoiceSelect } from '@/components/ui/select';
 import { ReportChart } from '@/components/molecules/report-chart';
 import {
   BANNER_CHART_KINDS,
@@ -102,17 +103,13 @@ export function TableBars({
           {kind === 'ranked' && rankedLabels.length > 1 ? (
             <label className="table-chart-highlight">
               <span>Highlight</span>
-              <select
+              <ChoiceSelect
                 aria-label="Highlighted answer"
                 value={activeHighlight || ''}
-                onChange={event => setHighlight(event.target.value)}
-              >
-                {rankedLabels.map(label => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setHighlight}
+                options={rankedLabels.map(label => ({ value: label, label }))}
+                placeholder="Highlighted answer"
+              />
             </label>
           ) : null}
           {kind !== 'ranked' ? (

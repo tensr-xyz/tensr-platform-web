@@ -95,6 +95,8 @@ export type RunAgentLoopParams = {
   message: string;
   mode: AgentMode;
   datasetId?: string | null;
+  /** Study project for the chat; required for the one-time study-brief ask. */
+  projectId?: string | null;
   openDatasets?: AgentLoopOpenDataset[];
   conversationHistory?: Array<{ role: string; content: string }>;
   glossary?: string | null;
@@ -174,6 +176,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           message: params.message,
           mode: params.mode,
           datasetId: params.datasetId ?? null,
+          projectId: params.projectId ?? null,
           openDatasets: params.openDatasets ?? [],
           conversationHistory: params.conversationHistory ?? [],
           glossary: params.glossary ?? null,

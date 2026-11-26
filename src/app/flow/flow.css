@@ -2834,7 +2834,7 @@ select.flow-input {
   background: var(--color-accent-soft);
   color: var(--color-accent);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 16px;
 }
 
@@ -2848,7 +2848,7 @@ select.flow-input {
   margin: 0;
   color: var(--color-ink);
   font-size: 26px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: -0.01em;
   line-height: 34px;
 }
@@ -2881,7 +2881,7 @@ select.flow-input {
   margin: 0;
   color: var(--color-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: 0.08em;
   line-height: 16px;
   text-transform: uppercase;
@@ -2902,7 +2902,7 @@ select.flow-input {
 .standout-stats-percent {
   color: var(--color-ink);
   font-size: 40px;
-  font-weight: 700;
+  font-weight: var(--weight-title);
   letter-spacing: -0.02em;
   line-height: 44px;
 }
@@ -2916,7 +2916,7 @@ select.flow-input {
 .standout-stats-index {
   color: var(--color-accent);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   line-height: 16px;
 }
 
