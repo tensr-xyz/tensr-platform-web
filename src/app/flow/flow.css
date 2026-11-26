@@ -17055,6 +17055,13 @@ button.audience-op {
   background: var(--color-accent);
 }
 
+.report-editor-chart-footer {
+  margin: 6px 0 0;
+  color: var(--color-muted, #6a6b66);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .report-editor-live-value {
   color: var(--color-accent);
   font-weight: var(--weight-title);

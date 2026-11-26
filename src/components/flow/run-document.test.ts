@@ -196,4 +196,60 @@ describe('saved run document', () => {
     expect(enriched.bars?.map(bar => bar.percent)).toEqual([30.1, 12]);
     expect(enriched.headline).toBe('Group');
   });
+
+  it('TEN-267: crosstab base rows become the footer, never chart bars', () => {
+    const document = runDocument({
+      op: 'banner',
+      report: {
+        summary: 'NYT leads WSJ on reach.',
+        meta: { title: 'Reach of NYT and WSJ' },
+        tables: [
+          {
+            title: 'Reach',
+            columns: ['Item', 'Total'],
+            rows: [
+              ['The New York Times', '53.3'],
+              ['The Wall Street Journal', '49.7'],
+              ['Weighted base', '4822587.0'],
+              ['Unweighted base', '218.0'],
+              ['Effective base (Kish)', '204.2'],
+              ['DEFF', '1.1'],
+            ],
+          },
+        ],
+      },
+      result: {},
+    });
+    const story = pinStory(document);
+    expect(story.bars.map(bar => bar.label)).toEqual([
+      'The New York Times',
+      'The Wall Street Journal',
+    ]);
+    expect(story.bars.map(bar => bar.percent)).toEqual([53.3, 49.7]);
+    expect(story.baseFooter).toContain('Weighted base 4,822,587');
+    expect(story.baseFooter).toContain('Unweighted base 218');
+    expect(story.baseFooter).toContain('Effective base (Kish) 204.2');
+    expect(story.baseFooter).toMatch(/DEFF 1\.1/);
+    expect(story.baseFooter).not.toContain('%');
+    const enriched = enrichPinFromRunDocument(
+      {
+        id: 'pin-reach',
+        runId: 'run-reach',
+        headline: 'Chat title',
+        support: 'Other commentary.',
+        citation: 'Banner',
+        afterId: '',
+        deck: true,
+        topline: true,
+        keepLive: true,
+        bars: [{ label: 'Weighted base', percent: 4822587 }],
+      },
+      document
+    );
+    expect(enriched.bars?.map(bar => bar.label)).toEqual([
+      'The New York Times',
+      'The Wall Street Journal',
+    ]);
+    expect(enriched.baseFooter).toContain('Weighted base 4,822,587');
+  });
 });

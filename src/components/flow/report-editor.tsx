@@ -77,6 +77,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/rest';
 import { Segmented } from '@/components/ui/segmented';
 import { chartFromBannerBook } from '@/lib/flow-result-charts';
 import { getPageLayout } from '@/lib/report-theme';
+import { isBaseChartLabel } from '@/components/flow/run-document';
 
 const STYLE_PRESETS: { id: string; label: string; style: Partial<TextBoxStyle> }[] = [
   { id: 'headline', label: 'Headline', style: { fontFamily: 'Inter', fontSizePt: 22, bold: true } },
@@ -482,12 +483,20 @@ function ChartObjectPreview({
     ) || null;
   const specId = String(obj.tableSpecId || '').trim();
   const tableQuery = usePageTableBook(datasetId, pageId, specId);
-  const pinBars = (pin?.bars || []).filter(bar => String(bar?.label || '').trim());
+  const pinBars = (pin?.bars || []).filter(bar => {
+    const label = String(bar?.label || '').trim();
+    return label && !isBaseChartLabel(label);
+  });
   const liveBars = useMemo(
     () => (tableQuery.data ? shareBarsFromBannerBook(tableQuery.data) : []),
     [tableQuery.data]
   );
   const bars = pinBars.length ? pinBars : liveBars;
+  const baseFooter = String(
+    (pin as { baseFooter?: string; base_footer?: string } | null)?.baseFooter ||
+      (pin as { baseFooter?: string; base_footer?: string } | null)?.base_footer ||
+      ''
+  ).trim();
   if (!bars.length) {
     if (specId && datasetId && tableQuery.isPending) {
       return (
@@ -519,6 +528,7 @@ function ChartObjectPreview({
           </div>
         );
       })}
+      {baseFooter ? <p className="report-editor-chart-footer">{baseFooter}</p> : null}
     </div>
   );
 }

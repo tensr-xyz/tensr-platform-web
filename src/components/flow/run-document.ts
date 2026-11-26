@@ -265,12 +265,57 @@ export function documentApa(document: RunDocument): string {
 
 export type ReportPinBar = { label: string; percent: number };
 
+const BASE_CHART_LABEL =
+  /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|deff|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
+
+/** True when a stub label is a base / DEFF line, not a result item to chart. */
+export function isBaseChartLabel(label: string): boolean {
+  return BASE_CHART_LABEL.test(label.trim());
+}
+
+function formatBaseFooterValue(raw: string): string {
+  const text = raw.replace(/%/g, '').replace(/,/g, '').trim();
+  if (!text || text === '—' || text === '-') return '';
+  const number = Number(text);
+  if (!Number.isFinite(number)) return raw.trim();
+  if (Math.abs(number) >= 1000 || Math.abs(number - Math.round(number)) < 1e-9) {
+    return Math.round(number).toLocaleString('en-GB');
+  }
+  const places = Math.abs(number) < 10 ? 2 : 1;
+  return number.toLocaleString('en-GB', {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  });
+}
+
+/** Base / DEFF rows under a crosstab become a caption, never chart bars. */
+export function baseFooterFromTable(table: RunTable | undefined): string {
+  if (!table) return '';
+  const parts: string[] = [];
+  for (const row of table.rows) {
+    const label = (row[0] || '').trim();
+    if (!isBaseChartLabel(label)) continue;
+    const value = formatBaseFooterValue(row[1] || '');
+    if (!value) continue;
+    parts.push(`${label} ${value}`);
+  }
+  return parts.join(' · ');
+}
+
 /** The lead and the share bars a report card shows for a saved run. */
-export function pinStory(document: RunDocument): { support: string; bars: ReportPinBar[] } {
+export function pinStory(document: RunDocument): {
+  support: string;
+  bars: ReportPinBar[];
+  baseFooter: string;
+} {
   const table =
     document.tables.find(item => item.columns.some(column => /%|percent|share/i.test(column))) ||
     document.tables[0];
-  return { support: document.summary.trim(), bars: shareBars(table) };
+  return {
+    support: document.summary.trim(),
+    bars: shareBars(table),
+    baseFooter: baseFooterFromTable(table),
+  };
 }
 
 /**
@@ -281,19 +326,25 @@ export function enrichPinFromRunDocument(pin: ReportPin, document: RunDocument):
   const story = pinStory(document);
   const headline = (document.title || '').trim() || pin.headline;
   const support = story.support || pin.support;
+  const bars = story.bars.length
+    ? story.bars
+    : (pin.bars || []).filter(bar => !isBaseChartLabel(bar.label));
   return {
     ...pin,
     headline,
     support,
-    bars: story.bars.length ? story.bars : pin.bars || [],
+    bars,
+    baseFooter: story.baseFooter || pin.baseFooter || '',
   };
 }
 
 function shareBars(table: RunTable | undefined): ReportPinBar[] {
   if (!table) return [];
+  // Rows keep the stub label in cell 0 even when an empty header was dropped.
+  const width = Math.max(table.columns.length, ...table.rows.map(row => row.length), 0);
   let percentAt = table.columns.findIndex(column => /%|percent|share/i.test(column));
-  if (percentAt < 0 && table.columns.length >= 2) {
-    const last = table.columns.length - 1;
+  if (percentAt < 0 && width >= 2) {
+    const last = width - 1;
     const sample = table.rows.map(row => row[last] || '');
     if (sample.some(value => /%|\d+\.\d+/.test(value))) percentAt = last;
   }
@@ -301,9 +352,10 @@ function shareBars(table: RunTable | undefined): ReportPinBar[] {
   const bars: ReportPinBar[] = [];
   for (const row of table.rows) {
     const label = (row[0] || '').trim();
+    if (!label || isBaseChartLabel(label)) continue;
     const raw = (row[percentAt] || '').replace('%', '').replace(/,/g, '').trim();
     const percent = Number(raw);
-    if (!label || !Number.isFinite(percent)) continue;
+    if (!Number.isFinite(percent)) continue;
     bars.push({ label, percent: Math.round(percent * 10) / 10 });
     if (bars.length >= 8) break;
   }
@@ -328,6 +380,8 @@ export type ReportPin = {
   topline: boolean;
   keepLive: boolean;
   bars?: ReportPinBar[];
+  /** Weighted / unweighted / Kish / DEFF caption under a slide chart. */
+  baseFooter?: string;
 };
 
 const PIN_KEY = 'tensr-report-pins';

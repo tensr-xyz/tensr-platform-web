@@ -1308,6 +1308,40 @@ export function savePageAsTemplate(
   return { ...doc, pageTemplates: [...doc.pageTemplates, saved] };
 }
 
+const BASE_CHART_LABEL =
+  /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|deff|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
+
+function isBaseChartLabel(label: string): boolean {
+  return BASE_CHART_LABEL.test(label.trim());
+}
+
+function sanitizePinBars(bars: PinLike['bars']): {
+  chartBars: { label: string; percent: number }[];
+  baseFooter: string;
+} {
+  const chartBars: { label: string; percent: number }[] = [];
+  const footerParts: string[] = [];
+  for (const bar of bars || []) {
+    const label = String(bar?.label || '').trim();
+    if (!label) continue;
+    const percent = Number(bar?.percent);
+    if (!Number.isFinite(percent)) continue;
+    if (isBaseChartLabel(label)) {
+      const shown =
+        Math.abs(percent) >= 1000 || Math.abs(percent - Math.round(percent)) < 1e-9
+          ? Math.round(percent).toLocaleString('en-GB')
+          : percent.toLocaleString('en-GB', {
+              minimumFractionDigits: Math.abs(percent) < 10 ? 2 : 1,
+              maximumFractionDigits: Math.abs(percent) < 10 ? 2 : 1,
+            });
+      footerParts.push(`${label} ${shown}`);
+      continue;
+    }
+    chartBars.push({ label, percent: Math.round(percent * 10) / 10 });
+  }
+  return { chartBars, baseFooter: footerParts.join(' · ') };
+}
+
 export type PinLike = {
   id?: string;
   runId?: string;
@@ -1316,6 +1350,8 @@ export type PinLike = {
   title?: string;
   support?: string;
   bars?: { label?: string; percent?: number }[];
+  baseFooter?: string;
+  base_footer?: string;
   deck?: boolean;
   keepLive?: boolean;
   keep_live?: boolean;
@@ -1330,7 +1366,8 @@ export function pinPagePlan(pin: PinLike): {
   contentText: string;
 } {
   const support = String(pin.support || '').trim();
-  const hasChart = Array.isArray(pin.bars) && pin.bars.some(bar => String(bar?.label || '').trim());
+  const { chartBars } = sanitizePinBars(pin.bars);
+  const hasChart = chartBars.length > 0;
   const runId = String(pin.run_id || pin.runId || '').trim();
   if (hasChart) {
     return { layoutId: 'title_and_content', contentKind: 'chart', contentText: '' };
@@ -1346,26 +1383,33 @@ function pinObjectShell(
   pin: PinLike,
   options: {
     kind: ReportObjectKind;
-    slotId: string;
+    slotId: string | null;
     layoutId: string;
     text: string;
     zIndex: number;
+    frame?: { x: number; y: number; w: number; h: number };
+    textStyle?: Partial<typeof DEFAULT_TEXT_STYLE>;
   }
 ): ReportObject {
   const pinId = String(pin.id || '').trim() || newId('pin');
   const runId = String(pin.run_id || pin.runId || '').trim() || null;
   const keepLive = pin.keep_live !== false && pin.keepLive !== false;
+  const frame =
+    options.frame ||
+    (options.slotId ? frameForSlot(options.layoutId, options.slotId) : null) ||
+    normalizeFrame(null);
   return {
     id: newId('obj'),
     kind: options.kind,
     slotId: options.slotId,
-    frame: frameForSlot(options.layoutId, options.slotId) || normalizeFrame(null),
+    frame,
     zIndex: options.zIndex,
     hidden: false,
     text: options.text,
     textStyle: {
       ...DEFAULT_TEXT_STYLE,
       ...(options.slotId === 'title' ? { fontSizePt: 28, bold: true } : {}),
+      ...(options.textStyle || {}),
     },
     runs: [],
     binding: null,
@@ -1386,6 +1430,42 @@ export function pageFromPin(pin: PinLike, options?: { pageId?: string }): Report
   const headline = String(pin.headline || pin.title || '').trim();
   if (!headline) return null;
   const plan = pinPagePlan(pin);
+  const { baseFooter: fromBars } = sanitizePinBars(pin.bars);
+  const baseFooter = fromBars || String(pin.baseFooter || pin.base_footer || '').trim();
+  const content = pinObjectShell(pin, {
+    kind: plan.contentKind,
+    slotId: 'content',
+    layoutId: plan.layoutId,
+    text: plan.contentText,
+    zIndex: 2,
+  });
+  const objects = [
+    pinObjectShell(pin, {
+      kind: 'text',
+      slotId: 'title',
+      layoutId: plan.layoutId,
+      text: headline,
+      zIndex: 1,
+    }),
+    content,
+  ];
+  if (plan.contentKind === 'chart' && baseFooter) {
+    content.frame = {
+      ...content.frame,
+      h: Math.max(0.12, content.frame.h - 0.1),
+    };
+    objects.push(
+      pinObjectShell(pin, {
+        kind: 'text',
+        slotId: null,
+        layoutId: plan.layoutId,
+        text: baseFooter,
+        zIndex: 3,
+        frame: { x: 0.06, y: 0.88, w: 0.88, h: 0.08 },
+        textStyle: { fontSizePt: 12, color: '#6A6B66' },
+      })
+    );
+  }
   return {
     id: options?.pageId || newId('page'),
     title: headline,
@@ -1393,22 +1473,7 @@ export function pageFromPin(pin: PinLike, options?: { pageId?: string }): Report
     section: null,
     hideFromExport: pin.deck === false,
     hideFromPublish: false,
-    objects: [
-      pinObjectShell(pin, {
-        kind: 'text',
-        slotId: 'title',
-        layoutId: plan.layoutId,
-        text: headline,
-        zIndex: 1,
-      }),
-      pinObjectShell(pin, {
-        kind: plan.contentKind,
-        slotId: 'content',
-        layoutId: plan.layoutId,
-        text: plan.contentText,
-        zIndex: 2,
-      }),
-    ],
+    objects,
   };
 }
 

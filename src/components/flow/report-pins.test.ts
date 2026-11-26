@@ -24,6 +24,7 @@ describe('server report pins', () => {
         topline: true,
         keepLive: true,
         bars: [],
+        baseFooter: '',
       },
     ]);
   });
