@@ -287,15 +287,53 @@ export async function deckBatchFromTables(
   );
 }
 
-/** Every saved table on the file as an Excel banner book. */
-export async function bannerBookFromTables(datasetId: string, stem: string) {
+/** Banner book Excel: prefer Report page tables (selected pages), else every saved table. */
+export async function bannerBookFromTables(
+  datasetId: string,
+  stem: string,
+  opts?: { pageIds?: string[]; specIds?: string[] }
+) {
   if (!datasetId) throw new Error('Open a file first.');
-  const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
-    `/datasets/${datasetId}/tables`
-  );
-  const specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  let specIds = (opts?.specIds || []).map(id => String(id || '').trim()).filter(Boolean);
+  const pageIds = (opts?.pageIds || []).map(id => String(id || '').trim()).filter(Boolean);
   if (!specIds.length) {
-    throw new Error('Save a table in Tables first. The banner book has one sheet per saved table.');
+    let reportDocument: Record<string, unknown> | null = null;
+    try {
+      const stored = await flowJson<{
+        document?: Record<string, unknown> | null;
+        has_document?: boolean;
+      }>(`/datasets/${datasetId}/report/document`);
+      if (stored.has_document && stored.document && Array.isArray(stored.document.pages)) {
+        reportDocument = stored.document;
+      }
+    } catch {
+      /* Fall back to saved tables when the document route fails. */
+    }
+    if (reportDocument && pageIds.length) {
+      const pages = Array.isArray(reportDocument.pages) ? reportDocument.pages : [];
+      const wanted = new Set(pageIds);
+      reportDocument = {
+        ...reportDocument,
+        pages: pages.filter(
+          page =>
+            page &&
+            typeof page === 'object' &&
+            wanted.has(String((page as { id?: string }).id || '').trim())
+        ),
+      };
+    }
+    specIds = tableSpecIdsFromReportDocument(reportDocument);
+  }
+  if (!specIds.length) {
+    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+      `/datasets/${datasetId}/tables`
+    );
+    specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  }
+  if (!specIds.length) {
+    throw new Error(
+      'Add Report pages with tables, or save a table in Tables, before building a banner book.'
+    );
   }
   const saved = await flowJson<{ book?: { id?: string } }>(`/datasets/${datasetId}/banner-books`, {
     method: 'POST',
@@ -310,6 +348,40 @@ export async function bannerBookFromTables(datasetId: string, stem: string) {
       method: 'POST',
       body: JSON.stringify({ target_dataset_id: datasetId, mapping: {} }),
     }
+  );
+}
+
+/** One output's tables as an .xlsx (Paper 6g / 6h Excel download). */
+export async function workbookFromRunDocument(
+  document: RunDocument,
+  stem: string,
+  opts?: { datasetId?: string }
+) {
+  const { downloadReportXlsx } = await import('@/lib/report-export');
+  const tables = document.tables.map((table, index) => ({
+    id: `table_${index + 1}`,
+    title: table.title || `Table ${index + 1}`,
+    columns: table.columns,
+    rows: table.rows,
+  }));
+  if (!tables.length) {
+    throw new Error('This output has no table to put in Excel.');
+  }
+  await downloadReportXlsx(
+    {
+      meta: {
+        title: stem || document.title || 'Table',
+        subtitle: '',
+        analysis_key: document.op || 'table',
+        generated_at: new Date().toISOString(),
+        rows_dataset: 0,
+      },
+      summary: document.summary || '',
+      metrics: [],
+      tables,
+      trust: { notes: [], warnings: [] },
+    },
+    { datasetId: opts?.datasetId }
   );
 }
 
@@ -619,7 +691,10 @@ export function ExportDialog({
           ...meta,
           note: datasetId ? meta.note : 'Open a file to build a banner book',
           soon: !datasetId,
-          run: () => bannerBookFromTables(datasetId || '', stem),
+          run: () =>
+            bannerBookFromTables(datasetId || '', stem, {
+              pageIds: selectedPageIds,
+            }),
         };
       }
       if (meta.id === 'pdf') {
@@ -992,7 +1067,7 @@ export function ExportDialog({
               ) : format.id === 'sav' ? (
                 <span>Downloads the open file as .sav with an .sps weight file.</span>
               ) : format.id === 'xlsx' ? (
-                <span>Every table, sig letters, real numbers.</span>
+                <span>Every table as a sheet, with real numbers and significance letters.</span>
               ) : (
                 <span>Figures export at 300 dpi. Tables stay editable in Word.</span>
               )}
@@ -1097,7 +1172,14 @@ export function ExportDialog({
           }),
         }),
     },
-    { id: 'xlsx', label: 'Excel', ext: '.xlsx', note: 'Coming soon', soon: true },
+    {
+      id: 'xlsx',
+      label: 'Excel',
+      ext: '.xlsx',
+      note: current.tables.length ? 'Editable numbers' : 'No table on this output',
+      soon: !current.tables.length,
+      run: () => workbookFromRunDocument(current, stem, { datasetId }),
+    },
     { id: 'pdf', label: 'PDF', ext: '.pdf', run: () => server('pdf', `${stem}.pdf`) },
     { id: 'html', label: 'HTML', ext: '.html', run: () => server('html', `${stem}.html`) },
     ...(svg
