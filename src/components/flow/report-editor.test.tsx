@@ -3,11 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { flowJson } from '@/lib/flow-api';
 import {
+  labelledPageTableFromRunTables,
   preferAffirmativeRowFirst,
   previewGridFromBannerBook,
   ReportEditor,
   shareBarsFromBannerBook,
 } from './report-editor';
+import { tablePreviewTitle } from '@/lib/report-document';
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(),
@@ -150,6 +152,106 @@ describe('previewGridFromBannerBook', () => {
     expect(grid[1]?.[0]).toBe('Yes');
     expect(grid[2]?.[0]).toBe('No');
     expect(shareBarsFromBannerBook(book).map(bar => bar.label)).toEqual(['Yes', 'No']);
+  });
+});
+
+describe('labelledPageTableFromRunTables', () => {
+  it('keeps long Spearman axis labels instead of indexes', () => {
+    const labelled = labelledPageTableFromRunTables([
+      {
+        title: 'Spearman correlations',
+        columns: [
+          'Variable',
+          'How often do you brew coffee at home on a weekday morning?',
+          'How important is aroma when choosing a bag of beans?',
+        ],
+        rows: [
+          ['How often do you brew coffee at home on a weekday morning?', '1.000', '0.610'],
+          ['How important is aroma when choosing a bag of beans?', '0.610', '1.000'],
+        ],
+      },
+    ]);
+    expect(labelled?.title).toBe('Spearman correlations');
+    expect(labelled?.rows[0]).toEqual([
+      'Variable',
+      'How often do you brew coffee at home on a weekday morning?',
+      'How important is aroma when choosing a bag of beans?',
+    ]);
+    expect(labelled?.rows[1]?.[0]).toContain('brew coffee');
+    expect(JSON.stringify(labelled?.rows)).not.toMatch(/"1"|"2"/);
+  });
+
+  it('expands a legacy Columns key onto both axes for Pearson matrices', () => {
+    const labelled = labelledPageTableFromRunTables([
+      {
+        title: 'Pearson correlations',
+        columns: ['Variable', '1', '2'],
+        rows: [
+          ['1', '1.000', '0.768*** (n=500)'],
+          ['2', '0.768*** (n=500)', '1.000'],
+        ],
+      },
+      {
+        title: 'Columns',
+        columns: ['Column', 'Label'],
+        rows: [
+          ['1', 'Overall satisfaction with your most recent visit'],
+          ['2', 'Likelihood to recommend this brand to a friend'],
+        ],
+      },
+    ]);
+    expect(labelled?.title).toBe('Pearson correlations');
+    expect(labelled?.rows[0]).toEqual([
+      'Variable',
+      'Overall satisfaction with your most recent visit',
+      'Likelihood to recommend this brand to a friend',
+    ]);
+    expect(labelled?.rows[1]?.[0]).toBe('Overall satisfaction with your most recent visit');
+    expect(labelled?.rows[2]?.[0]).toBe('Likelihood to recommend this brand to a friend');
+    expect(labelled?.rows.flat().some(cell => cell === '1' || cell === '2')).toBe(false);
+  });
+
+  it('keeps short Kendall labels and weighted pair wording without inventing codes', () => {
+    const labelled = labelledPageTableFromRunTables([
+      {
+        title: 'Kendall correlation',
+        columns: ['Variables', 'τ', 'p', 'n'],
+        rows: [['Price paid with Taste', '0.20', '0.040', '1,204 (weighted)']],
+      },
+    ]);
+    expect(labelled?.title).toBe('Kendall correlation');
+    expect(labelled?.rows[0]).toEqual(['Variables', 'τ', 'p', 'n']);
+    expect(labelled?.rows[1]?.[0]).toBe('Price paid with Taste');
+    expect(labelled?.rows[1]?.[3]).toContain('weighted');
+    expect(labelled?.rows.flat().some(cell => /^[0-9]+$/.test(cell))).toBe(false);
+  });
+
+  it('page tables carry the question label above the grid, never a frequency code', () => {
+    expect(tablePreviewTitle({ title: 'Frequency Table: Prompted awareness by age' })).toBe(
+      'Prompted awareness by age'
+    );
+    expect(tablePreviewTitle({ title: 'Does culture shape advice?' })).toBe(
+      'Does culture shape advice?'
+    );
+    const grid = previewGridFromBannerBook({
+      title: 'Which materials do you prefer for patient education?',
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'print', label: 'Print' },
+      ],
+      rows: [
+        {
+          id: 'prefer',
+          label: 'Prefer this channel',
+          cells: [
+            { banner_id: 'total', percent: 54.2 },
+            { banner_id: 'print', percent: 61 },
+          ],
+        },
+      ],
+    });
+    expect(grid[0]).toEqual(['', 'Total', 'Print']);
+    expect(grid[1]?.[0]).toBe('Prefer this channel');
   });
 });
 
