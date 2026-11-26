@@ -6125,48 +6125,24 @@ function ReportScreen({
   };
 
   const bannerBook = async () => {
-    // Overview card says "Every saved table" — use all live specs, not only checked ones.
-    const sourceRows = selected.length
-      ? selected
-      : specs.filter(row => Object.keys(row.spec || {}).length > 0);
-    const liveSpecs = sourceRows
-      .map(row => ({
-        ...row.spec,
-        dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
-        table_number: row.number || row.spec.table_number,
-      }))
-      .filter(spec => Object.keys(spec).length);
-    const staleIds = staleTables.map(table => table.id).filter(Boolean);
-    if (!datasetId || (!liveSpecs.length && !staleIds.length)) {
+    // Checked rows win; otherwise every saved table by id (dataset/project list),
+    // not only the subset Overview managed to open — export rebuilds each sheet.
+    const checkedIds = selected.map(row => row.id).filter(Boolean);
+    const exportDatasetId =
+      selected[0]?.datasetId || specs[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
+    if (!exportDatasetId) {
       setError('Save a table before building a banner book.');
       return;
     }
     setError('');
-    const exportDatasetId = sourceRows[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
     const stem =
       (audienceNames[0] || 'banner-book').replace(/[^\w.-]+/g, '-').slice(0, 40) || 'banner-book';
-    const saved = await flowJson<{ book?: { id?: string } }>(
-      `/datasets/${exportDatasetId}/banner-books`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          name: audienceNames[0] ? `${audienceNames[0]} banner book` : 'Banner book',
-          specs: liveSpecs,
-          // Stale ("Needs rebuild") tables are loaded by id; export rebuilds them.
-          spec_ids: staleIds,
-        }),
-      }
-    );
-    const bookId = saved.book?.id;
-    if (!bookId) throw new Error('The banner book was not saved.');
-    await downloadExport(
-      `/datasets/${exportDatasetId}/banner-books/${bookId}/export.xlsx`,
-      `${stem}-banner-book.xlsx`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ target_dataset_id: exportDatasetId, mapping: {} }),
-      }
-    );
+    const { bannerBookFromTables } = await import('@/components/flow/export-dialog');
+    await bannerBookFromTables(exportDatasetId, stem, {
+      projectId,
+      specIds: checkedIds.length ? checkedIds : undefined,
+      everySaved: checkedIds.length === 0,
+    });
     setNote('Banner book downloaded.');
   };
 

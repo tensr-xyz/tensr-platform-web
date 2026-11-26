@@ -1,10 +1,12 @@
 import {
   bannerBookFromTables,
   deckBatchPayload,
+  everySavedTableSpecIds,
   pipelineExportPayload,
   reportExportFormatMeta,
   tableSpecIdsFromReportDocument,
   tableSpecIdsFromReportPages,
+  uniqueSpecIds,
   workbookFromRunDocument,
 } from '@/components/flow/export-dialog';
 import { groupReportExportPages, pagesFromReportDocument } from '@/lib/office-deck-job';
@@ -126,6 +128,41 @@ describe('tableSpecIdsFromReportPages', () => {
   });
 });
 
+describe('uniqueSpecIds', () => {
+  it('dedupes and drops blanks while keeping order', () => {
+    expect(uniqueSpecIds(['a', '', 'b', 'a', null, 'c'])).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('everySavedTableSpecIds', () => {
+  beforeEach(() => {
+    flowJson.mockReset();
+  });
+
+  it('returns every dataset table id when the list route works', async () => {
+    flowJson.mockResolvedValueOnce({
+      specs: [{ spec_id: 't1' }, { id: 't2' }, { spec_id: 't1' }, { spec_id: '' }],
+    });
+    await expect(everySavedTableSpecIds('ds-1', 'proj-1')).resolves.toEqual(['t1', 't2']);
+    expect(flowJson).toHaveBeenCalledWith('/datasets/ds-1/tables');
+  });
+
+  it('falls back to the project list when the dataset route fails', async () => {
+    flowJson.mockRejectedValueOnce(new Error('500')).mockResolvedValueOnce({
+      specs: [{ spec_id: 'p1' }, { spec_id: 'p2' }, { id: 'p3' }],
+    });
+    await expect(everySavedTableSpecIds('ds-1', 'proj-1')).resolves.toEqual(['p1', 'p2', 'p3']);
+    expect(flowJson).toHaveBeenCalledWith('/api/projects/proj-1/tables');
+  });
+
+  it('falls back to the project list when the dataset list is empty', async () => {
+    flowJson.mockResolvedValueOnce({ specs: [] }).mockResolvedValueOnce({
+      specs: [{ spec_id: 'only-project' }],
+    });
+    await expect(everySavedTableSpecIds('ds-1', 'proj-1')).resolves.toEqual(['only-project']);
+  });
+});
+
 describe('bannerBookFromTables', () => {
   beforeEach(() => {
     flowJson.mockReset();
@@ -161,6 +198,33 @@ describe('bannerBookFromTables', () => {
         body: JSON.stringify({ target_dataset_id: 'ds-1', mapping: {} }),
       }
     );
+  });
+
+  it('skips Report pages and posts every saved table when everySaved is set', async () => {
+    flowJson
+      .mockResolvedValueOnce({
+        specs: [
+          { spec_id: 't1' },
+          { spec_id: 't2' },
+          { id: 't3' },
+          { spec_id: 't4' },
+          { spec_id: 't5' },
+          { spec_id: 't6' },
+          { spec_id: 't7' },
+          { spec_id: 't8' },
+        ],
+      })
+      .mockResolvedValueOnce({ book: { id: 'book-all' } });
+    await bannerBookFromTables('ds-1', 'overview', { projectId: 'proj-1', everySaved: true });
+    expect(flowJson).toHaveBeenCalledWith('/datasets/ds-1/tables');
+    expect(flowJson).toHaveBeenCalledWith('/datasets/ds-1/banner-books', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Banner book',
+        spec_ids: ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'],
+      }),
+    });
+    expect(downloadExport).toHaveBeenCalled();
   });
 
   it('throws when there are no tables to export', async () => {
