@@ -119,10 +119,11 @@ describe('picker columns', () => {
       ],
       ['w']
     );
-    expect(options).toEqual([
+    expect(options.map(item => ({ value: item.value, label: item.label }))).toEqual([
       { value: 'Read last month', label: 'Read last month' },
       { value: 'aud', label: 'Audience' },
     ]);
+    expect(options[0].keywords).toMatch(/Title A/);
   });
 
   it('keeps unlabelled text categoricals on the stub list when n_unique is low', () => {
@@ -673,8 +674,46 @@ describe('outline linked other-choice and full stems', () => {
     expect(outline[0].kind).toBe('multi');
     expect(outline[0].columns).toEqual(columns.map(column => column.name));
     const stubs = tableStubPickerOptions([...columns, { name: 'region', label: 'Region' }], []);
-    expect(stubs[0]).toEqual({ value: stem, label: stem });
+    expect(stubs[0].value).toBe(stem);
+    expect(stubs[0].label).toBe(stem);
     expect(stubs.map(item => item.label)).toContain(stem);
     expect(stubs.length).toBe(1); // region alone without kinds may be open and dropped
+  });
+
+  it('groups tilde reach labels with bracket qualifiers and searches item labels (TEN-246)', () => {
+    const {
+      labelAxisParts,
+      questionnaireOutline: outlineFn,
+      tableStubPickerOptions,
+    } = jest.requireActual('./flow-columns') as typeof import('./flow-columns');
+    expect(labelAxisParts('Metro Ledger (Brand) (Total Reach) ~ Past 30 days reach')).toEqual([
+      'Metro Ledger (Brand) (Total Reach)',
+      'Past 30 days reach',
+    ]);
+    const titles = [
+      'Northern Herald (Total Reach) ~ Past 30 days reach',
+      'Coastal Courier (Total Reach) ~ Past 30 days reach',
+      'Prairie Post (Total Reach) ~ Past 30 days reach',
+      'Summit Tribune (Total Reach) ~ Past 30 days reach',
+      'Harbor Gazette (Total Reach) ~ Past 30 days reach',
+      'Metro Ledger (Brand) (Total Reach) ~ Past 30 days reach',
+      'Capital Wire (Digital, Markets, Businessweek) (Total Reach) ~ Past 30 days reach',
+      'River Times (Total Reach) ~ Past 30 days reach',
+      'Valley Journal (Total Reach) ~ Past 30 days reach',
+      'Sunday Harbor (Total Reach) ~ Past 30 days reach',
+      'Eastern Telegraph (Total Reach) ~ Past 30 days reach',
+      'Western Guardian (UK) (Total Reach) ~ Past 30 days reach',
+    ];
+    const columns = titles.map((label, index) => ({ name: `reach_${index}`, label }));
+    const outline = outlineFn(columns, []);
+    expect(outline).toHaveLength(1);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].columns).toHaveLength(12);
+    expect(outline[0].label.toLowerCase()).toContain('past 30 days reach');
+    expect(outline[0].keywords).toMatch(/Metro Ledger \(Brand\)/);
+    expect(outline[0].keywords).toMatch(/Western Guardian \(UK\)/);
+    const stubs = tableStubPickerOptions(columns, []);
+    expect(stubs).toHaveLength(1);
+    expect(stubs[0].keywords).toMatch(/Capital Wire \(Digital, Markets, Businessweek\)/);
   });
 });

@@ -3410,7 +3410,11 @@ export function TablesBuilder({
                               banner => banner.kind === 'column' && banner.column === item.value
                             )
                         )
-                        .map(item => ({ value: item.value, label: item.label })),
+                        .map(item => ({
+                          value: item.value,
+                          label: item.label,
+                          ...(item.keywords ? { keywords: item.keywords } : {}),
+                        })),
                     ]}
                   />
                 </div>
@@ -3457,6 +3461,7 @@ export function TablesBuilder({
                     questions={stubOptions.map(item => ({
                       value: item.value,
                       label: item.label,
+                      ...(item.keywords ? { keywords: item.keywords } : {}),
                     }))}
                     selected={banners}
                     stub={stub}

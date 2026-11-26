@@ -37,7 +37,7 @@ export function ChoiceSelect({
 }: {
   value: string;
   onValueChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; keywords?: string }[];
   placeholder?: string;
   className?: string;
   'aria-label'?: string;
@@ -51,6 +51,7 @@ export function ChoiceSelect({
         .map(option => ({
           value: option.value === '' ? EMPTY : option.value,
           label: option.label,
+          keywords: String(option.keywords || '').trim(),
         }))
         .filter((item, index, all) => all.findIndex(other => other.value === item.value) === index),
     [options]
@@ -60,7 +61,11 @@ export function ChoiceSelect({
   const current = value === '' ? (hasEmpty ? EMPTY : '') : value;
   const listed = [...items];
   if (current && !listed.some(item => item.value === current)) {
-    listed.unshift({ value: current, label: value || placeholder || 'Selected' });
+    listed.unshift({
+      value: current,
+      label: value || placeholder || 'Selected',
+      keywords: '',
+    });
   }
   const useSearch = searchable ?? listed.length >= SEARCH_FROM;
   const [open, setOpen] = useState(false);
@@ -99,7 +104,7 @@ export function ChoiceSelect({
                 {listed.map(item => (
                   <CommandItem
                     key={item.value}
-                    value={`${item.label} ${item.value === EMPTY ? '' : item.value}`}
+                    value={`${item.label} ${item.keywords || ''} ${item.value === EMPTY ? '' : item.value}`}
                     onSelect={() => {
                       onValueChange(item.value === EMPTY ? '' : item.value);
                       setOpen(false);
