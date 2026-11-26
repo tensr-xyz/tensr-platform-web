@@ -180,7 +180,7 @@ export function resolveNumberedNextStep(input: string, steps: NumberedNextStep[]
   return step?.prompt ?? null;
 }
 
-/** Edit procedures that create a working version (v2 name may be the procedure). */
+/** Edit / version procedures that create a working version (v2 name may be the procedure). */
 const EDIT_PROCEDURES = new Set([
   'data_edit',
   'recode',
@@ -196,18 +196,41 @@ const EDIT_PROCEDURES = new Set([
   'set_routing',
   'confirm_loop',
   'fix_types',
+  'rake',
+  'weight',
+  'rim',
+  'set_active_weight',
+  'combine_weights',
+  'merge',
+  'merge_datasets',
+  'stack',
+  'fuse_waves',
+  'save_working_version',
 ]);
 
-function isChatTurnEditEntry(entry: AgentLoopToolResult & Record<string, unknown>): boolean {
-  const name = String(entry.name || entry.procedure || '')
-    .trim()
-    .toLowerCase();
-  if (EDIT_PROCEDURES.has(name)) return true;
+function entryProcedureName(entry: AgentLoopToolResult & Record<string, unknown>): string {
   const args = entry.args && typeof entry.args === 'object' ? entry.args : null;
-  const fromArgs = String(args?.operation || args?.analysis_type || '')
+  const result = entry.result && typeof entry.result === 'object' ? entry.result : null;
+  return String(
+    entry.procedure ||
+      args?.operation ||
+      args?.analysis_type ||
+      result?.operation ||
+      result?.analysis_type ||
+      entry.name ||
+      ''
+  )
     .trim()
     .toLowerCase();
-  if (EDIT_PROCEDURES.has(fromArgs)) return true;
+}
+
+function isChatTurnEditEntry(entry: AgentLoopToolResult & Record<string, unknown>): boolean {
+  const procedure = entryProcedureName(entry);
+  if (EDIT_PROCEDURES.has(procedure)) return true;
+  const producing = String(entry.producing_operation || entry.result?.producing_operation || '')
+    .trim()
+    .toLowerCase();
+  if (producing.startsWith('weight:')) return true;
   // Slim / history payloads may only leave lineage ids.
   if (String(entry.derived_dataset_id || '').trim()) return true;
   const result = entry.result;
@@ -218,6 +241,47 @@ function isChatTurnEditEntry(entry: AgentLoopToolResult & Record<string, unknown
       ? (result.derived as Record<string, unknown>)
       : null;
   return Boolean(String(nested?.dataset_id || '').trim());
+}
+
+function weightLabelFromResult(
+  result: Record<string, unknown>,
+  entry: Record<string, unknown>
+): string {
+  const vector =
+    result.weight_vector && typeof result.weight_vector === 'object'
+      ? (result.weight_vector as Record<string, unknown>)
+      : null;
+  const diagnostics =
+    vector?.diagnostics && typeof vector.diagnostics === 'object'
+      ? (vector.diagnostics as Record<string, unknown>)
+      : result.diagnostics && typeof result.diagnostics === 'object'
+        ? (result.diagnostics as Record<string, unknown>)
+        : null;
+  for (const raw of [
+    result.active_weight_label,
+    diagnostics?.weight_label,
+    vector?.label,
+    entry.active_weight_label,
+  ]) {
+    const label = String(raw || '').trim();
+    if (!label) continue;
+    // Never surface column codes (rake_weight, weight_2).
+    if (label.includes('_') && label === label.toLowerCase()) continue;
+    return label;
+  }
+  return '';
+}
+
+function isWeightVersionOperation(operation: string): boolean {
+  const key = operation.trim().toLowerCase();
+  return (
+    key === 'rake' ||
+    key === 'weight' ||
+    key === 'rim' ||
+    key === 'set_active_weight' ||
+    key === 'combine_weights' ||
+    key.startsWith('weight:')
+  );
 }
 
 /** Dataset edits from this turn, for a change list and undo. */
@@ -238,10 +302,14 @@ export function chatTurnChangesFromToolResults(
       result.derived && typeof result.derived === 'object'
         ? (result.derived as Record<string, unknown>)
         : null;
+    const entrySummary =
+      entryRecord.summary && typeof entryRecord.summary === 'object'
+        ? (entryRecord.summary as Record<string, unknown>)
+        : null;
     const summary =
       result.summary && typeof result.summary === 'object'
         ? (result.summary as Record<string, unknown>)
-        : null;
+        : entrySummary;
     const currentDatasetId = String(
       result.derived_dataset_id ||
         result.saved_dataset_id ||
@@ -266,25 +334,53 @@ export function chatTurnChangesFromToolResults(
         args?.operation ||
         args?.analysis_type ||
         entryRecord.procedure ||
+        result.analysis_type ||
         entryRecord.producing_operation ||
         ''
     ).trim();
+    const weightLabel = weightLabelFromResult(result, entryRecord);
     const fromMarkdown = stripMarkdownBold(
       String(result.answer_markdown || summary?.line || entryRecord.answer_markdown || '').trim()
     );
-    const label =
-      fromMarkdown || (operation ? humanOperationLabel(operation) : '') || 'Edited the data';
+    const versionSwitched = Boolean(
+      currentDatasetId && previousDatasetId && currentDatasetId !== previousDatasetId
+    );
     // Need something the person can undo or at least read.
-    if (!currentDatasetId && !previousDatasetId && !fromMarkdown && !operation) continue;
-    if (currentDatasetId && previousDatasetId && currentDatasetId === previousDatasetId) {
-      // Same id is not a new working version — still list the label when present.
-      if (!fromMarkdown && !operation) continue;
+    if (!currentDatasetId && !previousDatasetId && !fromMarkdown && !operation && !weightLabel) {
+      continue;
     }
-    const change: ChatTurnChange = {
-      label: label.slice(0, 160),
+    if (currentDatasetId && previousDatasetId && currentDatasetId === previousDatasetId) {
+      if (!fromMarkdown && !operation && !weightLabel) continue;
+    }
+
+    const ids = {
       operation: operation || undefined,
       previousDatasetId: previousDatasetId || undefined,
       currentDatasetId: currentDatasetId || undefined,
+    };
+
+    // Weight + new file version: two readable rows (QA / Paper 9e pattern).
+    if (isWeightVersionOperation(operation) && weightLabel && versionSwitched) {
+      const weightChange: ChatTurnChange = {
+        label: `New weight: ${weightLabel}`.slice(0, 160),
+        ...ids,
+      };
+      const versionChange: ChatTurnChange = {
+        label: 'File version switched',
+        ...ids,
+      };
+      out.push(weightChange, versionChange);
+      continue;
+    }
+
+    const label =
+      (weightLabel ? `New weight: ${weightLabel}` : '') ||
+      fromMarkdown ||
+      (operation ? humanOperationLabel(operation) : '') ||
+      'Edited the data';
+    const change: ChatTurnChange = {
+      label: label.slice(0, 160),
+      ...ids,
     };
     if (changeOffersSeeDropped(change)) change.seeDropped = true;
     out.push(change);
@@ -452,7 +548,10 @@ function turnBuiltReportPages(toolResults: AgentLoopToolResult[]): boolean {
 }
 
 function humanOperationLabel(operation: string): string {
-  const cleaned = operation.replace(/_/g, ' ').trim();
+  const cleaned = operation
+    .replace(/^weight:/i, '')
+    .replace(/_/g, ' ')
+    .trim();
   if (!cleaned) return 'Edited the data';
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }

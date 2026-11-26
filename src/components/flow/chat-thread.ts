@@ -4,12 +4,22 @@ export type ChatExchange = {
   user: string;
   note: string;
   answer: string;
-  toolResults?: {
+  /** Full tool rows — keep slim lineage fields for the change list (TEN-136). */
+  toolResults?: Array<{
     name: string;
     args?: Record<string, unknown>;
     result?: Record<string, unknown>;
     run_id?: string | null;
-  }[];
+    procedure?: string;
+    derived_dataset_id?: string;
+    parent_dataset_id?: string;
+    answer_markdown?: string;
+    original_filename?: string;
+    producing_operation?: string;
+    active_weight_label?: string;
+    summary?: Record<string, unknown>;
+    [key: string]: unknown;
+  }>;
 };
 
 export function archiveChatTurn(

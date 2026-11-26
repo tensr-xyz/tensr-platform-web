@@ -89,6 +89,7 @@ import {
   runAgentLoop,
   type AgentLoopAttachment,
   type AgentLoopResponse,
+  type AgentLoopToolResult,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import {
@@ -1506,12 +1507,9 @@ export function AgentThreadColumn({
           )
         ) : null}
         {thread.past.map((item, index) => {
+          // Keep slim/history lineage fields (derived/parent ids, procedure, weight label).
           const pastChanges = chatTurnChangesFromToolResults(
-            (item.toolResults || []).map(entry => ({
-              name: entry.name,
-              args: entry.args,
-              result: entry.result,
-            }))
+            item.toolResults as AgentLoopToolResult[] | undefined
           );
           return (
             <div key={`${index}-${item.user.slice(0, 24)}`}>
