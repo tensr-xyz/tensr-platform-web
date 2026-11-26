@@ -333,7 +333,7 @@ function normalizeFrequencyColumns(
 ): string[] {
   if (!looksLikeFrequencyHeaders(columns)) return columns;
   if (opts?.multipleResponse) {
-    if (columns.some(column => /respondent/i.test(column))) return [...columns];
+    // Multi-select shares are of respondents, never Valid %.
     return [...MR_FREQUENCY_HEADERS];
   }
   if (columns.length >= FREQUENCY_HEADERS.length) return [...FREQUENCY_HEADERS];
@@ -366,8 +366,21 @@ function asTable(value: unknown): RunTable | null {
   let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const titleText = cell(record.title);
   const title = questionTitle(titleText);
+  const noteText = cell(record.note);
+  const notesText = Array.isArray((record as { notes?: unknown }).notes)
+    ? ((record as { notes?: unknown[] }).notes || []).map(cell).join(' ')
+    : '';
+  const explanatory = `${noteText} ${notesText}`;
   const multipleResponse =
-    Boolean(record.multiple_response) || record.mr_base === 'percent_of_respondents';
+    Boolean(record.multiple_response) ||
+    record.mr_base === 'percent_of_respondents' ||
+    /percent of respondents who selected|people may select more than one/i.test(explanatory) ||
+    (columns.some(column => /valid\s*%/i.test(column)) &&
+      columns.length <= 3 &&
+      Array.isArray(record.rows) &&
+      (record.rows as unknown[]).some(
+        row => Array.isArray(row) && /^base$/i.test(cell((row as unknown[])[0]))
+      ));
   if (looksLikeFrequencyHeaders(columns) || /^frequency table:/i.test(titleText)) {
     columns = normalizeFrequencyColumns(columns, { multipleResponse });
   }
@@ -383,8 +396,7 @@ function asTable(value: unknown): RunTable | null {
         .filter(row => row.some(Boolean))
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
-  const note = cell(record.note);
-  return { title, columns, rows, ...(note ? { note } : {}) };
+  return { title, columns, rows, ...(noteText ? { note: noteText } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -1293,7 +1305,9 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
   const looks =
     (weight && typeof weight === 'object' && !Array.isArray(weight)) ||
     record.n_observations != null ||
+    record.n_cases != null ||
     record.n_total != null ||
+    record.n_input != null ||
     record.n_missing != null ||
     record.n_excluded_missing != null ||
     record.model_fit != null ||
@@ -1311,12 +1325,22 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       column?: unknown;
       kish_ess?: unknown;
       unweighted_n?: unknown;
+      ran_unweighted?: unknown;
+      weight_aware?: unknown;
     };
-    const column = realWeightToken(block.column);
-    const label = stripCodeBrackets(cell(block.label), column);
-    if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
-      sample.weight = label;
-    } else if (column) sample.weight = column;
+    if (block.ran_unweighted === true || block.weight_aware === false) {
+      sample.weight = 'Unweighted';
+    } else {
+      const column = realWeightToken(block.column);
+      const label = stripCodeBrackets(cell(block.label), column);
+      if (
+        label &&
+        label.toLowerCase() !== column.toLowerCase() &&
+        label.toLowerCase() !== 'weight'
+      ) {
+        sample.weight = label;
+      } else if (column) sample.weight = column;
+    }
     if (!sample.sawEss) {
       const ess = Number(block.kish_ess);
       if (Number.isFinite(ess)) {
@@ -1347,7 +1371,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     }
   }
   if (!sample.sawN) {
-    const count = wholeNumber(record.n ?? record.n_observations ?? record.n_used);
+    const count = wholeNumber(record.n ?? record.n_observations ?? record.n_used ?? record.n_cases);
     const fitted =
       record.model_fit && typeof record.model_fit === 'object'
         ? wholeNumber((record.model_fit as { n?: unknown }).n)
@@ -1359,7 +1383,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     }
   }
   if (!sample.sawTotal) {
-    const total = wholeNumber(record.n_total ?? record.n_rows);
+    const total = wholeNumber(record.n_total ?? record.n_rows ?? record.n_input);
     if (total != null) {
       sample.total = total;
       sample.sawTotal = true;
@@ -1411,22 +1435,34 @@ function sampleWeightPhrase(sample: SampleBits): string {
   return 'Weight: Unweighted';
 }
 
+function formatBaseCount(value: number): string {
+  if (Math.abs(value - Math.round(value)) < 0.05) {
+    return Math.round(value).toLocaleString('en-GB');
+  }
+  return value.toLocaleString('en-GB', { maximumFractionDigits: 1 });
+}
+
 function sampleLine(sample: SampleBits): string {
   const weight = sampleWeightPhrase(sample);
   const parts = [weight];
   if (sample.sawTableBase) {
     const weighted = sample.tableWeighted;
+    const unweightedText = formatBaseCount(sample.tableUnweighted);
     parts.push(
       weighted != null && weighted !== sample.tableUnweighted
-        ? `base = ${sample.tableUnweighted} (${weighted} weighted)`
-        : `base = ${sample.tableUnweighted}`
+        ? `base = ${unweightedText} (${formatBaseCount(weighted)} weighted)`
+        : `base = ${unweightedText}`
     );
   } else if (sample.sawN && sample.sawTotal && sample.sawMissing) {
-    parts.push(`base = ${sample.n} (of ${sample.total}, ${sample.missing} missing)`);
+    parts.push(
+      `base = ${formatBaseCount(sample.n)} (of ${formatBaseCount(sample.total)}, ${formatBaseCount(sample.missing)} missing)`
+    );
   } else if (sample.sawN && sample.sawMissing && !sample.sawTotal) {
-    parts.push(`base = ${sample.n} (of ${sample.n + sample.missing}, ${sample.missing} missing)`);
-  } else if (sample.sawN) parts.push(`base = ${sample.n}`);
-  else if (sample.sawTotal) parts.push(`base = ${sample.total}`);
+    parts.push(
+      `base = ${formatBaseCount(sample.n)} (of ${formatBaseCount(sample.n + sample.missing)}, ${formatBaseCount(sample.missing)} missing)`
+    );
+  } else if (sample.sawN) parts.push(`base = ${formatBaseCount(sample.n)}`);
+  else if (sample.sawTotal) parts.push(`base = ${formatBaseCount(sample.total)}`);
   const denom = sample.sawTableBase
     ? sample.tableUnweighted
     : sample.sawN
@@ -1435,10 +1471,7 @@ function sampleLine(sample: SampleBits): string {
   // Kish ESS only when the engine sent one. Do not invent "100%" for unweighted runs.
   if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
-    const shown =
-      Math.abs(sample.ess - Math.round(sample.ess)) < 0.05
-        ? String(Math.round(sample.ess))
-        : sample.ess.toFixed(1);
+    const shown = formatBaseCount(sample.ess);
     parts.push(`effective base = ${shown} (${percent}%)`);
   }
   parts.push('95% confidence level');
@@ -1469,7 +1502,16 @@ function stripCodeBrackets(label: string, code = ''): string {
 
 function weightName(record: Record<string, unknown>): string {
   if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
-    const weight = record.weight as { column?: unknown; label?: unknown };
+    const weight = record.weight as {
+      column?: unknown;
+      label?: unknown;
+      ran_unweighted?: unknown;
+      weight_aware?: unknown;
+    };
+    // Forced unweighted runs (cluster / PCA on a weighted file) must not inherit the ledger.
+    if (weight.ran_unweighted === true || weight.weight_aware === false) {
+      return 'Unweighted';
+    }
     const column = realWeightToken(weight.column);
     const label = stripCodeBrackets(cell(weight.label).trim(), column);
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {

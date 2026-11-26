@@ -5,7 +5,12 @@ import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectSessions } from '@/hooks/api/use-project-data';
+import {
+  useDatasetAudiences,
+  useMe,
+  useProjectMembers,
+  useProjectSessions,
+} from '@/hooks/api/use-project-data';
 import { invalidateProjectSessions, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   Empty,
@@ -72,6 +77,7 @@ import {
   type StoredChatTurn,
 } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
+import { clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -83,6 +89,7 @@ import {
   runAgentLoop,
   type AgentLoopAttachment,
   type AgentLoopResponse,
+  type AgentLoopToolResult,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import {
@@ -227,24 +234,7 @@ function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
 }
 
 function clientDeckStillPending(result: AgentLoopResponse): boolean {
-  return (result.tool_results || []).some(item => {
-    const payload = item.result;
-    if (!payload || typeof payload !== 'object') return false;
-    const procedure = String(item.name || payload.procedure || '');
-    if (
-      procedure !== 'build_client_deck' &&
-      String(payload.procedure || '') !== 'build_client_deck'
-    ) {
-      return false;
-    }
-    const status = String(payload.status || '');
-    return (
-      payload.pending === true ||
-      status === 'pending' ||
-      status === 'running' ||
-      Boolean(String(payload.job_id || '').trim() && status !== 'complete' && status !== 'failed')
-    );
-  });
+  return clientDeckNeedsLiveResolve(result.tool_results);
 }
 
 function reportPagesFromResult(result: AgentLoopResponse): number {
@@ -1399,60 +1389,20 @@ export function AgentThreadColumn({
 }) {
   const router = useRouter();
   const [stepsOpen, setStepsOpen] = useState(true);
-  const [asker, setAsker] = useState(false);
   const [askedOwner, setAskedOwner] = useState(false);
-  const [audiences, setAudiences] = useState<
-    { name: string; label: string; description?: string }[]
-  >([]);
-  useEffect(() => {
-    if (!thread.projectId) return;
-    let live = true;
-    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
-      .then(me =>
-        flowJson<{ members?: { user_id?: string; role?: string }[] }>(
-          `/api/projects/${thread.projectId}/members`
-        ).then(page => {
-          if (!live) return;
-          const userId = me.user_id || me.user?.id || '';
-          const mine = (page.members || []).find(member => member.user_id === userId);
-          setAsker(mine?.role === 'asker');
-        })
-      )
-      .catch(() => {
-        if (live) setAsker(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [thread.projectId]);
-  useEffect(() => {
-    if (!asker || !thread.datasetId) {
-      setAudiences([]);
-      return;
-    }
-    let live = true;
-    void flowJson<{ audiences?: { name?: string; label?: string; description?: string }[] }>(
-      `/datasets/${thread.datasetId}/audiences`
-    )
-      .then(page => {
-        if (!live) return;
-        setAudiences(
-          (page.audiences || [])
-            .map(item => ({
-              name: String(item.name || '').trim(),
-              label: String(item.label || item.name || '').trim(),
-              description: String(item.description || '').trim(),
-            }))
-            .filter(item => item.label)
-        );
-      })
-      .catch(() => {
-        if (live) setAudiences([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [asker, thread.datasetId]);
+  const meQuery = useMe(Boolean(thread.projectId));
+  const membersQuery = useProjectMembers(thread.projectId || null);
+  const userId = meQuery.data?.user_id || meQuery.data?.user?.id || '';
+  const asker =
+    (membersQuery.data || []).find(member => member.user_id === userId)?.role === 'asker';
+  const audiencesQuery = useDatasetAudiences(asker ? thread.datasetId || null : null);
+  const audiences = (audiencesQuery.data?.audiences || [])
+    .map(item => ({
+      name: String(item.name || '').trim(),
+      label: String(item.label || item.name || '').trim(),
+      description: String(item.description || '').trim(),
+    }))
+    .filter(item => item.label);
   const notInData =
     asker &&
     Boolean(thread.answer) &&
@@ -1557,12 +1507,9 @@ export function AgentThreadColumn({
           )
         ) : null}
         {thread.past.map((item, index) => {
+          // Keep slim/history lineage fields (derived/parent ids, procedure, weight label).
           const pastChanges = chatTurnChangesFromToolResults(
-            (item.toolResults || []).map(entry => ({
-              name: entry.name,
-              args: entry.args,
-              result: entry.result,
-            }))
+            item.toolResults as AgentLoopToolResult[] | undefined
           );
           return (
             <div key={`${index}-${item.user.slice(0, 24)}`}>

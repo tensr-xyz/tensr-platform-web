@@ -380,6 +380,74 @@ function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
   return sets;
 }
 
+/** True when name, role, or label marks the column as a survey weight (not a question). */
+export function looksLikeWeightColumn(
+  column: Pick<FlowColumn, 'name' | 'label' | 'role'>
+): boolean {
+  const name = String(column.name || '')
+    .trim()
+    .toLowerCase();
+  if (!name) return false;
+  if (String(column.role || '').toLowerCase() === 'weight') return true;
+  if (
+    name === 'weight' ||
+    name === 'wt' ||
+    name === 'wgt' ||
+    name === 'wght' ||
+    name.endsWith('_wt')
+  ) {
+    return true;
+  }
+  if (name.includes('weight')) return true;
+  return String(column.label || '')
+    .toLowerCase()
+    .includes('weight');
+}
+
+/** Sentence-case a leading lowercase letter on set titles. */
+function sentenceCaseStem(label: string): string {
+  const text = label.trim().replace(/\s+/g, ' ');
+  if (!text) return text;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (/[A-Za-z]/.test(character)) {
+      if (character === character.toLowerCase()) {
+        return text.slice(0, index) + character.toUpperCase() + text.slice(index + 1);
+      }
+      return text;
+    }
+  }
+  return text;
+}
+
+/** True when a multi-set title is a short question fragment needing brand tails. */
+function incompleteMultiStem(stem: string): boolean {
+  const text = stem
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.?…]+$/, '');
+  if (!text || stem.trim().endsWith('?')) return false;
+  const words = text.split(/\s+/);
+  if (words.length <= 5) return true;
+  return ['of', 'about', 'for', 'to', 'a', 'an', 'the', 'in', 'on', 'with'].includes(
+    words[words.length - 1].toLowerCase()
+  );
+}
+
+/** Outline title for a multi set: stem plus brands when the stored label is a fragment. */
+function outlineMultiSetLabel(set: OutlineSetWithStructure, fallback: string): string {
+  const raw = String(set.label || set.name || fallback).trim();
+  const stem = sentenceCaseStem(raw);
+  if (!incompleteMultiStem(stem)) return stem || fallback;
+  const brands = (set.items || [])
+    .map(item => String(item.label || '').trim())
+    .filter(label => label && label.toLowerCase() !== stem.toLowerCase() && label.length <= 48);
+  if (brands.length < 2) return stem || fallback;
+  const shown = brands.slice(0, 8);
+  const joined = shown.join(', ') + (brands.length > shown.length ? ', …' : '');
+  return `${stem.replace(/[.…]+$/, '')}…? (${joined})`;
+}
+
 /** One outline row per question in file order; sets collapse; admin and ids stay out. */
 export function questionnaireOutline(
   columns: FlowColumn[],
@@ -389,8 +457,7 @@ export function questionnaireOutline(
   const weightName = String(options.weightName || '').trim();
   const kinds = options.kinds || {};
   const visible = pickerColumns(columns).filter(column => {
-    if (column.name === weightName || column.name.toLowerCase() === 'weight') return false;
-    if (String(column.role || '').toLowerCase() === 'weight') return false;
+    if (column.name === weightName || looksLikeWeightColumn(column)) return false;
     if (column.linked_set) return false;
     if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
     if (isOtherSpecifyField(column.name, String(column.label || ''))) return false;
@@ -434,14 +501,19 @@ export function questionnaireOutline(
         const name = String(text.column || '');
         if (name) covered.add(name);
       }
-      const setLabel = String(
-        found.set.label || found.set.name || byName.get(found.members[0])?.label || found.members[0]
-      );
+      const fallback =
+        byName.get(found.members[0])?.label || found.members[0] || found.set.name || '';
+      const setKind = outlineSetKind(found.set, found.members, kinds);
+      const setLabel =
+        setKind === 'multi'
+          ? outlineMultiSetLabel(found.set, String(fallback))
+          : sentenceCaseStem(String(found.set.label || found.set.name || fallback)) ||
+            String(fallback);
       const setName = String(found.set.name || found.set.label || found.members[0]);
       units.push({
         key: String(found.set.id || found.set.name || found.members[0]),
         label: setLabel,
-        kind: outlineSetKind(found.set, found.members, kinds),
+        kind: setKind,
         columns: found.members,
         stubValue: setName,
       });
@@ -493,9 +565,14 @@ export function themeColumns(
       const own = String(column.label || '')
         .replace(/^Codes for\s+/i, '')
         .replace(/\s+themes$/i, '')
+        .replace(/\s+first theme$/i, '')
         .trim();
       const ownIsStoredName =
-        !own || own === column.name || own === source || own === `${source} themes`;
+        !own ||
+        own === column.name ||
+        own === source ||
+        own === `${source} themes` ||
+        own === `${source} first theme`;
       const sourceLabel = String(sourceColumn?.label || '').trim();
       const label = !ownIsStoredName
         ? own
@@ -570,10 +647,28 @@ export function questionKind(
     }
     return 'numeric';
   }
+  const nUniqueMeta = Number(column.n_unique);
+  // Prefer metadata uniqueness over a sparse preview page for free-text open ends.
+  if (
+    (type === 'string' || type === 'text' || type === '') &&
+    Number.isFinite(nUniqueMeta) &&
+    nUniqueMeta > 12
+  ) {
+    return 'open';
+  }
   const unique = new Set(seen).size;
-  if (seen.length && unique <= 12 && unique < seen.length / 2) return 'single';
-  // Tables metadata often has no sample values. n_unique still marks text categories.
-  if (isTableTextCategorical(column)) return 'single';
+  if (
+    seen.length &&
+    unique <= 12 &&
+    unique < seen.length / 2 &&
+    (!Number.isFinite(nUniqueMeta) || nUniqueMeta <= 12)
+  ) {
+    return 'single';
+  }
+  // Short unlabelled lists (gender, region) stay single; wider text stays open.
+  if (isTableTextCategorical(column) && Number.isFinite(nUniqueMeta) && nUniqueMeta <= 12) {
+    return 'single';
+  }
   return 'open';
 }
 

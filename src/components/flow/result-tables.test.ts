@@ -566,6 +566,32 @@ describe('result tables', () => {
     expect(grouped.rows.some(row => row.includes('74.0'))).toBe(false);
   });
 
+  it('keeps an unweighted cluster footer when the project has a design weight', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        test: 'cluster_analysis',
+        n_cases: 500,
+        n_input: 500,
+        resolved_weight: 'none',
+        weight: {
+          column: null,
+          weight_aware: false,
+          ran_unweighted: true,
+          note: 'Cluster Analysis ran unweighted; weighted Cluster Analysis is not available yet.',
+        },
+        cluster_sizes: { '0': 141, '1': 206, '2': 153 },
+      },
+    });
+    expect(view.weight).toBe('Unweighted');
+    expect(view.baseDetail).toMatch(/^Weight: Unweighted;/);
+    expect(view.baseDetail).not.toContain('Design weight');
+    expect(
+      resultFootnote(view, '', 'Cluster Analysis', [
+        { name: 'design_weight', label: 'Design weight' },
+      ])
+    ).toMatch(/Weight: Unweighted/);
+  });
+
   it('says the footnote weight is the one named in the study brief', () => {
     const view = resultViewFromToolResults({
       summary: { weight_source: 'study_brief' },
@@ -2027,5 +2053,29 @@ describe('funnelHeadline', () => {
     expect(lead).toContain('50.0% from the previous stage');
     expect(lead).toContain('United Kingdom is highest at 31.3%');
     expect(lead).toContain('Germany is lowest at 13.8%');
+  });
+
+  it('TEN-253: multi-select Valid % becomes % of respondents', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'frequencies',
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Read or visited in the last 30 days',
+          columns: ['Label', 'Count', 'Valid %'],
+          notes: [
+            'Percent of respondents who selected each option. People may select more than one, so percents need not sum to 100.',
+          ],
+          rows: [
+            ['Global Ledger', '1221', '31.3'],
+            ['Base', '3000', '100'],
+          ],
+        },
+      ],
+      bases: [{ column: 'Read titles', unweighted: 3000, weighted: 3900000 }],
+      weight: { column: 'proj_weight', label: 'Projection weight (people)', unweighted_n: 3000 },
+    });
+    expect(view.tables[0].columns).toEqual(['Label', 'Count', '% of respondents']);
+    expect(view.tables[0].columns).not.toContain('Valid %');
+    expect(view.baseDetail || '').toMatch(/base = 3,000 \(3,900,000 weighted\)/);
   });
 });

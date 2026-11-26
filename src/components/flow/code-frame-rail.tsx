@@ -50,6 +50,24 @@ function rowsFrom(values: string[]): { codes: CodeRow[]; blank: number } {
   return { codes, blank };
 }
 
+/** Whole-file theme counts from /columns/.../values (Paper 4d · % of N). */
+export function rowsFromFileCounts(
+  counts: Record<string, number>,
+  valueLabels: Record<string, string> = {},
+  missing = 0
+): { codes: CodeRow[]; blank: number } {
+  const merged = new Map<string, number>();
+  for (const [code, count] of Object.entries(counts)) {
+    const label = valueLabels[code] || code;
+    if (!label || label === '—') continue;
+    merged.set(label, (merged.get(label) || 0) + Number(count || 0));
+  }
+  const codes = [...merged.entries()]
+    .map(([label, count]) => ({ id: label, label, count }))
+    .sort((a, b) => b.count - a.count);
+  return { codes, blank: missing };
+}
+
 async function pollApply(
   datasetId: string,
   body: Record<string, unknown>
@@ -101,6 +119,7 @@ export function CodeFrameRail({
   onApplied?: (datasetId: string) => void;
 }) {
   const [{ codes, blank }, setFrame] = useState(() => rowsFrom(values));
+  const [baseN, setBaseN] = useState(values.length || 0);
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState(codes[0]?.id || '');
   const [rename, setRename] = useState('');
@@ -118,6 +137,7 @@ export function CodeFrameRail({
   useEffect(() => {
     const next = rowsFrom(values);
     setFrame(next);
+    setBaseN(values.length || 0);
     setOpenId(next.codes[0]?.id || '');
     setSelected([]);
     setRename('');
@@ -126,7 +146,32 @@ export function CodeFrameRail({
     setImportPreview(null);
     setImportMode('replace');
   }, [signature]);
-  const total = values.length || 1;
+  // File-wide counts and base (Paper 4d · "% of 2,259"), not the preview window.
+  useEffect(() => {
+    if (!datasetId || !column) return;
+    let live = true;
+    void flowJson<{
+      counts?: Record<string, number>;
+      value_labels?: Record<string, string>;
+      missing?: number;
+      n?: number;
+    }>(`/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values`)
+      .then(page => {
+        if (!live || !page.counts) return;
+        const next = rowsFromFileCounts(page.counts, page.value_labels || {}, page.missing || 0);
+        if (!next.codes.length) return;
+        setFrame(next);
+        setBaseN(Number(page.n) || values.length || 0);
+        setOpenId(current => current || next.codes[0]?.id || '');
+      })
+      .catch(() => {
+        /* Keep the preview-window tallies. */
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, column, signature, values.length]);
+  const total = baseN || values.length || 1;
   const textColumn = String(textColumnProp || '').trim() || textColumnFromCodeColumn(column);
   const headTitle = `${title || textColumn} · ${codes.length} theme${
     codes.length === 1 ? '' : 's'
@@ -348,7 +393,7 @@ export function CodeFrameRail({
 
       <div className="code-frame-meta">
         <span>Code frame</span>
-        <span>% of {values.length}</span>
+        <span>% of {total.toLocaleString('en-GB')}</span>
       </div>
       <div className="code-frame-list">
         {codes.map(code => {

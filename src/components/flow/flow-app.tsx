@@ -85,7 +85,11 @@ import {
   visibleProjectSection,
 } from '@/components/flow/project-tabs';
 import {
+  ensureMe,
+  ensureProjectAskerLog,
+  ensureProjectMembers,
   useDatasetColumns,
+  useMe,
   usePrefetchProjectTab,
   useProjectOverview,
 } from '@/hooks/api/use-project-data';
@@ -558,20 +562,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (isAuthenticated) void reload();
   }, [isAuthenticated, reload]);
 
+  const meQuery = useMe(isAuthenticated);
   useEffect(() => {
-    if (!isAuthenticated) return;
-    void flowJson<{
-      email?: string;
-      user?: { email?: string; name?: string };
-      active_organization?: { name?: string };
-    }>('/me')
-      .then(page => {
-        setEmail(page.user?.email || page.email || '');
-        setAccount(page.user?.name || page.user?.email || page.email || '');
-        setOrgName(page.active_organization?.name || '');
-      })
-      .catch(() => undefined);
-  }, [isAuthenticated]);
+    if (!meQuery.data) return;
+    const page = meQuery.data;
+    setEmail(page.user?.email || page.email || '');
+    setAccount(page.user?.name || page.user?.email || page.email || '');
+    setOrgName(page.active_organization?.name || '');
+  }, [meQuery.data]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('new') === '1') {
@@ -660,6 +658,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
           dataset_id: row.dataset_id || row.id,
           project_id: row.project_id || projectId,
         }));
+        // Seed the project datasets key so Details paints from cache on revisit.
+        projectQueryClient.setQueryData(projectQueryKeys.datasets(projectId), rows);
         setDatasets(current => {
           const previous = new Map(current.map(row => [datasetRowId(row), row]));
           const merged = rows.map(row => {
@@ -735,23 +735,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
       return;
     }
     let live = true;
-    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
+    void ensureMe(projectQueryClient)
       .then(me => {
         const userId = me.user_id || me.user?.id || '';
-        return flowJson<{ members?: { user_id?: string; role?: string }[] }>(
-          `/api/projects/${projectId}/members`
-        ).then(page => {
+        return ensureProjectMembers(projectQueryClient, projectId).then(members => {
           if (!live) return;
-          const mine = (page.members || []).find(member => member.user_id === userId);
+          const mine = members.find(member => member.user_id === userId);
           const role = mine?.role || (project?.created_by === userId ? 'owner' : null);
           setMyRole(role);
           if (role === 'asker') {
             setAskerTurns(null);
             return;
           }
-          return flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
-            .then(log => {
-              if (live) setAskerTurns(log.turns || []);
+          return ensureProjectAskerLog(projectQueryClient, projectId)
+            .then(turns => {
+              if (live) setAskerTurns(turns as AskerTurn[]);
             })
             .catch(() => {
               if (live) setAskerTurns([]);
@@ -767,7 +765,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     return () => {
       live = false;
     };
-  }, [projectId, isAuthenticated, project?.created_by]);
+  }, [projectId, isAuthenticated, project?.created_by, projectQueryClient]);
 
   useEffect(() => {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
@@ -6760,7 +6758,8 @@ function ReportScreen({
                 const { live, outdated } = partitionLiveAndStale(findings, staleFindings);
                 const renderFinding = (
                   finding: ReportFinding,
-                  stale: (typeof staleTables)[0] | undefined
+                  stale: (typeof staleTables)[0] | undefined,
+                  key: string
                 ) => {
                   const inUse = versionLabel(datasets, datasetId || '', '');
                   const builtOn = stale
@@ -6769,7 +6768,7 @@ function ReportScreen({
                   const headline = stale?.label || finding.headline;
                   const support = stale ? outOfDateLine(builtOn, inUse) : finding.support;
                   return (
-                    <article key={finding.id} className="report-finding">
+                    <article key={key} className="report-finding">
                       <div className="report-finding-copy">
                         {finding.eyebrow ? <p className="flow-muted">{finding.eyebrow}</p> : null}
                         <div className="report-finding-title">
@@ -6809,7 +6808,7 @@ function ReportScreen({
                       {finding.bars.length ? (
                         <div className="report-bars">
                           {finding.bars.map((bar, barIndex) => (
-                            <div key={`${finding.id}-${barIndex}-${bar.label}`}>
+                            <div key={`${key}-${barIndex}-${bar.label}`}>
                               <div className="report-bar-label">
                                 <span>{bar.label}</span>
                                 <span>{shownPercent(bar.percent, finding.decimals)}</span>
@@ -6829,11 +6828,15 @@ function ReportScreen({
                 };
                 return (
                   <>
-                    {placePins(live, reportPins).map(entry => {
+                    {placePins(live, reportPins).map((entry, index) => {
                       if (entry.kind === 'pin') {
-                        return <OutputPin key={entry.item.id} pin={entry.item} />;
+                        return <OutputPin key={`pin-${entry.item.id}-${index}`} pin={entry.item} />;
                       }
-                      return renderFinding(entry.item, undefined);
+                      return renderFinding(
+                        entry.item,
+                        undefined,
+                        `finding-${entry.item.id}-${index}`
+                      );
                     })}
                     {outdated.length ? (
                       <details className="report-stale">
@@ -6842,11 +6845,11 @@ function ReportScreen({
                           {outdated.length === 1 ? 'table' : 'tables'}
                         </summary>
                         <div className="report-stale-list">
-                          {outdated.map(finding => {
+                          {outdated.map((finding, index) => {
                             const stale = staleTables.find(
                               table => table.id === finding.id || table.id === finding.tableId
                             );
-                            return renderFinding(finding, stale);
+                            return renderFinding(finding, stale, `stale-${finding.id}-${index}`);
                           })}
                         </div>
                       </details>

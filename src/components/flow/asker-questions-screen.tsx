@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { analysisReportHref } from '@/components/flow/chat-output';
 import { flowJson } from '@/lib/flow-api';
+import { useProjectAskerLog } from '@/hooks/api/use-project-data';
+import { projectQueryKeys } from '@/lib/project-query-cache';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type AskerTurn = {
   turn_id: string;
@@ -72,7 +75,10 @@ function summaryLine(turn: AskerTurn): string {
 }
 
 export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
-  const [turns, setTurns] = useState<AskerTurn[] | null>(null);
+  const queryClient = useQueryClient();
+  const askerQuery = useProjectAskerLog(projectId || null);
+  const turns =
+    askerQuery.isPending && !askerQuery.data ? null : ((askerQuery.data || []) as AskerTurn[]);
   const [filter, setFilter] = useState<FilterId>('to_check');
   const [openId, setOpenId] = useState('');
   const [note, setNote] = useState('');
@@ -80,22 +86,9 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!projectId) return;
-    let live = true;
-    void flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
-      .then(page => {
-        if (!live) return;
-        const list = page.turns || [];
-        setTurns(list);
-        setOpenId(current => current || list[0]?.turn_id || '');
-      })
-      .catch(() => {
-        if (live) setTurns([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [projectId]);
+    if (!turns?.length) return;
+    setOpenId(current => current || turns[0]?.turn_id || '');
+  }, [turns]);
 
   const counts = useMemo(() => {
     const list = turns || [];
@@ -133,8 +126,10 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
       .then(page => {
         const saved = page.turn;
         if (!saved) return;
-        setTurns(current =>
-          (current || []).map(turn => (turn.turn_id === saved.turn_id ? saved : turn))
+        queryClient.setQueryData(
+          projectQueryKeys.askerLog(projectId),
+          (current: AskerTurn[] | undefined) =>
+            (current || []).map(turn => (turn.turn_id === saved.turn_id ? saved : turn))
         );
       })
       .catch(() => setError('Could not update that answer.'))

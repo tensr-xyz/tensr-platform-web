@@ -247,6 +247,66 @@ describe('chatTurnChangesFromToolResults', () => {
     ).toEqual([]);
   });
 
+  it('lists a rake as new weight + file version switched', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'run_analysis',
+        args: { analysis_type: 'rake', dataset_id: 'parent' },
+        result: {
+          ok: true,
+          analysis_type: 'rake',
+          derived_dataset_id: 'child',
+          parent_dataset_id: 'parent',
+          weight_vector: {
+            column: 'rake_weight',
+            diagnostics: { weight_label: 'Raked weight' },
+          },
+        },
+      },
+    ]);
+    expect(changes).toEqual([
+      {
+        label: 'New weight: Raked weight',
+        operation: 'rake',
+        previousDatasetId: 'parent',
+        currentDatasetId: 'child',
+      },
+      {
+        label: 'File version switched',
+        operation: 'rake',
+        previousDatasetId: 'parent',
+        currentDatasetId: 'child',
+      },
+    ]);
+    expect(chatTurnUndoTarget(changes)).toEqual({
+      previousDatasetId: 'parent',
+      currentDatasetId: 'child',
+    });
+  });
+
+  it('lists a slim rake lineage row without stripping ids', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'run_analysis',
+        procedure: 'rake',
+        derived_dataset_id: 'child',
+        parent_dataset_id: 'parent',
+        result: {
+          ok: true,
+          operation: 'rake',
+          derived_dataset_id: 'child',
+          parent_dataset_id: 'parent',
+          active_weight_label: 'Raked weight',
+          answer_markdown: 'New weight: Raked weight',
+        },
+      } as never,
+    ]);
+    expect(changes.map(change => change.label)).toEqual([
+      'New weight: Raked weight',
+      'File version switched',
+    ]);
+  });
+
   it('formats the Paper 9e changes headline', () => {
     const changes = chatTurnChangesFromToolResults([
       {

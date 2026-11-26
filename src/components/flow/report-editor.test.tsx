@@ -2,7 +2,12 @@ import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { flowJson } from '@/lib/flow-api';
-import { previewGridFromBannerBook, ReportEditor } from './report-editor';
+import {
+  preferAffirmativeRowFirst,
+  previewGridFromBannerBook,
+  ReportEditor,
+  shareBarsFromBannerBook,
+} from './report-editor';
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(),
@@ -120,6 +125,31 @@ describe('previewGridFromBannerBook', () => {
     expect(grid[0]).toEqual(['', 'Total', 'South']);
     expect(grid[1]).toEqual(['South', '40.4%', '100%']);
     expect(JSON.stringify(grid)).not.toMatch(/Row one|Group A/);
+  });
+
+  it('leads yes/no rows with Yes and builds chart bars from the book', () => {
+    const book = {
+      banner_columns: [{ id: 'total', label: 'Total' }],
+      rows: [
+        {
+          id: 'n',
+          kind: 'value',
+          label: 'No',
+          cells: [{ banner_id: 'total', percent: 22.9 }],
+        },
+        {
+          id: 'y',
+          kind: 'value',
+          label: 'Yes',
+          cells: [{ banner_id: 'total', percent: 77.1 }],
+        },
+      ],
+    };
+    expect(preferAffirmativeRowFirst(book.rows).map(row => row.label)).toEqual(['Yes', 'No']);
+    const grid = previewGridFromBannerBook(book);
+    expect(grid[1]?.[0]).toBe('Yes');
+    expect(grid[2]?.[0]).toBe('No');
+    expect(shareBarsFromBannerBook(book).map(bar => bar.label)).toEqual(['Yes', 'No']);
   });
 });
 

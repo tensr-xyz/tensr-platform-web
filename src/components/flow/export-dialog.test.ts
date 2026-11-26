@@ -1,9 +1,21 @@
 import {
   deckBatchPayload,
   pipelineExportPayload,
+  reportExportFormatMeta,
   tableSpecIdsFromReportDocument,
 } from '@/components/flow/export-dialog';
 import { groupReportExportPages, pagesFromReportDocument } from '@/lib/office-deck-job';
+
+describe('reportExportFormatMeta', () => {
+  it('lists Word, PowerPoint, Excel, PDF, Markdown and SPSS data (Paper 6i)', () => {
+    const formats = reportExportFormatMeta();
+    expect(formats.map(item => item.id)).toEqual(['docx', 'pptx', 'xlsx', 'pdf', 'md', 'sav']);
+    expect(formats.find(item => item.id === 'pdf')?.note).toMatch(/Fixed layout/i);
+    expect(formats.find(item => item.id === 'md')?.label).toBe('Markdown');
+    expect(formats.find(item => item.id === 'sav')?.ext).toBe('.SAV + .SPS');
+    expect(formats.find(item => item.id === 'sav')?.label).toBe('Data for SPSS');
+  });
+});
 
 describe('pipelineExportPayload', () => {
   it('sends the project id so the study brief can be a context page', () => {

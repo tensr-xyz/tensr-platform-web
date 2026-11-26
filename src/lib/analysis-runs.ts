@@ -236,11 +236,26 @@ export type StoredAnalysisRun = {
   status?: string;
 };
 
-/** Poll interval while a banner finishes on the 180s worker. */
-export const ANALYSIS_RUN_POLL_MS = 2000;
+/** First poll delay while a run is still pending (TEN-272 backoff). */
+export const ANALYSIS_RUN_POLL_MS = 1000;
+
+/** Cap for exponential backoff between pending-run polls. */
+export const ANALYSIS_RUN_POLL_MAX_MS = 10_000;
 
 /** Give a cold worker enough room before the UI gives up. */
 export const ANALYSIS_RUN_POLL_LIMIT = 90;
+
+/** Delay before the next poll after `attempt` pending responses (0-based). */
+export function analysisRunPollDelay(
+  attempt: number,
+  opts?: { initialMs?: number; maxMs?: number }
+): number {
+  const initial = opts?.initialMs ?? ANALYSIS_RUN_POLL_MS;
+  const max = opts?.maxMs ?? ANALYSIS_RUN_POLL_MAX_MS;
+  if (initial <= 0) return 0;
+  const exp = Math.max(0, Math.floor(attempt));
+  return Math.min(initial * 2 ** exp, max);
+}
 
 /** Row from GET /datasets/{id}/runs. The report lives on the full run. */
 export type AnalysisRunSummary = {
@@ -316,18 +331,26 @@ export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun
 /** Wait until a pending analysis run is complete or failed. */
 export async function waitForAnalysisRun(
   runId: string,
-  opts?: { intervalMs?: number; attempts?: number; signal?: AbortSignal }
+  opts?: {
+    intervalMs?: number;
+    maxIntervalMs?: number;
+    attempts?: number;
+    signal?: AbortSignal;
+  }
 ): Promise<StoredAnalysisRun | null> {
-  const intervalMs = opts?.intervalMs ?? ANALYSIS_RUN_POLL_MS;
+  const initialMs = opts?.intervalMs ?? ANALYSIS_RUN_POLL_MS;
+  const maxMs = opts?.maxIntervalMs ?? ANALYSIS_RUN_POLL_MAX_MS;
   const attempts = opts?.attempts ?? ANALYSIS_RUN_POLL_LIMIT;
   for (let i = 0; i < attempts; i += 1) {
     if (opts?.signal?.aborted) return null;
     const run = await fetchAnalysisRun(runId);
-    const status = String(run?.status || 'complete');
+    const status = String(run?.status || 'complete').toLowerCase();
+    // Stop as soon as the run leaves pending — no further GETs (TEN-272).
     if (run && status !== 'pending') return run;
     if (i + 1 >= attempts) return run;
+    const delayMs = analysisRunPollDelay(i, { initialMs, maxMs });
     await new Promise<void>(resolve => {
-      const timer = setTimeout(resolve, intervalMs);
+      const timer = setTimeout(resolve, delayMs);
       opts?.signal?.addEventListener(
         'abort',
         () => {

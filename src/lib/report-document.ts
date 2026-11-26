@@ -620,7 +620,7 @@ export function cssFontStack(family: string | null | undefined): string {
 }
 
 /** Gap under a text frame so the next object (table title, commentary) never overlaps. */
-const TEXT_STACK_GAP = 0.03;
+const TEXT_STACK_GAP = 0.04;
 
 const TRAILING_BASE_FOOTNOTE_RE =
   /\s+(?:Base\s*:\s*(?:Unweighted,\s*)?n\s*=\s*[\d,]+|Base\s*:\s*[\d,]+(?:\s*\([^)]*\))?|Base\s*:\s*[\d,]+\s+weighted(?:\s*\([^)]*\))?|Unweighted,\s*n\s*=\s*[\d,]+)\s*$/i;
@@ -668,17 +668,19 @@ function estimateTextHeightFraction(obj: ReportObject): number {
     1,
     Number(obj.textStyle.lineSpacing) || DEFAULT_TEXT_STYLE.lineSpacing
   );
-  const widthIn = Math.max(0.5, obj.frame.w * PAGE_WIDTH_IN);
+  // Canvas objects pad 4px; subtract so wrap estimate matches what the browser paints.
+  const widthIn = Math.max(0.4, obj.frame.w * PAGE_WIDTH_IN - 0.12);
   // Bold / display sizes wrap sooner; keep the estimate conservative so frames
   // reserve room rather than painting over the object below.
-  const emWidth = obj.textStyle.bold || sizePt >= 18 ? 0.72 : 0.64;
-  const charsPerLine = Math.max(16, Math.floor((widthIn * 72) / (sizePt * emWidth)));
+  const emWidth = obj.textStyle.bold || sizePt >= 18 ? 0.78 : 0.7;
+  const charsPerLine = Math.max(14, Math.floor((widthIn * 72) / (sizePt * emWidth)));
   let lines = 0;
   for (const paragraph of text.split(/\n/) || [text]) {
     lines += Math.max(1, Math.ceil(Math.max(1, paragraph.length) / charsPerLine));
   }
-  // Object padding + selection border so the last line is never clipped.
-  const heightIn = (lines * sizePt * lineSpacing) / 72 + 0.26;
+  // Object padding + selection border + one spare line so the last glyph never
+  // sits on the table question title below.
+  const heightIn = ((lines + 0.35) * sizePt * lineSpacing) / 72 + 0.2;
   return Math.min(0.85, Math.max(obj.frame.h, heightIn / PAGE_HEIGHT_IN));
 }
 
@@ -705,12 +707,48 @@ function pushObjectsBelow(objects: ReportObject[], source: ReportObject, floorY:
   }
 }
 
+/**
+ * Headline + chart must not keep a bare table. Prefer promoting the live grid to a
+ * chart (insight decks); otherwise remount the page as Headline + table.
+ */
+function alignLayoutContentKinds(
+  page: ReportDocument['pages'][number],
+  objects: ReportObject[]
+): string {
+  const layout = String(page.layoutId || '').trim();
+  if (layout !== 'title_and_content') return layout;
+  const liveTables = objects.filter(
+    obj => !obj.hidden && obj.kind === 'table' && String(obj.tableSpecId || '').trim()
+  );
+  const hasChart = objects.some(obj => !obj.hidden && obj.kind === 'chart');
+  if (!liveTables.length || hasChart) return layout;
+  // Insight section → chart on Headline + chart; everything else → Headline + table.
+  const section = String(page.section || '')
+    .trim()
+    .toLowerCase();
+  if (section === 'insights' || section === 'insight') {
+    for (const obj of liveTables) {
+      obj.kind = 'chart';
+    }
+    return layout;
+  }
+  return 'title_only';
+}
+
 function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['pages'][number] {
-  const hasTable = page.objects.some(obj => obj.kind === 'table' && !obj.hidden);
-  const isStudy =
-    String(page.title || '')
-      .trim()
-      .toLowerCase() === 'study';
+  const hasLiveGrid = page.objects.some(
+    obj => (obj.kind === 'table' || obj.kind === 'chart') && !obj.hidden
+  );
+  const section = String(page.section || '')
+    .trim()
+    .toLowerCase();
+  const titleFolded = String(page.title || '')
+    .trim()
+    .toLowerCase();
+  // Opening context page (legacy "Study" or Title section) — never show a deck ask.
+  const isOpeningBrief =
+    titleFolded === 'study' || section === 'title' || section === 'study' || section === 'context';
+  let clearedDeckRequest = false;
   const objects = page.objects.map(obj => {
     const next = {
       ...obj,
@@ -719,15 +757,16 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
     };
     if (next.kind !== 'text' || next.hidden) return next;
     const plain = objectPlainTextForFit(next);
-    // Study page must never show the chat request that asked for the deck.
-    if (isStudy && looksLikeDeckRequestBrief(plain)) {
+    // Opening page must never show the chat request that asked for the deck.
+    if (isOpeningBrief && looksLikeDeckRequestBrief(plain)) {
+      clearedDeckRequest = true;
       next.text = '';
       next.runs = [];
       next.hidden = true;
       return next;
     }
     // Insight / appendix commentary must not repeat the table Base footer.
-    if (hasTable) {
+    if (hasLiveGrid) {
       const cleaned = stripTrailingBaseFootnote(plain);
       if (cleaned !== plain.trim()) {
         next.text = cleaned;
@@ -738,19 +777,67 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
     }
     return next;
   });
-  const ordered = [...objects].sort(
-    (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
-  );
-  for (const obj of ordered) {
-    if (obj.kind !== 'text' || obj.hidden) continue;
-    const needed = estimateTextHeightFraction(obj);
-    if (needed > obj.frame.h + 0.002) {
-      obj.frame.h = needed;
+  if (clearedDeckRequest) {
+    // Drop a leftover bare "Study"/"Report" label when the brief was only the ask.
+    for (const obj of objects) {
+      if (obj.kind !== 'text' || obj.hidden) continue;
+      const plain = objectPlainTextForFit(obj).trim().toLowerCase();
+      if (!plain || plain === 'study' || plain === 'report') {
+        obj.text = '';
+        obj.runs = [];
+        obj.hidden = true;
+      }
     }
-    // Always keep a gap under text so wrapped lines never sit on the next frame.
-    pushObjectsBelow(objects, obj, obj.frame.y + obj.frame.h + TEXT_STACK_GAP);
   }
-  return { ...page, objects };
+  const layoutId = alignLayoutContentKinds(page, objects);
+  // Two passes: expanding a title can push commentary, which then needs its own grow.
+  for (let pass = 0; pass < 2; pass++) {
+    const ordered = [...objects].sort(
+      (a, b) => a.frame.y - b.frame.y || a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+    );
+    for (const obj of ordered) {
+      if (obj.kind !== 'text' || obj.hidden) continue;
+      const needed = estimateTextHeightFraction(obj);
+      if (needed > obj.frame.h + 0.002) {
+        obj.frame.h = needed;
+      }
+      // Always keep a gap under text so wrapped lines never sit on the next frame.
+      pushObjectsBelow(objects, obj, obj.frame.y + obj.frame.h + TEXT_STACK_GAP);
+    }
+  }
+  const fitted = { ...page, layoutId, objects };
+  if (!isOpeningBrief) return fitted;
+  const hasVisibleText = objects.some(
+    obj => obj.kind === 'text' && !obj.hidden && objectPlainTextForFit(obj).trim()
+  );
+  const hasLiveContent = objects.some(
+    obj =>
+      !obj.hidden &&
+      (obj.kind === 'table' || obj.kind === 'chart') &&
+      String(obj.tableSpecId || '').trim()
+  );
+  // Empty opening brief (chat request cleared, no study brief) — drop from view.
+  if (!hasVisibleText && !hasLiveContent) {
+    return { ...fitted, hideFromExport: true, hideFromPublish: true };
+  }
+  return fitted;
+}
+
+function isHiddenEmptyOpeningPage(page: ReportPage): boolean {
+  const section = String(page.section || '')
+    .trim()
+    .toLowerCase();
+  const titleFolded = String(page.title || '')
+    .trim()
+    .toLowerCase();
+  const isOpening =
+    titleFolded === 'study' || section === 'title' || section === 'study' || section === 'context';
+  if (!isOpening) return false;
+  if (!page.hideFromExport || !page.hideFromPublish) return false;
+  const hasVisibleText = page.objects.some(
+    obj => obj.kind === 'text' && !obj.hidden && objectPlainTextForFit(obj).trim()
+  );
+  return !hasVisibleText;
 }
 
 /** Expand clipped text frames on one page (first paint); other pages stay as stored. */
@@ -761,7 +848,9 @@ export function fitPageTextFrames(
   const doc = normalizeReportDocument(document);
   return {
     ...doc,
-    pages: doc.pages.map(page => (page.id === pageId ? fitPageObjects(page) : page)),
+    pages: doc.pages
+      .map(page => (page.id === pageId ? fitPageObjects(page) : page))
+      .filter(page => !isHiddenEmptyOpeningPage(page)),
   };
 }
 
@@ -770,7 +859,7 @@ export function fitDocumentTextFrames(document: ReportDocument | unknown): Repor
   const doc = normalizeReportDocument(document);
   return {
     ...doc,
-    pages: doc.pages.map(fitPageObjects),
+    pages: doc.pages.map(fitPageObjects).filter(page => !isHiddenEmptyOpeningPage(page)),
   };
 }
 
@@ -1152,11 +1241,31 @@ function normalizeSavedPageTemplate(raw: unknown): SavedPageTemplate | null {
   };
 }
 
+/** Remint colliding page / object ids so React list keys stay unique. */
+function ensureUniquePageIds(pages: ReportPage[]): ReportPage[] {
+  const seenPages = new Set<string>();
+  return pages.map(page => {
+    let pageId = String(page.id || '').trim() || newId('page');
+    if (seenPages.has(pageId)) pageId = newId('page');
+    seenPages.add(pageId);
+    const seenObjects = new Set<string>();
+    const objects = page.objects.map(obj => {
+      let objectId = String(obj.id || '').trim() || newId('obj');
+      if (seenObjects.has(objectId)) objectId = newId('obj');
+      seenObjects.add(objectId);
+      return { ...obj, id: objectId };
+    });
+    return { ...page, id: pageId, objects };
+  });
+}
+
 export function normalizeReportDocument(raw: unknown): ReportDocument {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const pages = (Array.isArray(source.pages) ? source.pages : [])
-    .map(normalizePage)
-    .filter((page): page is ReportPage => Boolean(page));
+  const pages = ensureUniquePageIds(
+    (Array.isArray(source.pages) ? source.pages : [])
+      .map(normalizePage)
+      .filter((page): page is ReportPage => Boolean(page))
+  );
   const templatesRaw = source.page_templates ?? source.pageTemplates ?? [];
   const pageTemplates = (Array.isArray(templatesRaw) ? templatesRaw : [])
     .map(normalizeSavedPageTemplate)

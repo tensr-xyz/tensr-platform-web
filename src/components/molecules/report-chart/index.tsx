@@ -489,51 +489,98 @@ function ChartBody({
       sizedByWeight && maxWeight > 0 && typeof weight === 'number'
         ? Math.max(1.5, maxRadius * Math.sqrt(weight / maxWeight))
         : baseRadius;
+    const groups = Array.from(
+      new Set(
+        pts
+          .map(p => ('group' in p && typeof p.group === 'string' ? p.group.trim() : ''))
+          .filter(Boolean)
+      )
+    );
+    const colourByGroup = chart.kind === 'scatter' && groups.length > 0;
+    const legendMax = layout.density === 'comfortable' ? 28 : 16;
+    const legendGutter = colourByGroup
+      ? Math.min(160, Math.max(72, Math.round(legendMax * layout.fontSize * 0.6 + 20)))
+      : 0;
+    const scatterLayout = colourByGroup
+      ? {
+          ...layout,
+          padR: Math.max(layout.padR, legendGutter),
+          plotW: layout.width - layout.padL - Math.max(layout.padR, legendGutter),
+        }
+      : layout;
+    const scatterSx = colourByGroup
+      ? scaleLinear(x0, x1, scatterLayout.padL, scatterLayout.padL + scatterLayout.plotW)
+      : sx;
+    const scatterXTicks = colourByGroup
+      ? ticksInDomain(x0, x1, scatterLayout.maxTicksX).map(v => ({ value: v, x: scatterSx(v) }))
+      : xTicks;
+    // Cluster scatters colour by group + legend. Sparse maps keep point labels.
+    const drawPointLabels = !colourByGroup;
 
     return (
       <svg
         data-chart-kind={chart.kind}
         data-point-size={sizedByWeight ? 'weight' : undefined}
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        data-scatter-groups={colourByGroup ? String(groups.length) : undefined}
+        viewBox={`0 0 ${scatterLayout.width} ${scatterLayout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
       >
-        <ChartTitle layout={layout} title={chart.title} />
+        <ChartTitle layout={scatterLayout} title={chart.title} />
         {line && (
           <line
-            x1={sx(line.x0)}
+            x1={scatterSx(line.x0)}
             y1={sy(line.y0)}
-            x2={sx(line.x1)}
+            x2={scatterSx(line.x1)}
             y2={sy(line.y1)}
             className="stroke-violet-600"
             strokeWidth={2}
             strokeLinecap="round"
           />
         )}
-        {pts.map((p, i) => (
-          <g key={i}>
-            <circle
-              cx={sx(p.x)}
-              cy={sy(p.y)}
-              r={pointRadius('weight' in p ? p.weight : undefined)}
-              className={sizedByWeight ? 'fill-zinc-600/45 stroke-zinc-700/60' : 'fill-zinc-600/80'}
-              strokeWidth={sizedByWeight ? 0.5 : undefined}
-            />
-            {'label' in p && p.label ? (
-              <text
-                x={sx(p.x) + 6}
-                y={sy(p.y) - 4}
-                fill="#3f3f46"
-                style={{ fontSize: layout.density === 'comfortable' ? 11 : 10 }}
-              >
-                {p.label}
-              </text>
-            ) : null}
-          </g>
-        ))}
+        {pts.map((p, i) => {
+          const group =
+            colourByGroup && 'group' in p && typeof p.group === 'string' ? p.group.trim() : '';
+          const colourIndex = group ? groups.indexOf(group) : -1;
+          const fill =
+            colourIndex >= 0
+              ? seriesFill[colourIndex % seriesFill.length]
+              : sizedByWeight
+                ? undefined
+                : undefined;
+          return (
+            <g key={i}>
+              <circle
+                cx={scatterSx(p.x)}
+                cy={sy(p.y)}
+                r={pointRadius('weight' in p ? p.weight : undefined)}
+                fill={fill}
+                className={
+                  fill
+                    ? undefined
+                    : sizedByWeight
+                      ? 'fill-zinc-600/45 stroke-zinc-700/60'
+                      : 'fill-zinc-600/80'
+                }
+                strokeWidth={sizedByWeight ? 0.5 : undefined}
+                opacity={fill ? 0.85 : undefined}
+              />
+              {drawPointLabels && 'label' in p && p.label ? (
+                <text
+                  x={scatterSx(p.x) + 6}
+                  y={sy(p.y) - 4}
+                  fill="#3f3f46"
+                  style={{ fontSize: scatterLayout.density === 'comfortable' ? 11 : 10 }}
+                >
+                  {p.label}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
         <AxisFrame
-          layout={layout}
-          xTicks={xTicks}
+          layout={scatterLayout}
+          xTicks={scatterXTicks}
           yTicks={yTicks}
           xFormatter={v =>
             (chart.kind === 'scatter' ? labelledTick(v, chart.x_tick_labels) : null) ??
@@ -546,6 +593,27 @@ function ChartBody({
           xAxisLabel={chart.x_label}
           yAxisLabel={chart.y_label}
         />
+        {colourByGroup ? (
+          <g
+            transform={`translate(${scatterLayout.padL + scatterLayout.plotW + 10} ${scatterLayout.padT + 4})`}
+            data-chart-legend="groups"
+          >
+            {groups.map((name, index) => (
+              <g key={name} transform={`translate(0 ${index * (scatterLayout.fontSize + 4)})`}>
+                <circle
+                  cx={4}
+                  cy={4}
+                  r={4}
+                  fill={seriesFill[index % seriesFill.length]}
+                  opacity={0.85}
+                />
+                <text x={12} y={7} fill="#52525b" style={{ fontSize: scatterLayout.fontSize }}>
+                  {truncateLabel(name, legendMax)}
+                </text>
+              </g>
+            ))}
+          </g>
+        ) : null}
       </svg>
     );
   }

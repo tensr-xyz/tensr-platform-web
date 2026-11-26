@@ -784,9 +784,74 @@ describe('reshapeReportDocument', () => {
     const comment = fitted.pages[0]!.objects.find(obj => obj.id === 'comment')!;
     const table = fitted.pages[0]!.objects.find(obj => obj.id === 'table')!;
     expect(comment.frame.h).toBeGreaterThan(0.12);
-    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.02);
+    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.03);
     expect(cssFontStack('Inter')).toMatch(/^Inter, system-ui, sans-serif$/);
     expect(cssFontStack('Inter')).not.toMatch(/(^|,\s*)serif\b/);
+  });
+
+  it('promotes insight tables on Headline + chart to charts and remounts other tables', () => {
+    const insight = normalizeReportDocument({
+      pages: [
+        {
+          id: 'page-chart',
+          title: 'Referral to Registered Dietitians',
+          section: 'Insights',
+          layout_id: 'title_and_content',
+          objects: [
+            {
+              id: 'title',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.06, w: 0.88, h: 0.12 },
+              text: 'Referral to Registered Dietitians for specialist support.',
+              text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
+            },
+            {
+              id: 'comment',
+              kind: 'text',
+              frame: { x: 0.06, y: 0.2, w: 0.88, h: 0.08 },
+              text: 'Most respondents want specialist support.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+            {
+              id: 'grid',
+              kind: 'table',
+              table_spec_id: 'spec-referral',
+              frame: { x: 0.06, y: 0.3, w: 0.88, h: 0.5 },
+            },
+          ],
+        },
+      ],
+    });
+    const fittedInsight = fitDocumentTextFrames(insight);
+    const title = fittedInsight.pages[0]!.objects.find(obj => obj.id === 'title')!;
+    const comment = fittedInsight.pages[0]!.objects.find(obj => obj.id === 'comment')!;
+    const grid = fittedInsight.pages[0]!.objects.find(obj => obj.id === 'grid')!;
+    expect(fittedInsight.pages[0]!.layoutId).toBe('title_and_content');
+    expect(grid.kind).toBe('chart');
+    expect(comment.frame.y).toBeGreaterThanOrEqual(title.frame.y + title.frame.h + 0.03);
+    expect(grid.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.03);
+
+    const evidence = normalizeReportDocument({
+      pages: [
+        {
+          id: 'page-table',
+          title: 'Evidence',
+          section: 'Evidence',
+          layout_id: 'title_and_content',
+          objects: [
+            {
+              id: 'grid',
+              kind: 'table',
+              table_spec_id: 'spec-ev',
+              frame: { x: 0.06, y: 0.3, w: 0.88, h: 0.5 },
+            },
+          ],
+        },
+      ],
+    });
+    const fittedEvidence = fitDocumentTextFrames(evidence);
+    expect(fittedEvidence.pages[0]!.layoutId).toBe('title_only');
+    expect(fittedEvidence.pages[0]!.objects.find(obj => obj.id === 'grid')!.kind).toBe('table');
   });
 
   it('hides Study pages that stored the chat request as the brief', () => {
@@ -800,11 +865,77 @@ describe('reshapeReportDocument', () => {
         {
           id: 'study',
           title: 'Study',
+          section: 'Title',
           objects: [
             {
               id: 'title',
               kind: 'text',
               text: 'Study',
+              text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
+            },
+            {
+              id: 'body',
+              kind: 'text',
+              text: 'Executive summary, 10 to 15 insight slides with a clear narrative.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+          ],
+        },
+        {
+          id: 'exec',
+          title: 'Executive summary',
+          section: 'Executive summary',
+          objects: [
+            {
+              id: 'exec-body',
+              kind: 'text',
+              text: '• Blue leads at 62%.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+          ],
+        },
+      ],
+    });
+    const fitted = fitDocumentTextFrames(doc);
+    // Empty opening brief (chat ask only) is removed; exec summary stays.
+    expect(fitted.pages.map(page => page.id)).toEqual(['exec']);
+  });
+
+  it('remints duplicate page ids so React keys stay unique', () => {
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: '8faf62c889f071704fa1893ab2b84cc9-NPR',
+          title: 'Insight A',
+          objects: [
+            { id: 'obj-dup', kind: 'text', text: 'A1' },
+            { id: 'obj-dup', kind: 'text', text: 'A2' },
+          ],
+        },
+        {
+          id: '8faf62c889f071704fa1893ab2b84cc9-NPR',
+          title: 'Insight B',
+          objects: [{ id: 'obj-b', kind: 'text', text: 'B' }],
+        },
+      ],
+    });
+    expect(doc.pages).toHaveLength(2);
+    expect(doc.pages[0]!.id).not.toBe(doc.pages[1]!.id);
+    expect(doc.pages[0]!.objects[0]!.id).not.toBe(doc.pages[0]!.objects[1]!.id);
+  });
+
+  it('clears a Title-section body that stored the deck chat request', () => {
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'title-page',
+          title: 'Ready meals study',
+          section: 'Title',
+          objects: [
+            {
+              id: 'title',
+              kind: 'text',
+              text: 'Ready meals study',
               text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
             },
             {
@@ -821,6 +952,9 @@ describe('reshapeReportDocument', () => {
     const body = fitted.pages[0]!.objects.find(obj => obj.id === 'body')!;
     expect(body.hidden).toBe(true);
     expect(body.text).toBe('');
+    const title = fitted.pages[0]!.objects.find(obj => obj.id === 'title')!;
+    expect(title.hidden).toBe(false);
+    expect(title.text).toBe('Ready meals study');
   });
 
   it('pushes commentary under a tall title and strips Base footers above tables', () => {
@@ -864,9 +998,9 @@ describe('reshapeReportDocument', () => {
     const comment = fitted.pages[0]!.objects.find(obj => obj.id === 'comment')!;
     const table = fitted.pages[0]!.objects.find(obj => obj.id === 'table')!;
     expect(title.frame.h).toBeGreaterThan(0.12);
-    expect(comment.frame.y).toBeGreaterThanOrEqual(title.frame.y + title.frame.h + 0.02);
+    expect(comment.frame.y).toBeGreaterThanOrEqual(title.frame.y + title.frame.h + 0.03);
     expect(comment.text).toBe('No leads at 54.2% for print.');
-    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.02);
+    expect(table.frame.y).toBeGreaterThanOrEqual(comment.frame.y + comment.frame.h + 0.03);
   });
 
   it('migrates browser serif defaults to Inter and keeps Times New Roman', () => {

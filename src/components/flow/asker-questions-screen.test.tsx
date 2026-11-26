@@ -1,4 +1,6 @@
+import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   AskerQuestionsScreen,
   askerQuestionsTabLabel,
@@ -8,6 +10,13 @@ import {
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(),
 }));
+
+function renderScreen(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const turns: AskerTurn[] = [
   {
@@ -73,7 +82,7 @@ describe('AskerQuestionsScreen', () => {
       return Promise.resolve({});
     });
 
-    render(<AskerQuestionsScreen projectId="study-1" />);
+    renderScreen(<AskerQuestionsScreen projectId="study-1" />);
     expect(await screen.findByRole('heading', { level: 2 })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2 }).textContent).toMatch(
       /institutional investors/i

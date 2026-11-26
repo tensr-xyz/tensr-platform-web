@@ -101,6 +101,55 @@ export async function savAndSyntax(datasetId: string, stem: string) {
   await exportDatasetSavAndSps(datasetId, stem);
 }
 
+/** Format cards on Report → Export (Paper 6i). */
+export type ReportExportFormatId = 'docx' | 'pptx' | 'xlsx' | 'pdf' | 'md' | 'sav';
+
+export function reportExportFormatMeta(): {
+  id: ReportExportFormatId;
+  ext: string;
+  label: string;
+  note: string;
+}[] {
+  return [
+    {
+      id: 'docx',
+      ext: '.DOCX',
+      label: 'Word',
+      note: 'Manuscript or topline, tables stay editable',
+    },
+    {
+      id: 'pptx',
+      ext: '.PPTX',
+      label: 'PowerPoint',
+      note: 'One slide per finding, chart or table',
+    },
+    {
+      id: 'xlsx',
+      ext: '.XLSX',
+      label: 'Excel banner book',
+      note: 'Every table, sig letters, real numbers',
+    },
+    {
+      id: 'pdf',
+      ext: '.PDF',
+      label: 'PDF',
+      note: 'Fixed layout, ready to send',
+    },
+    {
+      id: 'md',
+      ext: '.MD',
+      label: 'Markdown',
+      note: 'Plain text, figures as files',
+    },
+    {
+      id: 'sav',
+      ext: '.SAV + .SPS',
+      label: 'Data for SPSS',
+      note: 'Dataset with an .sps weight file',
+    },
+  ];
+}
+
 /** Spec ids from Report pages (exec → insights → appendix), in page order. */
 export function tableSpecIdsFromReportDocument(
   document: { pages?: unknown } | null | undefined
@@ -529,52 +578,73 @@ export function ExportDialog({
     const allPagesSelected =
       totalPageCount > 0 && selectedPageCount === totalPageCount && selectedPageCount > 0;
     const formats: {
-      id: string;
+      id: ReportExportFormatId;
       ext: string;
       label: string;
       note: string;
       soon?: boolean;
       run?: () => Promise<void> | void;
-    }[] = [
-      {
-        id: 'docx',
-        ext: '.DOCX',
-        label: 'Word',
-        note: 'Manuscript or topline',
-        run: () => serverFor('docx', `${stem}.docx`, chosenRuns),
-      },
-      {
-        id: 'pptx',
-        ext: '.PPTX',
-        label: 'PowerPoint',
-        note: datasetId
-          ? perGroup
-            ? 'One PowerPoint per group value'
-            : 'One slide per finding'
-          : 'Open a file to build a deck',
+    }[] = reportExportFormatMeta().map(meta => {
+      if (meta.id === 'docx') {
+        return {
+          ...meta,
+          run: () => serverFor('docx', `${stem}.docx`, chosenRuns),
+        };
+      }
+      if (meta.id === 'pptx') {
+        return {
+          ...meta,
+          note: datasetId
+            ? perGroup
+              ? 'One PowerPoint per group value'
+              : meta.note
+            : 'Open a file to build a deck',
+          soon: !datasetId,
+          run: () => {
+            if (perGroup) {
+              const values = Object.entries(pickedGroups)
+                .filter(([, on]) => on)
+                .map(([value]) => value);
+              return deckBatchFromTables(datasetId || '', stem, groupColumn, values);
+            }
+            return deckFromTables(datasetId || '', stem, {
+              pageIds: selectedPageIds,
+              onProgress: message => setBusy(message),
+            });
+          },
+        };
+      }
+      if (meta.id === 'xlsx') {
+        return {
+          ...meta,
+          note: datasetId ? meta.note : 'Open a file to build a banner book',
+          soon: !datasetId,
+          run: () => bannerBookFromTables(datasetId || '', stem),
+        };
+      }
+      if (meta.id === 'pdf') {
+        return {
+          ...meta,
+          soon: !chosenRuns.length,
+          note: chosenRuns.length ? meta.note : 'Pin a saved analysis to export PDF',
+          run: () => serverFor('pdf', `${stem}.pdf`, chosenRuns),
+        };
+      }
+      if (meta.id === 'md') {
+        return {
+          ...meta,
+          soon: !chosen.length,
+          note: chosen.length ? meta.note : 'Include at least one table or finding',
+          run: () => downloadText(`${stem}.md`, documentMarkdown(reportDoc), 'text/markdown'),
+        };
+      }
+      return {
+        ...meta,
         soon: !datasetId,
-        run: () => {
-          if (perGroup) {
-            const values = Object.entries(pickedGroups)
-              .filter(([, on]) => on)
-              .map(([value]) => value);
-            return deckBatchFromTables(datasetId || '', stem, groupColumn, values);
-          }
-          return deckFromTables(datasetId || '', stem, {
-            pageIds: selectedPageIds,
-            onProgress: message => setBusy(message),
-          });
-        },
-      },
-      {
-        id: 'xlsx',
-        ext: '.XLSX',
-        label: 'Excel',
-        note: datasetId ? 'Every table, real numbers' : 'Open a file to build a banner book',
-        soon: !datasetId,
-        run: () => bannerBookFromTables(datasetId || '', stem),
-      },
-    ];
+        note: datasetId ? meta.note : 'Open a file to export the dataset',
+        run: () => savAndSyntax(datasetId || '', stem),
+      };
+    });
     const format = formats.find(item => item.id === reportFormat) || formats[0];
     const headerBits = [
       title,
@@ -915,8 +985,16 @@ export function ExportDialog({
                   Figures export as editable charts.
                   {estimatedSeconds ? ` Estimated time about ${estimatedSeconds} seconds.` : ''}
                 </span>
+              ) : format.id === 'pdf' ? (
+                <span>Figures export at 300 dpi. Layout is fixed.</span>
+              ) : format.id === 'md' ? (
+                <span>Plain text, figures as files.</span>
+              ) : format.id === 'sav' ? (
+                <span>Downloads the open file as .sav with an .sps weight file.</span>
+              ) : format.id === 'xlsx' ? (
+                <span>Every table, sig letters, real numbers.</span>
               ) : (
-                <span>Tables stay editable in Word.</span>
+                <span>Figures export at 300 dpi. Tables stay editable in Word.</span>
               )}
             </div>
             <Button className="flow-btn" type="button" onClick={onClose}>
@@ -928,6 +1006,7 @@ export function ExportDialog({
               disabled={
                 busy !== '' ||
                 !format.run ||
+                Boolean(format.soon) ||
                 (format.id === 'pptx' &&
                   perGroup &&
                   (!groupColumn || !Object.values(pickedGroups).some(Boolean))) ||
@@ -935,9 +1014,10 @@ export function ExportDialog({
                   !perGroup &&
                   totalPageCount > 0 &&
                   selectedPageCount === 0) ||
-                (!chosen.length &&
-                  format.id !== 'pptx' &&
+                (format.id !== 'pptx' &&
                   format.id !== 'xlsx' &&
+                  format.id !== 'sav' &&
+                  !chosen.length &&
                   totalPageCount === 0)
               }
               onClick={() => format.run && save(format.label, format.run)}
@@ -952,7 +1032,9 @@ export function ExportDialog({
                     ? `Export .pptx · ${selectedPageCount || totalPageCount} of ${
                         totalPageCount || selectedPageCount || 0
                       } pages`
-                    : `Export ${format.ext.toLowerCase().split(' ')[0]}`}
+                    : format.id === 'sav'
+                      ? 'Export SPSS data'
+                      : `Export ${format.ext.toLowerCase().split(' ')[0]}`}
             </Button>
           </div>
         </DialogContent>

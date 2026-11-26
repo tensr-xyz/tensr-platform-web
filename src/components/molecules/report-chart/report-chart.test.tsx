@@ -156,6 +156,38 @@ describe('ReportChart palette kinds', () => {
     expect(screen.getByText('From → To')).toBeTruthy();
   });
 
+  it('colours clustered scatter points by group and shows a legend instead of point labels', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'scatter',
+          title: 'Cluster scatter',
+          x_label: 'Dim 1',
+          y_label: 'Dim 2',
+          points: [
+            { x: 1.1, y: 2.2, group: 'High Satisfaction', label: '0' },
+            { x: 1.2, y: 2.1, group: 'High Satisfaction', label: '0' },
+            { x: -1.3, y: -2.2, group: 'Low Satisfaction', label: '1' },
+            { x: -1.2, y: -2.3, group: 'Low Satisfaction', label: '1' },
+          ],
+        }}
+      />
+    );
+    const svg = container.querySelector('[data-chart-kind="scatter"]');
+    expect(svg?.getAttribute('data-scatter-groups')).toBe('2');
+    const legend = container.querySelector('[data-chart-legend="groups"]');
+    expect(legend).toBeTruthy();
+    expect(legend?.textContent).toContain('High Satisfact');
+    expect(legend?.textContent).toContain('Low Satisfaction');
+    // Group colouring suppresses per-point labels even when a code is present
+    // (point labels use ink #3f3f46; axis ticks use muted #71717a).
+    const pointLabels = Array.from(svg?.querySelectorAll('text') || []).filter(node => {
+      const text = (node.textContent || '').trim();
+      return (text === '0' || text === '1') && node.getAttribute('fill') === '#3f3f46';
+    });
+    expect(pointLabels).toHaveLength(0);
+  });
+
   it('sizes weighted scatter points by weight and leaves unweighted points equal', () => {
     const weighted = render(
       <ReportChart

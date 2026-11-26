@@ -26,6 +26,8 @@ export const RULE_TYPES = [
   'highlight',
   'shade_alternate_rows',
   'shade_net_rows',
+  'add_rank_column',
+  'add_difference_column',
 ] as const;
 export type TableRuleType = (typeof RULE_TYPES)[number];
 
@@ -80,6 +82,9 @@ export type TableRule = {
   k?: number;
   statistic?: StatKey;
   columnId?: string | null;
+  leftColumnId?: string | null;
+  rightColumnId?: string | null;
+  label?: string | null;
   lowColor?: string;
   highColor?: string;
   op?: HighlightOp;
@@ -297,6 +302,12 @@ export function tableRuleLabel(rule: TableRule): string {
       return 'Shade alternate rows';
     case 'shade_net_rows':
       return 'Shade NET rows';
+    case 'add_rank_column':
+      return rule.label?.trim() ? `Add rank column (${rule.label.trim()})` : 'Add rank column';
+    case 'add_difference_column':
+      return rule.label?.trim()
+        ? `Add difference column (${rule.label.trim()})`
+        : 'Add difference between columns';
     default:
       return 'Table rule';
   }
@@ -376,6 +387,26 @@ export const TABLE_RULE_CATALOG: {
     id: 'shade-net',
     label: 'Shade NET rows',
     rule: { type: 'shade_net_rows', fill: '#E8F1ED' },
+  },
+  {
+    id: 'add-rank',
+    label: 'Add rank column',
+    rule: {
+      type: 'add_rank_column',
+      by: 'average',
+      direction: 'desc',
+      statistic: 'percent',
+      protectNets: true,
+      label: 'Rank',
+    },
+  },
+  {
+    id: 'add-difference',
+    label: 'Add difference between columns',
+    rule: {
+      type: 'add_difference_column',
+      statistic: 'percent',
+    },
   },
 ];
 
@@ -464,6 +495,11 @@ export function normalizeTableRule(raw: unknown): TableRule | null {
     shade_alternate: 'shade_alternate_rows',
     hide_nonsig: 'hide_non_significant',
     hide_non_sig: 'hide_non_significant',
+    rank_column: 'add_rank_column',
+    add_rank: 'add_rank_column',
+    difference_column: 'add_difference_column',
+    add_difference: 'add_difference_column',
+    column_difference: 'add_difference_column',
   };
   type = aliases[type] || type;
   if (!RULE_TYPE_SET.has(type)) return null;
@@ -483,7 +519,7 @@ export function normalizeTableRule(raw: unknown): TableRule | null {
     rule.axis = normalizeAxis(source.axis, 'both');
   } else if (type === 'hide_non_significant') {
     rule.axis = normalizeAxis(source.axis, 'rows');
-  } else if (type === 'sort' || type === 'show_top_k') {
+  } else if (type === 'sort' || type === 'show_top_k' || type === 'add_rank_column') {
     rule.by =
       String(source.by || source.column_id || source.columnId || 'average').trim() || 'average';
     const direction = String(source.direction || 'desc')
@@ -493,6 +529,14 @@ export function normalizeTableRule(raw: unknown): TableRule | null {
     rule.protectNets = coerceBool(source.protect_nets ?? source.protectNets, true);
     if (type === 'show_top_k') {
       rule.k = coerceInt(source.k ?? source.top_k ?? source.topK, 5, 1);
+    }
+    if (type === 'add_rank_column') {
+      const statistic = String(source.statistic || 'percent')
+        .trim()
+        .toLowerCase() as StatKey;
+      rule.statistic = STAT_KEYS.has(statistic) ? statistic : 'percent';
+      const label = String(source.label || source.column_label || source.columnLabel || '').trim();
+      rule.label = label || 'Rank';
     }
   } else if (type === 'colour_scale') {
     const statistic = String(source.statistic || 'percent')
@@ -519,6 +563,31 @@ export function normalizeTableRule(raw: unknown): TableRule | null {
     rule.fill = coerceHexColor(source.fill, '#F6F6F3');
   } else if (type === 'shade_net_rows') {
     rule.fill = coerceHexColor(source.fill, '#E8F1ED');
+  } else if (type === 'add_difference_column') {
+    const statistic = String(source.statistic || 'percent')
+      .trim()
+      .toLowerCase() as StatKey;
+    rule.statistic = STAT_KEYS.has(statistic) ? statistic : 'percent';
+    rule.leftColumnId =
+      String(
+        source.left_column_id ||
+          source.leftColumnId ||
+          source.column_a ||
+          source.columnA ||
+          source.left ||
+          ''
+      ).trim() || null;
+    rule.rightColumnId =
+      String(
+        source.right_column_id ||
+          source.rightColumnId ||
+          source.column_b ||
+          source.columnB ||
+          source.right ||
+          ''
+      ).trim() || null;
+    const label = String(source.label || source.column_label || source.columnLabel || '').trim();
+    rule.label = label || null;
   }
   return rule;
 }
@@ -670,6 +739,138 @@ function rowSortKey(row: Record<string, unknown>, by: string): number {
     }
   }
   return Number.NEGATIVE_INFINITY;
+}
+
+function bannerLabel(book: BannerBookLike, columnId: string): string {
+  for (const col of book.banner_columns || []) {
+    if (!col || typeof col !== 'object') continue;
+    const record = col as Record<string, unknown>;
+    if (String(record.id || '') === columnId) {
+      const label = String(record.label || '').trim();
+      return label || columnId;
+    }
+  }
+  return columnId;
+}
+
+function resolveBannerId(book: BannerBookLike, hint: string | null | undefined): string | null {
+  const text = String(hint || '').trim();
+  if (!text) return null;
+  if (text.toLowerCase() === 'average' || text.toLowerCase() === 'row_base') return text;
+  const banners = (book.banner_columns || []).filter(
+    col => col && typeof col === 'object'
+  ) as Array<Record<string, unknown>>;
+  for (const col of banners) {
+    if (String(col.id || '') === text) return text;
+  }
+  const lowered = text.toLowerCase();
+  for (const col of banners) {
+    if (
+      String(col.label || '')
+        .trim()
+        .toLowerCase() === lowered
+    ) {
+      return String(col.id || '') || null;
+    }
+  }
+  return text;
+}
+
+function rowStatValue(row: Record<string, unknown>, by: string, statistic: string): number | null {
+  const cells = (Array.isArray(row.cells) ? row.cells : []).filter(
+    cell => cell && typeof cell === 'object'
+  ) as Array<Record<string, unknown>>;
+  if (!by || by === 'average') {
+    const values = cells
+      .map(cell => cellStat(cell, statistic))
+      .filter((value): value is number => value != null);
+    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  }
+  if (by === 'row_base') {
+    const values = cells
+      .map(cell => cellStat(cell, 'unweighted_n'))
+      .filter((value): value is number => value != null);
+    return values.length ? Math.max(...values) : null;
+  }
+  for (const cell of cells) {
+    if (String(cell.banner_id || '') === by) return cellStat(cell, statistic);
+  }
+  return null;
+}
+
+function competitionRanks(
+  values: Array<{ rowId: string; value: number }>,
+  descending: boolean
+): Map<string, number> {
+  const ordered = [...values].sort((a, b) => (descending ? b.value - a.value : a.value - b.value));
+  const ranks = new Map<string, number>();
+  let index = 0;
+  while (index < ordered.length) {
+    const score = ordered[index]!.value;
+    let end = index + 1;
+    while (end < ordered.length && ordered[end]!.value === score) end += 1;
+    const rank = index + 1;
+    for (const item of ordered.slice(index, end)) ranks.set(item.rowId, rank);
+    index = end;
+  }
+  return ranks;
+}
+
+function appendDerivedColumn(
+  book: BannerBookLike,
+  rows: Array<Record<string, unknown>>,
+  options: {
+    columnId: string;
+    label: string;
+    kind: string;
+    values: Map<string, number | null>;
+  }
+) {
+  const banners = (book.banner_columns || []).filter(
+    col => col && typeof col === 'object'
+  ) as Array<Record<string, unknown>>;
+  if (banners.some(col => String(col.id || '') === options.columnId)) {
+    book.banner_columns = banners.filter(col => String(col.id || '') !== options.columnId);
+    for (const row of rows) {
+      row.cells = (
+        (Array.isArray(row.cells) ? row.cells : []) as Array<Record<string, unknown>>
+      ).filter(
+        cell =>
+          cell && typeof cell === 'object' && String(cell.banner_id || '') !== options.columnId
+      );
+    }
+  }
+  const nextBanners = (
+    (book.banner_columns || []).filter(col => col && typeof col === 'object') as Array<
+      Record<string, unknown>
+    >
+  ).concat([
+    {
+      id: options.columnId,
+      label: options.label,
+      kind: options.kind,
+      derived: true,
+    },
+  ]);
+  book.banner_columns = nextBanners;
+  for (const row of rows) {
+    const rowId = String(row.id || '');
+    const value = options.values.has(rowId) ? options.values.get(rowId)! : null;
+    const cells = (
+      (Array.isArray(row.cells) ? row.cells : []) as Array<Record<string, unknown>>
+    ).concat([
+      {
+        stub_row_id: rowId,
+        banner_id: options.columnId,
+        percent: value,
+        count: value,
+        mean: value,
+        kind: options.kind,
+        derived: true,
+      },
+    ]);
+    row.cells = cells;
+  }
 }
 
 function letterKeys(book: BannerBookLike): Set<string> {
@@ -1185,6 +1386,78 @@ export function applyTablePresentation(
           }
         }
       }
+    } else if (rule.type === 'add_rank_column') {
+      const byHint = String(rule.by || 'average').trim() || 'average';
+      const by = resolveBannerId(out, byHint) || byHint;
+      const statistic = rule.statistic || 'percent';
+      const direction = rule.direction || 'desc';
+      const protect = rule.protectNets !== false;
+      const label = String(rule.label || 'Rank').trim() || 'Rank';
+      const columnId = `rank-${rule.id || newId('rule')}`;
+      const scored: Array<{ rowId: string; value: number }> = [];
+      for (const row of rows) {
+        const rowId = String(row.id || '');
+        if (!rowId) continue;
+        if (protect && isProtectedRow(row)) continue;
+        const value = rowStatValue(row, by, statistic);
+        if (value == null) continue;
+        scored.push({ rowId, value });
+      }
+      const ranks = competitionRanks(scored, direction !== 'asc');
+      const values = new Map<string, number | null>();
+      for (const row of rows) {
+        const rowId = String(row.id || '');
+        if (protect && isProtectedRow(row)) {
+          values.set(rowId, null);
+        } else if (ranks.has(rowId)) {
+          values.set(rowId, ranks.get(rowId)!);
+        } else {
+          values.set(rowId, null);
+        }
+      }
+      appendDerivedColumn(out, rows, {
+        columnId,
+        label,
+        kind: 'rank',
+        values,
+      });
+    } else if (rule.type === 'add_difference_column') {
+      let leftId = resolveBannerId(out, rule.leftColumnId);
+      let rightId = resolveBannerId(out, rule.rightColumnId);
+      if (!leftId || !rightId) {
+        const clean = (
+          (out.banner_columns || []).filter(col => col && typeof col === 'object') as Array<
+            Record<string, unknown>
+          >
+        )
+          .filter(col => {
+            const id = String(col.id || '').trim();
+            return id && id.toLowerCase() !== 'total' && !col.derived;
+          })
+          .map(col => String(col.id || ''));
+        if (!leftId && clean.length >= 1) leftId = clean[0]!;
+        if (!rightId && clean.length >= 2) rightId = clean[1]!;
+      }
+      if (leftId && rightId && leftId !== rightId) {
+        const statistic = rule.statistic || 'percent';
+        const leftLabel = bannerLabel(out, leftId);
+        const rightLabel = bannerLabel(out, rightId);
+        const label = String(rule.label || '').trim() || `${leftLabel} − ${rightLabel}`;
+        const columnId = `diff-${rule.id || newId('rule')}`;
+        const values = new Map<string, number | null>();
+        for (const row of rows) {
+          const rowId = String(row.id || '');
+          const leftVal = rowStatValue(row, leftId, statistic);
+          const rightVal = rowStatValue(row, rightId, statistic);
+          values.set(rowId, leftVal == null || rightVal == null ? null : leftVal - rightVal);
+        }
+        appendDerivedColumn(out, rows, {
+          columnId,
+          label,
+          kind: 'difference',
+          values,
+        });
+      }
     }
   }
 
@@ -1283,6 +1556,9 @@ export function tableRulesForApi(rules: TableRule[]): Array<Record<string, unkno
     k: rule.k,
     statistic: rule.statistic,
     column_id: rule.columnId,
+    left_column_id: rule.leftColumnId,
+    right_column_id: rule.rightColumnId,
+    label: rule.label,
     low_color: rule.lowColor,
     high_color: rule.highColor,
     op: rule.op,

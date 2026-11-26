@@ -14,6 +14,8 @@ export const PROJECT_STALE_MS = {
   report: 10_000,
   page: 60_000,
   details: 60_000,
+  /** Session profile (/me): one fetch per browser session unless invalidated. */
+  session: Number.POSITIVE_INFINITY,
 } as const;
 
 export const projectQueryKeys = {
