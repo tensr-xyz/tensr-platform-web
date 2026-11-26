@@ -56,6 +56,7 @@ const KIND_LABELS: Record<string, string> = {
   brand_duplication: 'Duplication',
   paired_brand_test: 'Paired comparison',
   turf: 'TURF',
+  standout_stats: 'Standout stats',
 };
 
 function procedureOf(item: ToolResult): string {
@@ -587,9 +588,9 @@ export function resultLead(
       /no real link|move together|move in opposite/i.test(finding));
   const preferFinding =
     Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose) || repeatedContract);
-  // Duplication leads are stamped by the engine (Paper 6n). Prefer them over model prose
-  // so the card does not repeat net reach in two formats.
-  const duplicationFinding =
+  // Duplication / standout leads are stamped by the engine (Paper 6n / 14a). Prefer them
+  // over model prose so the card does not repeat the finding in two formats.
+  const engineLeadFinding =
     Boolean(finding) &&
     Array.isArray(results) &&
     results.some(item => {
@@ -599,11 +600,33 @@ export function resultLead(
       return (
         record.kind === 'brand_duplication' ||
         record.analysis_type === 'brand_duplication' ||
-        record.procedure === 'brand_duplication'
+        record.procedure === 'brand_duplication' ||
+        record.kind === 'standout_stats' ||
+        record.analysis_type === 'standout_stats' ||
+        record.procedure === 'standout_stats'
       );
     });
+  // Prefer the one-sentence standout lead when the engine stamped it.
+  const standoutLead = (() => {
+    if (!Array.isArray(results)) return '';
+    for (const item of results) {
+      const nested = item?.result && typeof item.result === 'object' ? item.result : item;
+      const record =
+        nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : {};
+      if (
+        record.analysis_type === 'standout_stats' ||
+        record.procedure === 'standout_stats' ||
+        record.kind === 'standout_stats'
+      ) {
+        const lead = typeof record.lead === 'string' ? record.lead.trim() : '';
+        if (lead) return lead;
+      }
+    }
+    return '';
+  })();
   const text =
-    (duplicationFinding ? finding : '') ||
+    standoutLead ||
+    (engineLeadFinding ? finding : '') ||
     (preferFinding ? finding : '') ||
     (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||
@@ -614,7 +637,7 @@ export function resultLead(
     (unfinishedStub ? '' : outputTakeaway(answer));
   // TEN-40: a tool name, flags stub, or progress line is never the card lead.
   const stubLead =
-    /^(?:banner_table|brand_duplication|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
+    /^(?:banner_table|brand_duplication|standout_stats|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
       text.trim()
     ) ||
     /building the (?:table|deck)/i.test(text) ||

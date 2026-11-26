@@ -1601,6 +1601,7 @@ export function AgentThreadColumn({
           thread.structuredTables.length ||
           thread.resultCharts.length ||
           thread.resultView.duplication ||
+          thread.resultView.standout ||
           thread.lead) &&
         (!thread.plan || thread.approving) ? (
           notInData ? (
@@ -1612,7 +1613,8 @@ export function AgentThreadColumn({
             </div>
           ) : thread.structuredTables.length ||
             thread.resultCharts.length ||
-            thread.resultView.duplication ? (
+            thread.resultView.duplication ||
+            thread.resultView.standout ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
@@ -1626,6 +1628,7 @@ export function AgentThreadColumn({
               datasetId={thread.datasetId || undefined}
               projectId={thread.projectId || undefined}
               duplication={thread.resultView.duplication}
+              standout={thread.resultView.standout}
               audience={thread.resultView.audience}
             />
           ) : thread.prose || thread.lead ? (
