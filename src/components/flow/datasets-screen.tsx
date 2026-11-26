@@ -22,6 +22,7 @@ import {
   exportStemFromVersion,
 } from '@/lib/dataset-data-export';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
+import { datasetVersionsPath } from '@/lib/dataset-versions';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 
@@ -183,6 +184,8 @@ export function DatasetsScreen({
   const [kindFilter, setKindFilter] = useState('');
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [lazyVersions, setLazyVersions] = useState<Record<string, ShellDataset[]>>({});
+  const [loadingVersions, setLoadingVersions] = useState<Record<string, boolean>>({});
   const [moving, setMoving] = useState<ShellDataset | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -211,7 +214,53 @@ export function DatasetsScreen({
 
   const groups = useMemo(() => groupDatasets(datasets), [datasets]);
   const uploadCount = groups.filter(group => !group.root.parent_dataset_id).length;
-  const versionCount = datasets.filter(row => shellDatasetId(row) && row.parent_dataset_id).length;
+  const versionCount =
+    datasets.filter(row => shellDatasetId(row) && row.parent_dataset_id).length ||
+    datasets.reduce((sum, row) => sum + (Number(row.version_count) || 0), 0);
+
+  const loadVersions = (root: ShellDataset) => {
+    const id = shellDatasetId(root);
+    if (!id || lazyVersions[id] || loadingVersions[id]) return;
+    setLoadingVersions(current => ({ ...current, [id]: true }));
+    void flowJson<{
+      versions?: {
+        dataset_id?: string;
+        original_filename?: string;
+        parent_dataset_id?: string | null;
+        origin_dataset_id?: string | null;
+        lineage_label?: string | null;
+        producing_operation?: string;
+        n_rows?: number;
+        n_cols?: number;
+        updated_at?: string;
+        project_id?: string;
+      }[];
+    }>(datasetVersionsPath(id))
+      .then(page => {
+        const rows = (page.versions || [])
+          .filter(row => row.dataset_id && row.dataset_id !== id)
+          .map(
+            (row): ShellDataset => ({
+              dataset_id: row.dataset_id,
+              original_filename: row.original_filename,
+              parent_dataset_id: row.parent_dataset_id,
+              origin_dataset_id: row.origin_dataset_id,
+              lineage_label: row.lineage_label || row.producing_operation || null,
+              n_rows: row.n_rows,
+              n_cols: row.n_cols,
+              updated_at: row.updated_at,
+              project_id: row.project_id || root.project_id,
+            })
+          );
+        setLazyVersions(current => ({ ...current, [id]: rows }));
+      })
+      .catch(() => {
+        setLazyVersions(current => ({ ...current, [id]: [] }));
+      })
+      .finally(() => {
+        setLoadingVersions(current => ({ ...current, [id]: false }));
+      });
+  };
   const activeView: DatasetView =
     view ?? (uploadCount > 0 || phase !== 'ready' ? 'uploads' : 'all');
 
@@ -512,8 +561,13 @@ export function DatasetsScreen({
                 const root = group.root;
                 const id = shellDatasetId(root);
                 const isVersion = Boolean(root.parent_dataset_id);
-                const expanded =
-                  versions.length > 0 && (open[id] ?? (Boolean(needle) && !rootMatches));
+                const nested = versions.length ? versions : lazyVersions[id] || [];
+                const knownCount = Math.max(
+                  nested.length,
+                  group.versions.length,
+                  Number(root.version_count) || 0
+                );
+                const expanded = knownCount > 0 && (open[id] ?? (Boolean(needle) && !rootMatches));
                 return (
                   <Fragment key={id}>
                     <tr className="ds-row">
@@ -540,15 +594,20 @@ export function DatasetsScreen({
                       <td className="ds-col-num">{count(root.n_rows)}</td>
                       <td className="ds-col-num">{count(root.n_cols)}</td>
                       <td className="ds-col-versions">
-                        {group.versions.length > 0 ? (
+                        {knownCount > 0 ? (
                           <Button
                             className="ds-toggle"
                             type="button"
                             aria-expanded={expanded}
-                            disabled={versions.length === 0}
-                            onClick={() => setOpen(current => ({ ...current, [id]: !expanded }))}
+                            onClick={() => {
+                              const next = !expanded;
+                              setOpen(current => ({ ...current, [id]: next }));
+                              if (next && !versions.length) loadVersions(root);
+                            }}
                           >
-                            {versions.length} version{versions.length === 1 ? '' : 's'}{' '}
+                            {loadingVersions[id] && !nested.length
+                              ? 'Loading…'
+                              : `${knownCount} version${knownCount === 1 ? '' : 's'} `}
                             {expanded ? '⌄' : '›'}
                           </Button>
                         ) : (
@@ -561,7 +620,7 @@ export function DatasetsScreen({
                       <td className="ds-col-actions">{menu(root)}</td>
                     </tr>
                     {expanded
-                      ? versions.map(row => (
+                      ? nested.map(row => (
                           <tr key={shellDatasetId(row)} className="ds-row ds-child">
                             <td className="ds-col-file">
                               <div className="ds-child-name">

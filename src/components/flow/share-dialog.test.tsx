@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { ShareDialog } from './share-dialog';
 
 jest.mock('@/lib/flow-api', () => ({
@@ -19,9 +21,16 @@ jest.mock('@/lib/flow-api', () => ({
   }),
 }));
 
+function renderShare(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 describe('ShareDialog', () => {
   it('shows Anyone with the link and Share one output only', async () => {
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     expect(await screen.findByText('Share Brand tracker')).toBeInTheDocument();
     expect(screen.getByText('Anyone with the link')).toBeInTheDocument();
     expect(screen.getByText('Share one output only')).toBeInTheDocument();
@@ -61,7 +70,9 @@ describe('ShareDialog', () => {
       return Promise.resolve({});
     });
 
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     expect(await screen.findByRole('radiogroup', { name: 'Link access' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Anyone, no sign-in/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Signed-in people in Acme/ })).toBeInTheDocument();
@@ -69,7 +80,9 @@ describe('ShareDialog', () => {
   });
 
   it('offers Can ask between Can view and Can edit', async () => {
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     expect(await screen.findByText('Share Brand tracker')).toBeInTheDocument();
     expect(screen.getByText(/Can view · reads outputs/)).toBeInTheDocument();
     expect(screen.getByText(/Can ask · asks questions/)).toBeInTheDocument();
@@ -130,7 +143,9 @@ describe('ShareDialog', () => {
       return Promise.resolve({});
     });
 
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     expect(await screen.findByText('asker@example.com')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getAllByText('Can ask').length).toBeGreaterThan(0);
@@ -179,7 +194,9 @@ describe('ShareDialog', () => {
       return Promise.resolve({});
     });
 
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     const email = await screen.findByLabelText('Email');
     fireEvent.change(email, { target: { value: 'new@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
@@ -229,7 +246,9 @@ describe('ShareDialog', () => {
       return Promise.resolve({});
     });
 
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     expect(await screen.findByText('Published link settings')).toBeInTheDocument();
     expect(screen.getByLabelText('Password protect')).toBeInTheDocument();
     expect(screen.getByLabelText('Embed code')).toBeInTheDocument();
@@ -267,7 +286,9 @@ describe('ShareDialog', () => {
       return Promise.resolve({});
     });
 
-    render(<ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />);
+    renderShare(
+      <ShareDialog projectId="p1" projectName="Brand tracker" onClose={() => undefined} />
+    );
     const settings = await screen.findByText('Published link settings');
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     const dialog = document.body.querySelector('.share-dialog');

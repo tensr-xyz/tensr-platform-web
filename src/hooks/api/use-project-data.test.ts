@@ -3,6 +3,7 @@ import { PROJECT_STALE_MS, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   ensureMe,
   ensureProjectAskerLog,
+  ensureProjectDetail,
   ensureProjectMembers,
   shouldRetryProjectQuery,
 } from './use-project-data';
@@ -42,6 +43,23 @@ describe('shared Details cache ensure helpers', () => {
     expect(mockFlowJson).toHaveBeenCalledWith('/me');
     expect(client.getQueryData(projectQueryKeys.me())).toEqual(first);
     expect(PROJECT_STALE_MS.session).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('fetches /api/projects/:id once when two callers ensure the same detail key', async () => {
+    mockFlowJson.mockResolvedValue({
+      project: { id: 'p1', name: 'Study' },
+      datasets: [{ dataset_id: 'd1' }],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const [first, second] = await Promise.all([
+      ensureProjectDetail(client, 'p1'),
+      ensureProjectDetail(client, 'p1'),
+    ]);
+    expect(first.project?.id).toBe('p1');
+    expect(second).toEqual(first);
+    expect(mockFlowJson).toHaveBeenCalledTimes(1);
+    expect(mockFlowJson).toHaveBeenCalledWith('/api/projects/p1');
+    expect(client.getQueryData(projectQueryKeys.detail('p1'))).toEqual(first);
   });
 
   it('shares members and asker-log under project keys', async () => {

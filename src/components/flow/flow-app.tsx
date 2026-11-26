@@ -87,6 +87,7 @@ import {
 import {
   ensureMe,
   ensureProjectAskerLog,
+  ensureProjectDetail,
   ensureProjectMembers,
   useDatasetColumns,
   useMe,
@@ -518,9 +519,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
       setFolders(folderPage.folders || []);
       setError(null);
       setWorkspacePhase('ready');
-      void flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>(
-        '/datasets/?scope=all&include=versions'
-      )
+      // Tips only — working versions load lazily via GET /datasets/:id/versions.
+      void flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets?scope=all')
         .then(filePage => {
           const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
           // A project page may already have loaded every version. The workspace list
@@ -635,12 +635,10 @@ export function FlowApp({ slug }: { slug: string[] }) {
   useEffect(() => {
     if (!isAuthenticated || !projectId) return;
     let cancelled = false;
-    void flowJson<{ project?: FlowProject; datasets?: DatasetRow[] }>(`/api/projects/${projectId}`)
+    void ensureProjectDetail(projectQueryClient, projectId)
       .then(page => {
         if (cancelled) return;
-        // Seed the shared Details cache so Project AI settings does not refetch.
-        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
-        const found = page.project;
+        const found = page.project as FlowProject | undefined;
         if (found) {
           setProjects(current =>
             current.some(item => item.id === found.id)
@@ -653,7 +651,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             // The cached name only saves a flash of the placeholder.
           }
         }
-        const rows = (page.datasets || []).map(row => ({
+        const rows = ((page.datasets || []) as DatasetRow[]).map(row => ({
           ...row,
           dataset_id: row.dataset_id || row.id,
           project_id: row.project_id || projectId,
@@ -771,10 +769,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
       return;
     }
-    void flowJson<{ project?: FlowProject }>(`/api/projects/${projectId}`)
+    void ensureProjectDetail(projectQueryClient, projectId)
       .then(page => {
-        projectQueryClient.setQueryData(projectQueryKeys.detail(projectId), page);
-        const found = page.project;
+        const found = page.project as FlowProject | undefined;
         if (found)
           setProjects(current =>
             current.some(item => item.id === found.id) ? current : [...current, found]

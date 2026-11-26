@@ -70,6 +70,8 @@ export type ShellDataset = {
   /** The upload a working version came from. */
   origin_dataset_id?: string | null;
   lineage_label?: string | null;
+  /** Other rows that share this origin; expand via GET /datasets/:id/versions. */
+  version_count?: number;
 };
 
 export type ShellFolder = { id: string; name: string };
