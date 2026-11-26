@@ -169,8 +169,8 @@ function columnNames(columns: { name?: string }[]): string[] {
 }
 
 /**
- * Counts use the same people units as the table base (never silent thousands).
- * Projected 000s are a separate statistic and render via mediaCellLines with a k label.
+ * Counts prefer projected thousands when the book carries them (with separators).
+ * Otherwise the weighted people count, still with thousands separators.
  */
 export function displayedCount(
   cell:
@@ -185,6 +185,15 @@ export function displayedCount(
 ): string {
   if (!cell) return '—';
   if (weighted) {
+    const projected = cell.projected_thousands;
+    if (typeof projected === 'number' && Number.isFinite(projected)) {
+      const shown = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
+      const unweighted = cell.unweighted_n;
+      if (unweighted != null && !Number.isNaN(Number(unweighted))) {
+        return `${shown} (${formatGroupedNumber(Number(unweighted))})`;
+      }
+      return shown;
+    }
     const raw = cell.count ?? cell.weighted_n;
     if (raw == null || Number.isNaN(Number(raw))) return '—';
     const weightedShown = formatGroupedNumber(Number(raw));
@@ -199,10 +208,22 @@ export function displayedCount(
   return formatGroupedNumber(Number(raw));
 }
 
+/** Paper 5d default cell stats for a projection-weighted table with Total. */
+export function defaultProjectionStatistics(): string[] {
+  return ['column_proportion', 'projected_thousands', 'index', 'unweighted_base'];
+}
+
+function bareColumnPercentStats(selected: string[]): boolean {
+  const stats = selected.filter(Boolean);
+  if (!stats.length || (stats.length === 1 && stats[0] === 'column_proportion')) return true;
+  return stats.length === 2 && stats.includes('column_proportion') && stats.includes('column_mean');
+}
+
 /**
- * Statistics sent for a table run. Only what the user toggled — never force
- * index / projected / unweighted on (Paper 5d checklist). Drop Projected 000s
- * when the active weight is not a projection.
+ * Statistics sent for a table run. A bare column-% request on a weighted table
+ * expands to index (and projected 000s on a projection weight) so Tables, chat
+ * cards, and decks match. An explicit checklist selection is left as written.
+ * Drop Projected 000s when the active weight is not a projection.
  */
 export function tableStatisticsForWeight(
   selected: string[],
@@ -210,9 +231,16 @@ export function tableStatisticsForWeight(
   isProjection = false
 ): string[] {
   const stats = selected.filter(Boolean);
-  const base = stats.length ? stats : ['column_proportion'];
-  if (!weighted || isProjection) return base;
-  return base.filter(kind => kind !== 'projected_thousands');
+  if (!weighted) return stats.length ? stats : ['column_proportion'];
+  let base = stats.length ? [...stats] : ['column_proportion'];
+  if (bareColumnPercentStats(base)) {
+    const media = isProjection
+      ? defaultProjectionStatistics()
+      : ['column_proportion', 'index', 'unweighted_base'];
+    base = base.includes('column_mean') ? [...media, 'column_mean'] : [...media];
+  }
+  if (!isProjection) return base.filter(kind => kind !== 'projected_thousands');
+  return base;
 }
 
 /** Book weight block: projection weights carry is_projection / projection_unit. */

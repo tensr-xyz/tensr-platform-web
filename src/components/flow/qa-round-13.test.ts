@@ -24,23 +24,34 @@ describe('round 13', () => {
     expect(past.map(turn => turn.answer)).toEqual(['8 rows.', 'Base 8.', 'North.']);
   });
 
-  it('shows the weighted count beside the unweighted count when both exist', () => {
+  it('shows projected thousands with separators when present, else weighted people', () => {
     const cell = { count: 39.4, weighted_n: 39.4, unweighted_n: 36 };
     expect(displayedCount(cell, true)).toBe('39 (36)');
     expect(displayedCount(cell, false)).toBe('36');
     expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76 (70)');
     expect(displayedCount({ count: 76.2 }, true)).toBe('76');
-    // Counts keep people units (same as the base), even when projected_thousands is on the cell.
+    // TEN-245: projected thousands replace raw people when the book carries them.
     expect(
       displayedCount(
         { count: 2678957, weighted_n: 2678957, unweighted_n: 2046, projected_thousands: 2678.957 },
         true
       )
-    ).toBe('2,678,957 (2,046)');
+    ).toBe('2,679 (2,046)');
     expect(displayedCount({ count: 2678957, unweighted_n: 2046 }, true)).toBe('2,678,957 (2,046)');
   });
 
-  it('sends only the statistics the user toggled (no forced index / projected)', () => {
+  it('expands a bare column-% request on weighted tables; keeps an explicit list', () => {
+    expect(tableStatisticsForWeight(['column_proportion'], true, true)).toEqual([
+      'column_proportion',
+      'projected_thousands',
+      'index',
+      'unweighted_base',
+    ]);
+    expect(tableStatisticsForWeight(['column_proportion'], true, false)).toEqual([
+      'column_proportion',
+      'index',
+      'unweighted_base',
+    ]);
     expect(tableStatisticsForWeight(['column_proportion', 'count'], true, true)).toEqual([
       'column_proportion',
       'count',
