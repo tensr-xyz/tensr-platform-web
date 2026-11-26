@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton, Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { ensureMe } from '@/hooks/api/use-project-data';
 import { inviteCreatedToast, mapApiInvitation } from '@/lib/organization-invitations';
 import { publicShareEmbedSnippet } from '@/lib/public-share';
 import { outputKindLabel, outputRuns, type OutputRun } from '@/components/flow/report-output-runs';
@@ -64,6 +66,7 @@ export function ShareDialog({
   projectName: string;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [orgId, setOrgId] = useState('');
@@ -107,7 +110,7 @@ export function ShareDialog({
       .catch(() => setShares([]));
 
   const load = () => {
-    void flowJson<{ active_organization?: { id?: string; name?: string } }>('/me')
+    void ensureMe(queryClient)
       .then(async me => {
         const orgId = me.active_organization?.id || '';
         setOrgId(orgId);
@@ -184,13 +187,15 @@ export function ShareDialog({
 
   useEffect(() => {
     load();
-  }, [projectId]);
+    // load closes over queryClient + projectId; re-run when the project changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, queryClient]);
 
   const invite = () => {
     const address = email.trim();
     if (!address) return;
     setError('');
-    void flowJson<{ active_organization?: { id?: string }; user_id?: string }>('/me')
+    void ensureMe(queryClient)
       .then(async me => {
         const orgId = me.active_organization?.id || '';
         if (!orgId) {

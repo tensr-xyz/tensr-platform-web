@@ -167,19 +167,17 @@ export async function prefetchProjectTab(
         queryFn: fetchMe,
         staleTime: PROJECT_STALE_MS.session,
       }),
-      client.prefetchQuery({
-        queryKey: projectQueryKeys.detail(projectId),
-        queryFn: () => fetchProjectDetail(projectId),
-        staleTime: PROJECT_STALE_MS.details,
-      }),
-      client.prefetchQuery({
-        queryKey: projectQueryKeys.datasets(projectId),
-        queryFn: async () => {
-          const page = await fetchProjectDetail(projectId);
-          return page.datasets || [];
-        },
-        staleTime: PROJECT_STALE_MS.details,
-      })
+      (async () => {
+        await client.prefetchQuery({
+          queryKey: projectQueryKeys.detail(projectId),
+          queryFn: () => fetchProjectDetail(projectId),
+          staleTime: PROJECT_STALE_MS.details,
+        });
+        const page = client.getQueryData<ProjectDetailPayload>(projectQueryKeys.detail(projectId));
+        if (page) {
+          client.setQueryData(projectQueryKeys.datasets(projectId), page.datasets || []);
+        }
+      })()
     );
     if (datasetId) {
       jobs.push(
@@ -352,6 +350,18 @@ export function ensureMe(client: QueryClient): Promise<MePayload> {
   });
 }
 
+/** One /api/projects/:id fetch shared by shell, Details, and tab prefetch. */
+export function ensureProjectDetail(
+  client: QueryClient,
+  projectId: string
+): Promise<ProjectDetailPayload> {
+  return client.ensureQueryData({
+    queryKey: projectQueryKeys.detail(projectId),
+    queryFn: () => fetchProjectDetail(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+  });
+}
+
 export function ensureProjectMembers(
   client: QueryClient,
   projectId: string
@@ -386,10 +396,11 @@ export function useProjectDetail(projectId: string | undefined | null) {
 
 /** Project-scoped dataset list (seeded from /api/projects/:id). */
 export function useProjectDatasets(projectId: string | undefined | null) {
+  const client = useQueryClient();
   return useQuery({
     queryKey: projectQueryKeys.datasets(projectId || ''),
     queryFn: async () => {
-      const page = await fetchProjectDetail(projectId || '');
+      const page = await ensureProjectDetail(client, projectId || '');
       return page.datasets || [];
     },
     enabled: Boolean(projectId),

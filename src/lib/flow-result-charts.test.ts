@@ -233,4 +233,92 @@ describe('flow result charts', () => {
     expect(charts[0]?.categories).toEqual(['BrewCo', 'BeanHouse', 'Cuppa']);
     expect(charts[0]?.categories).not.toContain('aware_a');
   });
+
+  it('derives grouped bars by demographic host for a brand-grid banner', () => {
+    const book = {
+      title: 'Brand awareness by gender',
+      weight: { column: 'w', weight_aware: true },
+      column_metadata: {
+        aware_a: { label: 'BrewCo', value_labels: { '0': 'No', '1': 'Yes' } },
+        aware_b: { label: 'BeanHouse', value_labels: { '0': 'No', '1': 'Yes' } },
+        aware_c: { label: 'Cuppa', value_labels: { '0': 'No', '1': 'Yes' } },
+      },
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'gender=Men', label: 'Men' },
+        { id: 'gender=Women', label: 'Women' },
+      ],
+      rows: [
+        {
+          column: 'aware_a',
+          label: '1',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 71.1 },
+            { banner_id: 'gender=Men', percent: 69.3 },
+            { banner_id: 'gender=Women', percent: 72.9 },
+          ],
+        },
+        {
+          column: 'aware_a',
+          label: '0',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 28.9 },
+            { banner_id: 'gender=Men', percent: 30.7 },
+            { banner_id: 'gender=Women', percent: 27.1 },
+          ],
+        },
+        {
+          column: 'aware_b',
+          label: '1',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'gender=Men', percent: 48 },
+            { banner_id: 'gender=Women', percent: 52 },
+          ],
+        },
+        {
+          column: 'aware_b',
+          label: '0',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'gender=Men', percent: 52 },
+            { banner_id: 'gender=Women', percent: 48 },
+          ],
+        },
+        {
+          column: 'aware_c',
+          label: '1',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 40 },
+            { banner_id: 'gender=Men', percent: 35 },
+            { banner_id: 'gender=Women', percent: 45 },
+          ],
+        },
+        {
+          column: 'aware_c',
+          label: '0',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 60 },
+            { banner_id: 'gender=Men', percent: 65 },
+            { banner_id: 'gender=Women', percent: 55 },
+          ],
+        },
+      ],
+    };
+    expect(chartFromBannerBook(book, 'weighted')).toMatchObject({
+      kind: 'bar_grouped',
+      categories: ['BrewCo', 'BeanHouse', 'Cuppa'],
+      series: [
+        { name: 'Men', values: [69.3, 48, 35] },
+        { name: 'Women', values: [72.9, 52, 45] },
+      ],
+      weighting: 'weighted',
+    });
+  });
 });

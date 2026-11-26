@@ -73,6 +73,62 @@ export function isCodedColumnName(name: string): boolean {
   return trimmed.endsWith('_codes') || trimmed.endsWith('_themes');
 }
 
+/** Single-code first-theme columns from open-end coding. */
+export function isMainThemeColumnName(name: string): boolean {
+  return /_first_theme$/i.test(String(name || '').trim());
+}
+
+const THEME_LABEL_SUFFIX_RE =
+  /(?:\s+themes(?:\s*\((?:all mentioned|main theme)\))?|\s+first theme)\s*$/i;
+
+/** Strip a previous themes / first-theme suffix so a distinct one can be attached. */
+export function themeQuestionStem(label: string): string {
+  return String(label || '')
+    .replace(THEME_LABEL_SUFFIX_RE, '')
+    .trim();
+}
+
+/** True when a coded open end stores every mentioned theme (pipe-joined). */
+export function isCodedMultiThemeColumn(
+  column: Pick<
+    FlowColumn,
+    'name' | 'label' | 'coded_multi' | 'multi_response' | 'source_text_column' | 'codeframe'
+  >
+): boolean {
+  if (isMainThemeColumnName(column.name)) return false;
+  const label = String(column.label || '');
+  if (/\bfirst theme$/i.test(label) || /\bthemes \(main theme\)$/i.test(label)) {
+    return false;
+  }
+  if (column.coded_multi || column.multi_response) return true;
+  if (isCodedColumnName(column.name)) return true;
+  // Open-end coding defaults to multi-response when flags are absent.
+  return true;
+}
+
+/**
+ * Outline title for a coded themes column. Single vs multi always differ, including
+ * older files that still store the same ``…themes`` label on both.
+ */
+export function outlineCodedThemeLabel(
+  column: Pick<
+    FlowColumn,
+    'name' | 'label' | 'source_text_column' | 'coded_multi' | 'multi_response' | 'codeframe'
+  >
+): string {
+  const raw = String(column.label || column.name || '').trim();
+  if (!isCodedOpenEndColumn(column) && !isMainThemeColumnName(column.name)) {
+    return raw;
+  }
+  const multi = isCodedMultiThemeColumn(column);
+  const suffix = multi ? 'themes (all mentioned)' : 'themes (main theme)';
+  if (multi && /\bthemes \(all mentioned\)$/i.test(raw)) return raw;
+  if (!multi && /\bthemes \(main theme\)$/i.test(raw)) return raw;
+  const stem = themeQuestionStem(raw);
+  if (!stem || stem === column.name) return suffix[0].toUpperCase() + suffix.slice(1);
+  return `${stem} ${suffix}`;
+}
+
 /** A themes / code-frame column the Themes screen and Variable rail can open. */
 export function isCodedOpenEndColumn(
   column: Pick<
@@ -82,7 +138,7 @@ export function isCodedOpenEndColumn(
 ): boolean {
   const name = String(column.name || '').trim();
   if (!name) return false;
-  if (isCodedColumnName(name)) return true;
+  if (isCodedColumnName(name) || isMainThemeColumnName(name)) return true;
   if (String(column.label || '').startsWith('Codes for')) return true;
   if (String(column.source_text_column || '').trim()) return true;
   if (column.coded_multi || column.multi_response) return true;
@@ -111,6 +167,11 @@ export function sourceTextColumnFor(
   }
   if (name.endsWith('_themes')) {
     const source = name.slice(0, -'_themes'.length);
+    if (!columns.length || columns.some(item => item.name === source)) return source;
+    return source;
+  }
+  if (isMainThemeColumnName(name)) {
+    const source = name.replace(/_first_theme$/i, '');
     if (!columns.length || columns.some(item => item.name === source)) return source;
     return source;
   }
@@ -291,6 +352,8 @@ function slashJoinedStem(label: string): string | null {
 function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
   const candidates: { name: string; label: string; parts: [string, string] }[] = [];
   for (const column of columns) {
+    // Coded theme columns share a stem on purpose (single vs multi). Keep them separate.
+    if (isCodedOpenEndColumn(column) || isMainThemeColumnName(column.name)) continue;
     const label = String(column.label || column.name || '');
     if (isOtherSpecifyField(column.name, label)) continue;
     const parts = labelAxisParts(label);
@@ -347,6 +410,7 @@ function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
   const identicalGroups = new Map<string, { stem: string; members: string[] }>();
   for (const column of columns) {
     if (claimed.has(column.name)) continue;
+    if (isCodedOpenEndColumn(column) || isMainThemeColumnName(column.name)) continue;
     const label = String(column.label || '')
       .trim()
       .replace(/\s+/g, ' ');
@@ -519,9 +583,13 @@ export function questionnaireOutline(
       });
       continue;
     }
+    const outlineLabel =
+      isCodedOpenEndColumn(column) || isMainThemeColumnName(column.name)
+        ? outlineCodedThemeLabel(column)
+        : String(column.label || column.name);
     units.push({
       key: column.name,
-      label: String(column.label || column.name),
+      label: outlineLabel,
       kind: kinds[column.name] || questionKind(column, []),
       columns: [column.name],
       stubValue: column.name,
@@ -562,17 +630,15 @@ export function themeColumns(
     .map(column => {
       const source = sourceTextColumnFor(column, columns);
       const sourceColumn = columns.find(item => item.name === source);
-      const own = String(column.label || '')
-        .replace(/^Codes for\s+/i, '')
-        .replace(/\s+themes$/i, '')
-        .replace(/\s+first theme$/i, '')
-        .trim();
+      const own = themeQuestionStem(String(column.label || '').replace(/^Codes for\s+/i, ''));
       const ownIsStoredName =
         !own ||
         own === column.name ||
         own === source ||
         own === `${source} themes` ||
-        own === `${source} first theme`;
+        own === `${source} first theme` ||
+        own === `${source} themes (all mentioned)` ||
+        own === `${source} themes (main theme)`;
       const sourceLabel = String(sourceColumn?.label || '').trim();
       const label = !ownIsStoredName
         ? own
