@@ -1,14 +1,27 @@
 import {
+  bannerBookFromTables,
   deckBatchPayload,
   pipelineExportPayload,
   reportExportFormatMeta,
   tableSpecIdsFromReportDocument,
+  tableSpecIdsFromReportPages,
   workbookFromRunDocument,
 } from '@/components/flow/export-dialog';
 import { groupReportExportPages, pagesFromReportDocument } from '@/lib/office-deck-job';
 
 jest.mock('@/lib/report-export', () => ({
   downloadReportXlsx: jest.fn(async () => undefined),
+}));
+
+const flowJson = jest.fn();
+const downloadExport = jest.fn(async () => undefined);
+
+jest.mock('@/lib/flow-api', () => ({
+  flowJson: (...args: unknown[]) => flowJson(...args),
+}));
+
+jest.mock('@/components/flow/survey-screens', () => ({
+  downloadExport: (...args: unknown[]) => downloadExport(...args),
 }));
 
 describe('reportExportFormatMeta', () => {
@@ -87,6 +100,75 @@ describe('tableSpecIdsFromReportDocument', () => {
   it('returns an empty list when the document has no linked tables', () => {
     expect(tableSpecIdsFromReportDocument({ pages: [{ objects: [] }] })).toEqual([]);
     expect(tableSpecIdsFromReportDocument(null)).toEqual([]);
+  });
+});
+
+describe('tableSpecIdsFromReportPages', () => {
+  it('matches picker page ids even when raw pages have no id', () => {
+    const document = {
+      pages: [
+        {
+          title: 'Reach',
+          section: 'Insights',
+          objects: [{ kind: 'table', table_spec_id: 'spec-reach' }],
+        },
+        {
+          title: 'Age',
+          section: 'Insights',
+          objects: [{ kind: 'table', table_spec_id: 'spec-age' }],
+        },
+      ],
+    };
+    const pages = pagesFromReportDocument(document);
+    expect(pages.map(page => page.id)).toEqual(['page-1', 'page-2']);
+    expect(tableSpecIdsFromReportPages(document, [pages[0].id])).toEqual(['spec-reach']);
+    expect(tableSpecIdsFromReportPages(document, [pages[1].id])).toEqual(['spec-age']);
+  });
+});
+
+describe('bannerBookFromTables', () => {
+  beforeEach(() => {
+    flowJson.mockReset();
+    downloadExport.mockClear();
+  });
+
+  it('POSTs a banner book then downloads export.xlsx', async () => {
+    flowJson
+      .mockResolvedValueOnce({
+        has_document: true,
+        document: {
+          pages: [
+            {
+              id: 'p1',
+              title: 'Reach',
+              section: 'Insights',
+              objects: [{ kind: 'table', table_spec_id: 'spec-1' }],
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ book: { id: 'book-1' } });
+    await bannerBookFromTables('ds-1', 'audience', { pageIds: ['p1'] });
+    expect(flowJson).toHaveBeenCalledWith('/datasets/ds-1/banner-books', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Banner book', spec_ids: ['spec-1'] }),
+    });
+    expect(downloadExport).toHaveBeenCalledWith(
+      '/datasets/ds-1/banner-books/book-1/export.xlsx',
+      'audience-banner-book.xlsx',
+      {
+        method: 'POST',
+        body: JSON.stringify({ target_dataset_id: 'ds-1', mapping: {} }),
+      }
+    );
+  });
+
+  it('throws when there are no tables to export', async () => {
+    flowJson
+      .mockResolvedValueOnce({ has_document: false, document: null })
+      .mockResolvedValueOnce({ specs: [] });
+    await expect(bannerBookFromTables('ds-1', 'empty')).rejects.toThrow(/save a table/i);
+    expect(downloadExport).not.toHaveBeenCalled();
   });
 });
 

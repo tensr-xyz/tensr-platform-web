@@ -9,7 +9,7 @@ import { formatDecimalText } from '@/components/flow/result-tables';
 import { guardUserText } from '@/components/flow/chat-output';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
-import { exportTableAsCSV, exportTableAsImage } from '@/utils/table-export';
+import { exportTableAsImage } from '@/utils/table-export';
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
@@ -21,6 +21,7 @@ import {
   standoutMetaLine,
   type StandoutPanelData,
 } from '@/components/flow/standout-stats-panel';
+import { workbookFromRunDocument } from '@/components/flow/export-dialog';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -80,7 +81,35 @@ export function AnalysisResult({
   const [exportBusy, setExportBusy] = useState('');
   const card = useRef<HTMLDivElement>(null);
   const download = (kind: 'xlsx' | 'png') => {
-    if (kind === 'png' && charts.length) {
+    if (kind === 'xlsx') {
+      if (!tables.length) {
+        setExportNote('This output has no table to put in Excel.');
+        return;
+      }
+      const stem =
+        tables
+          .find(table => table.title)
+          ?.title?.replace(/[^\w.-]+/g, '-')
+          .slice(0, 40) || 'table';
+      runExport('xlsx', () =>
+        workbookFromRunDocument(
+          {
+            title: stem,
+            op: 'table',
+            summary: leadText || '',
+            base: null,
+            createdAt: new Date().toISOString(),
+            tables,
+            checks: checks || [],
+            script: script || '',
+          },
+          stem,
+          { datasetId }
+        )
+      );
+      return;
+    }
+    if (charts.length) {
       const svg = card.current?.querySelector('.analysis-charts svg, svg');
       if (svg instanceof SVGSVGElement) {
         const title = 'title' in charts[0] ? String(charts[0].title || 'chart') : 'chart';
@@ -90,10 +119,6 @@ export function AnalysisResult({
     }
     const table = card.current?.querySelector('table');
     if (!(table instanceof HTMLElement)) return;
-    if (kind === 'xlsx') {
-      exportTableAsCSV(table, { filename: 'table' });
-      return;
-    }
     void exportTableAsImage(table, { filename: 'table' });
   };
   const runExport = (name: string, action: () => Promise<void>) => {
@@ -101,7 +126,13 @@ export function AnalysisResult({
     setExportNote('');
     void action()
       .then(() =>
-        setExportNote(name === 'pptx' ? 'PowerPoint slide downloaded.' : 'Added to the deck.')
+        setExportNote(
+          name === 'pptx'
+            ? 'PowerPoint slide downloaded.'
+            : name === 'xlsx'
+              ? 'Excel table downloaded.'
+              : 'Added to the deck.'
+        )
       )
       .catch(err =>
         setExportNote(err instanceof Error ? err.message : 'The export did not finish.')
@@ -268,6 +299,7 @@ export function AnalysisResult({
                   type="button"
                   className="flow-btn"
                   role="menuitem"
+                  disabled={Boolean(exportBusy)}
                   onClick={() => download('xlsx')}
                 >
                   Excel table

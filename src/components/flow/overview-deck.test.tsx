@@ -16,6 +16,10 @@ jest.mock('@/lib/output-pptx', () => ({
   appendResultToDeck: jest.fn(async () => undefined),
 }));
 
+jest.mock('@/components/flow/export-dialog', () => ({
+  workbookFromRunDocument: jest.fn(async () => undefined),
+}));
+
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(async (path: string) => {
     if (String(path).includes('/metadata')) {
@@ -42,6 +46,7 @@ jest.mock('@/lib/flow-api', () => ({
 }));
 
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
+import { workbookFromRunDocument } from '@/components/flow/export-dialog';
 
 describe('the deck and refresh screens', () => {
   it('greys the audience profile and size slides when no audience is selected', () => {
@@ -347,5 +352,11 @@ describe('the deck and refresh screens', () => {
     await waitFor(() => expect(exportResultAsPptx).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add to a deck…' }));
     await waitFor(() => expect(appendResultToDeck).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Excel table' }));
+    await waitFor(() => expect(workbookFromRunDocument).toHaveBeenCalled());
+    const [document, stem, options] = (workbookFromRunDocument as jest.Mock).mock.calls[0];
+    expect(document.tables[0].rows).toEqual([['Alpha', '40.0%']]);
+    expect(stem).toBe('Reach');
+    expect(options).toEqual({ datasetId: 'ds-1' });
   });
 });

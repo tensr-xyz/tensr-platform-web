@@ -4054,11 +4054,17 @@ export async function downloadExport(path: string, filename: string, init?: Requ
     throw new Error(formatApiErrorMessage(new ApiRequestError(response.status, body)));
   }
   const blob = await response.blob();
+  if (!blob.size) {
+    throw new Error('The download came back empty. Try again.');
+  }
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
+  // Some browsers ignore click() unless the anchor is in the document.
+  document.body.appendChild(anchor);
   anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
 

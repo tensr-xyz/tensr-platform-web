@@ -6150,7 +6150,11 @@ function ReportScreen({
   };
 
   const bannerBook = async () => {
-    const liveSpecs = selected
+    // Overview card says "Every saved table" — use all live specs, not only checked ones.
+    const sourceRows = selected.length
+      ? selected
+      : specs.filter(row => Object.keys(row.spec || {}).length > 0);
+    const liveSpecs = sourceRows
       .map(row => ({
         ...row.spec,
         dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
@@ -6163,7 +6167,7 @@ function ReportScreen({
       return;
     }
     setError('');
-    const exportDatasetId = selected[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
+    const exportDatasetId = sourceRows[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
     const stem =
       (audienceNames[0] || 'banner-book').replace(/[^\w.-]+/g, '-').slice(0, 40) || 'banner-book';
     const saved = await flowJson<{ book?: { id?: string } }>(
