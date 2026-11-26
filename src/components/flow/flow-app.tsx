@@ -151,7 +151,6 @@ import {
   pinsFromRuns,
   rememberReportRuns,
   savePin,
-  shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
 import { documentFromPins, reportDocumentForApi } from '@/lib/report-document';
@@ -5651,236 +5650,215 @@ function ReportScreen({
       return;
     }
     let live = true;
-    // Keep Deliverables + toolbar visible while overview loads; only findings skeleton.
-    if (!overviewQuery.data) setFindingsPhase('loading');
-    setError('');
-    const fileIds = reportFileKey ? reportFileKey.split(',') : [];
     // The file list arrives after the first paint. Waiting for it keeps the
     // overview on those files instead of scanning every file in the account.
     if (!reportLoadKey) return;
-    const overviewUrl = `/api/projects/${projectId}/overview${
-      fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
-    }`;
-    const loadOverview = async () => {
-      // Prefer the shared cache on a warm mount; always re-fetch after an explicit refresh.
-      if (refreshKey === 0 && overviewQuery.data?.ok && Array.isArray(overviewQuery.data.tables)) {
-        return overviewQuery.data;
+    // One fetch via useProjectOverview (shared with Outputs). Do not re-hit /overview here.
+    if (overviewQuery.isError) {
+      setError('Could not load saved tables');
+      setPhase('error');
+      setFindingsPhase('error');
+      return;
+    }
+    if (!overviewQuery.data) {
+      setFindingsPhase('loading');
+      return;
+    }
+    setError('');
+    const overview = overviewQuery.data;
+    void (async () => {
+      if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
+        throw new Error('Could not load saved tables');
       }
-      return shareRequest(overviewUrl, async () => {
-        const first = await flowJson<{
-          ok?: boolean;
-          tables?: {
-            spec_id?: string;
-            label?: string;
-            dataset_id?: string;
-            filename?: string;
-            table_number?: number | null;
-            stale?: boolean;
-            detail?: string;
-          }[];
-          findings?: { id: string; title: string; number?: number | null }[];
-          runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
-        }>(overviewUrl, { signal: AbortSignal.timeout(30_000) });
-        queryClient.setQueryData(projectQueryKeys.overview(projectId, reportFileKey), first);
-        return first;
-      });
-    };
-    void loadOverview()
-      .then(async overview => {
-        if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
-          throw new Error('Could not load saved tables');
-        }
-        const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
-        rememberReportRuns(projectId, runs);
-        applyServerPins(projectId, pinsFromRuns(runs));
-        setSavedTotal(
-          savedTableTotal([
-            overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
-          ])
-        );
-        const staleRows = overview.tables.filter(row => row.stale);
-        const liveRows = overview.tables.filter(row => row.spec_id && !row.stale);
-        setStaleTables(
-          uniqueStale(
-            staleRows.map(row => ({
-              id: String(row.spec_id || ''),
-              label: String(row.label || ''),
-              number: Number(row.table_number) || 0,
-              datasetId: String(row.dataset_id || ''),
-              filename: String(row.filename || ''),
-              detail: String(row.detail || ''),
-            }))
-          )
-        );
-        setFindings((overview.findings || []).map(findingFromOverview));
-        setFindingsPhase('ready');
-        // Paint the Report editor shell before tabulating every live spec.
-        // Unbounded parallel GETs were keeping the skeleton up for 40s+.
-        setPhase('ready');
-        const meta = await flowJson<{
-          columns?: {
-            name?: string;
-            label?: string;
-            value_labels?: Record<string, string> | null;
-          }[];
-        }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
-        if (!live) return;
-        const questions = (meta.columns || []).map(column => ({
-          name: column.name || '',
-          label: column.label || '',
-        }));
-        const labels = Object.fromEntries(
-          (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
-        );
-        // Overview titles can still carry codes until tables load; rewrite labels now.
-        setFindings(current =>
-          current.map(finding => ({
-            ...finding,
-            eyebrow: titledWithQuestions(finding.eyebrow, questions),
-            headline: titledWithQuestions(finding.headline, questions),
-            support: titledWithQuestions(finding.support, questions),
-          }))
-        );
-        setStaleTables(current =>
-          current.map(table => ({
-            ...table,
-            label: titledWithQuestions(table.label, questions),
-          }))
-        );
-        let openFailed = false;
-        const opened = liveRows.length
-          ? await flowJson<{
-              tables?: {
-                ok?: boolean;
-                spec_id?: string;
-                book?: Record<string, unknown>;
-                stale?: boolean;
-              }[];
-            }>(`/datasets/projects/${projectId}/tables/open`, {
-              method: 'POST',
-              body: JSON.stringify({
-                tables: liveRows.map(row => ({
-                  spec_id: row.spec_id,
-                  dataset_id: row.dataset_id,
-                })),
-              }),
-              signal: AbortSignal.timeout(45_000),
-            }).catch(() => {
-              openFailed = true;
-              return null;
-            })
-          : { tables: [] };
-        if (!live) return;
-        const staleFromOpen = new Set(
-          (opened?.tables || [])
-            .filter(item => item.stale && item.spec_id)
-            .map(item => String(item.spec_id))
-        );
-        const byId = new Map(
-          (opened?.tables || [])
-            .filter(item => item.ok && item.book && item.spec_id)
-            .map(item => [String(item.spec_id), item.book as Record<string, unknown>])
-        );
-        const rows = liveRows
-          .filter(row => !staleFromOpen.has(String(row.spec_id || '')))
-          .map(row => ({
+      const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
+      rememberReportRuns(projectId, runs);
+      applyServerPins(projectId, pinsFromRuns(runs));
+      setSavedTotal(
+        savedTableTotal([
+          overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
+        ])
+      );
+      const staleRows = overview.tables.filter(row => row.stale);
+      const liveRows = overview.tables.filter(row => row.spec_id && !row.stale);
+      setStaleTables(
+        uniqueStale(
+          staleRows.map(row => ({
             id: String(row.spec_id || ''),
             label: String(row.label || ''),
-            datasetId: String(row.dataset_id || datasetId),
-            filename: String(row.filename || ''),
-            number: Number(row.table_number) || 0,
-          }));
-        const settled = await loadTablesSettled(
-          rows,
-          row => {
-            const cached = byId.get(row.id);
-            if (cached) return Promise.resolve(cached);
-            return flowJson<Record<string, unknown>>(
-              `/datasets/${row.datasetId}/tables/${row.id}`,
-              {
-                signal: AbortSignal.timeout(30_000),
-              }
-            );
-          },
-          { concurrency: 4 }
-        );
-        if (!live) return;
-        const readyRows = settled.ready.map(({ row, detail }) => {
-          const note = tableFileNote(row, datasetId);
-          const named = titledWithQuestions(row.label, questions);
-          const label = note ? `${named} (${note})` : named;
-          const spec = (detail.spec as Record<string, unknown>) || {};
-          return {
-            id: row.id,
-            label,
-            datasetId: row.datasetId,
-            number: row.number,
-            spec,
-            table: reportTableFromBook(row.id, label, row.number, detail, labels),
-          };
-        });
-        // A failed tables/open with nothing else to show must not leave empty deliverables.
-        if (
-          liveRows.length > 0 &&
-          readyRows.length === 0 &&
-          (openFailed || settled.failed.length > 0)
-        ) {
-          throw new Error(
-            openFailed
-              ? 'Could not open saved tables. Try again.'
-              : 'Could not load saved tables. Try again.'
-          );
-        }
-        setSpecs(
-          readyRows.map(row => ({
-            id: row.id,
-            label: row.label,
-            spec: row.spec,
-            datasetId: row.datasetId,
-            number: row.number,
-          }))
-        );
-        setPicked(readyRows.map(row => row.id));
-        const refused = liveRows
-          .filter(row => staleFromOpen.has(String(row.spec_id || '')))
-          .map(row => ({
-            id: String(row.spec_id || ''),
-            label: titledWithQuestions(String(row.label || ''), questions),
             number: Number(row.table_number) || 0,
             datasetId: String(row.dataset_id || ''),
             filename: String(row.filename || ''),
-            detail: String(row.detail || 'Rebuild this table on the current file.'),
-          }));
-        setStaleTables(current =>
-          uniqueStale([...current, ...refused, ...settled.stale]).map(table => ({
-            ...table,
-            label: titledWithQuestions(table.label, questions),
+            detail: String(row.detail || ''),
           }))
-        );
-        const nextTables = distinctTables(readyRows.map(row => row.table));
-        setTables(nextTables);
-        setSegmentId(null);
-        setRowCut(null);
-        writeFindings(nextTables, null, null);
-      })
-      .catch(err => {
-        if (!live) return;
-        setError(err instanceof Error ? err.message : 'Could not load saved tables');
-        setPhase('error');
+        )
+      );
+      setFindings((overview.findings || []).map(findingFromOverview));
+      setFindingsPhase('ready');
+      // Paint the Report editor shell before tabulating every live spec.
+      // Unbounded parallel GETs were keeping the skeleton up for 40s+.
+      setPhase('ready');
+      const meta = await flowJson<{
+        columns?: {
+          name?: string;
+          label?: string;
+          value_labels?: Record<string, string> | null;
+        }[];
+      }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
+      if (!live) return;
+      const questions = (meta.columns || []).map(column => ({
+        name: column.name || '',
+        label: column.label || '',
+      }));
+      const labels = Object.fromEntries(
+        (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
+      );
+      // Overview titles can still carry codes until tables load; rewrite labels now.
+      setFindings(current =>
+        current.map(finding => ({
+          ...finding,
+          eyebrow: titledWithQuestions(finding.eyebrow, questions),
+          headline: titledWithQuestions(finding.headline, questions),
+          support: titledWithQuestions(finding.support, questions),
+        }))
+      );
+      setStaleTables(current =>
+        current.map(table => ({
+          ...table,
+          label: titledWithQuestions(table.label, questions),
+        }))
+      );
+      let openFailed = false;
+      const opened = liveRows.length
+        ? await flowJson<{
+            tables?: {
+              ok?: boolean;
+              spec_id?: string;
+              book?: Record<string, unknown>;
+              stale?: boolean;
+            }[];
+          }>(`/datasets/projects/${projectId}/tables/open`, {
+            method: 'POST',
+            body: JSON.stringify({
+              tables: liveRows.map(row => ({
+                spec_id: row.spec_id,
+                dataset_id: row.dataset_id,
+              })),
+            }),
+            signal: AbortSignal.timeout(45_000),
+          }).catch(() => {
+            openFailed = true;
+            return null;
+          })
+        : { tables: [] };
+      if (!live) return;
+      const staleFromOpen = new Set(
+        (opened?.tables || [])
+          .filter(item => item.stale && item.spec_id)
+          .map(item => String(item.spec_id))
+      );
+      const byId = new Map(
+        (opened?.tables || [])
+          .filter(item => item.ok && item.book && item.spec_id)
+          .map(item => [String(item.spec_id), item.book as Record<string, unknown>])
+      );
+      const rows = liveRows
+        .filter(row => !staleFromOpen.has(String(row.spec_id || '')))
+        .map(row => ({
+          id: String(row.spec_id || ''),
+          label: String(row.label || ''),
+          datasetId: String(row.dataset_id || datasetId),
+          filename: String(row.filename || ''),
+          number: Number(row.table_number) || 0,
+        }));
+      const settled = await loadTablesSettled(
+        rows,
+        row => {
+          const cached = byId.get(row.id);
+          if (cached) return Promise.resolve(cached);
+          return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`, {
+            signal: AbortSignal.timeout(30_000),
+          });
+        },
+        { concurrency: 4 }
+      );
+      if (!live) return;
+      const readyRows = settled.ready.map(({ row, detail }) => {
+        const note = tableFileNote(row, datasetId);
+        const named = titledWithQuestions(row.label, questions);
+        const label = note ? `${named} (${note})` : named;
+        const spec = (detail.spec as Record<string, unknown>) || {};
+        return {
+          id: row.id,
+          label,
+          datasetId: row.datasetId,
+          number: row.number,
+          spec,
+          table: reportTableFromBook(row.id, label, row.number, detail, labels),
+        };
       });
+      // A failed tables/open with nothing else to show must not leave empty deliverables.
+      if (
+        liveRows.length > 0 &&
+        readyRows.length === 0 &&
+        (openFailed || settled.failed.length > 0)
+      ) {
+        throw new Error(
+          openFailed
+            ? 'Could not open saved tables. Try again.'
+            : 'Could not load saved tables. Try again.'
+        );
+      }
+      setSpecs(
+        readyRows.map(row => ({
+          id: row.id,
+          label: row.label,
+          spec: row.spec,
+          datasetId: row.datasetId,
+          number: row.number,
+        }))
+      );
+      setPicked(readyRows.map(row => row.id));
+      const refused = liveRows
+        .filter(row => staleFromOpen.has(String(row.spec_id || '')))
+        .map(row => ({
+          id: String(row.spec_id || ''),
+          label: titledWithQuestions(String(row.label || ''), questions),
+          number: Number(row.table_number) || 0,
+          datasetId: String(row.dataset_id || ''),
+          filename: String(row.filename || ''),
+          detail: String(row.detail || 'Rebuild this table on the current file.'),
+        }));
+      setStaleTables(current =>
+        uniqueStale([...current, ...refused, ...settled.stale]).map(table => ({
+          ...table,
+          label: titledWithQuestions(table.label, questions),
+        }))
+      );
+      const nextTables = distinctTables(readyRows.map(row => row.table));
+      setTables(nextTables);
+      setSegmentId(null);
+      setRowCut(null);
+      writeFindings(nextTables, null, null);
+    })().catch(err => {
+      if (!live) return;
+      setError(err instanceof Error ? err.message : 'Could not load saved tables');
+      setPhase('error');
+    });
     return () => {
       live = false;
     };
-    // overviewQuery.data is read for a warm cache hit; refreshKey forces a network reload.
+    // overviewQuery.dataUpdatedAt re-runs after invalidate (refresh); do not fetch /overview again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     datasetId,
     writeFindings,
-    refreshKey,
     projectId,
     reportLoadKey,
     reportFileKey,
     labelsRevision,
+    overviewQuery.data,
+    overviewQuery.dataUpdatedAt,
+    overviewQuery.isError,
   ]);
 
   useEffect(() => {

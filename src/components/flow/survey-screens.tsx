@@ -2266,16 +2266,11 @@ export function TablesBuilder({
     } catch {
       pendingOpen = '';
     }
+    // Metadata only — never open_first (that tabulated on the list and hit the 29s gateway).
     const firstPage = pendingOpen
-      ? Promise.resolve({
+      ? Promise.resolve({ specs: [] as SavedSpec[] })
+      : flowJson<{ specs?: SavedSpec[] }>(`/datasets/${datasetId}/tables`).catch(() => ({
           specs: [] as SavedSpec[],
-          first: null as Record<string, unknown> | null,
-        })
-      : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
-          `/datasets/${datasetId}/tables?open_first=true`
-        ).catch(() => ({
-          specs: [] as SavedSpec[],
-          first: null as Record<string, unknown> | null,
         }));
     // Banner books are not needed to paint the rail or open the first table.
     void flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`)
@@ -2287,12 +2282,12 @@ export function TablesBuilder({
       });
     void Promise.all([
       firstPage,
-      // The open file's list comes from the open_first call; the project list reads only this project's files.
+      // The open file's list and the project list; the file page is not fetched twice.
       loadProjectTables(projectId, datasetId, {
         fileIds: fileIdsRef.current,
         filePage: pendingOpen ? undefined : firstPage,
       }),
-    ]).then(async ([specPage, projectTables]) => {
+    ]).then(async ([, projectTables]) => {
       if (!live) return;
       const saved: SavedSpec[] = projectTables.map(table => ({
         spec_id: table.id,
@@ -2311,14 +2306,8 @@ export function TablesBuilder({
       );
       const firstHere = saved.find(item => !item.dataset_id || item.dataset_id === datasetId);
       const firstId = pendingOpen || liveHere[0]?.spec_id || liveHere[0]?.id;
-      const openedId = String(
-        (specPage.first as { spec?: { id?: string } } | null)?.spec?.id || ''
-      );
-      const openedLive = liveHere.some(item => (item.spec_id || item.id) === openedId);
       setRailReady(true);
-      if (specPage.first && !pendingOpen && openedLive) {
-        remember(specPage.first);
-      } else if (firstHere?.stale && !pendingOpen && !firstId) {
+      if (firstHere?.stale && !pendingOpen && !firstId) {
         setError(firstHere.detail || 'Rebuild this table on the current file.');
       } else if (firstId) {
         setOpening(true);

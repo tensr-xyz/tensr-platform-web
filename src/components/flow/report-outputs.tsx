@@ -162,7 +162,12 @@ export function ReportOutputs({
     const overviewUrl = `/api/projects/${projectId}/overview${
       fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
     }`;
-    void shareRequest(overviewUrl, () => flowJson<{ ok?: boolean; runs?: unknown[] }>(overviewUrl))
+    // Same key as useProjectOverview so Report Overview and Outputs share one in-flight GET.
+    void shareRequest(overviewUrl, () =>
+      flowJson<{ ok?: boolean; runs?: unknown[] }>(overviewUrl, {
+        signal: AbortSignal.timeout(30_000),
+      })
+    )
       .then(overview => {
         if (!live) return;
         if (overview?.ok && Array.isArray(overview.runs) && overview.runs.length) {

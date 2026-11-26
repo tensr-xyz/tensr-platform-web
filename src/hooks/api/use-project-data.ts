@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { shareRequest } from '@/components/flow/report-pins';
 import { flowJson } from '@/lib/flow-api';
 import { PROJECT_STALE_MS, projectQueryKeys } from '@/lib/project-query-cache';
 
@@ -71,12 +72,19 @@ export function useProjectOverview(
   fileKey: string,
   enabled = true
 ) {
+  const path = overviewPath(projectId || '', fileKey);
   return useQuery({
     queryKey: projectQueryKeys.overview(projectId || '', fileKey),
-    queryFn: () => flowJson<ProjectOverviewPayload>(overviewPath(projectId || '', fileKey)),
+    // shareRequest collapses Report + Outputs + this hook when they race.
+    queryFn: () =>
+      shareRequest(path, () =>
+        flowJson<ProjectOverviewPayload>(path, {
+          signal: AbortSignal.timeout(30_000),
+        })
+      ),
     enabled: Boolean(projectId) && enabled,
     staleTime: PROJECT_STALE_MS.tables,
-    refetchOnMount: true,
+    refetchOnMount: false,
     retry: shouldRetryProjectQuery,
   });
 }
