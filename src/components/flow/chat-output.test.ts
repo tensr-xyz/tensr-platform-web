@@ -265,6 +265,26 @@ describe('chat output panel', () => {
     expect(outputTitle(results, 'Chart ready.')).toBe('Read or visited and 2 more');
   });
 
+  it('titles a TURF card TURF, not Reach and frequency and 1 more', () => {
+    const results = [
+      {
+        procedure: 'turf',
+        summary: {
+          title: 'TURF',
+          line: 'Reach is 46.0% for a 3-item portfolio (NYT, CNBC, Bloomberg); frequency 0.600.',
+          table: [
+            { title: 'Reach and frequency', rows: [['Reach', '46.0%']] },
+            { title: 'Selected items', rows: [['NYT', '1']] },
+            { title: 'Incremental reach', rows: [['1', 'NYT', '28.0%', '28.0%']] },
+            { title: 'Runner-up portfolios', rows: [['2', '44.0%', '0.550', 'NYT, CNBC, WSJ']] },
+          ],
+        },
+      },
+    ];
+    expect(outputTitle(results, 'Reach is 46.0%.')).toBe('TURF');
+    expect(outputKind(results)).toBe('TURF');
+  });
+
   it('rewrites a subtitle of column codes into labels', () => {
     const columns = [
       { name: 'item_a', label: 'Ledger' },

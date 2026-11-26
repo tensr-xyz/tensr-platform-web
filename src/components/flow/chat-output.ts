@@ -55,6 +55,7 @@ const KIND_LABELS: Record<string, string> = {
   funnel: 'Funnel',
   brand_duplication: 'Duplication',
   paired_brand_test: 'Paired comparison',
+  turf: 'TURF',
 };
 
 function procedureOf(item: ToolResult): string {
@@ -379,6 +380,7 @@ function preferredProcedure(items: ToolResult[]): string {
     'brand_duplication',
     'paired_brand_test',
     'funnel',
+    'turf',
     'nps',
     'chi_square',
     'banner_table',
@@ -937,6 +939,7 @@ export function outputTitle(
   const items = analysisItems(results);
   if (preferredProcedure(items) === 'funnel') return 'Funnel';
   if (preferredProcedure(items) === 'brand_duplication') return 'Duplication';
+  if (preferredProcedure(items) === 'turf') return 'TURF';
   // Share tables for skipped categoricals must not rename a descriptives card.
   if (preferredProcedure(items) === 'descriptives') return 'Descriptives';
   const questions = frequencyQuestions(results).map(question =>
