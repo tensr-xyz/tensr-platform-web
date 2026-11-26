@@ -275,6 +275,18 @@ function outlineSetKind(
   return kinds[members[0]] || 'multi';
 }
 
+/** Stem title when every dichotomy carries ``Stem: A / B / C`` (identical labels). */
+function slashJoinedStem(label: string): string | null {
+  const parts = labelAxisParts(label);
+  if (!parts || !parts[1].includes(' / ')) return null;
+  const brands = parts[1]
+    .split(' / ')
+    .map(piece => piece.trim())
+    .filter(Boolean);
+  if (brands.length < 2 || parts[0].length < 8) return null;
+  return parts[0];
+}
+
 /** Infer multi-select / grid groups from shared stem labels when sets are missing. */
 function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
   const candidates: { name: string; label: string; parts: [string, string] }[] = [];
@@ -327,6 +339,29 @@ function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
     buckets.set(`right:${stem.toLowerCase()}`, {
       stem,
       members: group.map(entry => entry.name),
+    });
+    for (const entry of group) claimed.add(entry.name);
+  }
+
+  // Identical labels (often ``Stem: Brand A / Brand B / …`` on every dichotomy).
+  const identicalGroups = new Map<string, { stem: string; members: string[] }>();
+  for (const column of columns) {
+    if (claimed.has(column.name)) continue;
+    const label = String(column.label || '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    if (!label || label.length < 8 || isOtherSpecifyField(column.name, label)) continue;
+    const stem = slashJoinedStem(label) || label;
+    const key = label.toLowerCase();
+    const group = identicalGroups.get(key) || { stem, members: [] };
+    group.members.push(column.name);
+    identicalGroups.set(key, group);
+  }
+  for (const group of identicalGroups.values()) {
+    if (group.members.length < 2) continue;
+    buckets.set(`identical:${group.stem.toLowerCase()}`, {
+      stem: group.stem,
+      members: group.members,
     });
   }
 
