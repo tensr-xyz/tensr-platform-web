@@ -574,7 +574,8 @@ export function resultLead(
       prose
     );
   if (pendingOrFailedProse && finding) return guardUserText(withoutStrayEnding(finding));
-  const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
+  const hasFigure = (text: string) =>
+    /%/.test(text) || /thousand/i.test(text) || /\d[\d,]*\.?\d*\s*k\b/i.test(text);
   const hasDigits = (text: string) => /\d/.test(text);
   // Prefer the structured summary when the model still quotes snake_case codes.
   const codeHeavy = (text: string) =>
@@ -954,7 +955,9 @@ function summaryLine(
   if (!lines.length) return '';
   // A share or rake finding beats a weight-only companion. Comparison and
   // correlation lines have no % — keep every structured contract in order.
-  const withFigure = lines.filter(line => /%|thousand|target|met|missed/i.test(line));
+  const withFigure = lines.filter(line =>
+    /%|thousand|\d[\d,]*\.?\d*\s*k\b|target|met|missed/i.test(line)
+  );
   if (withFigure.length) return withFigure.join(' ');
   return lines.join(' ');
 }

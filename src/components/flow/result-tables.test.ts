@@ -2102,4 +2102,80 @@ describe('funnelHeadline', () => {
     expect(view.tables[0].columns).not.toContain('Valid %');
     expect(view.baseDetail || '').toMatch(/base = 3,000 \(3,900,000 weighted\)/);
   });
+
+  it('TEN-192: prefers the audience column base over the full-file weight block', () => {
+    const cases = [
+      {
+        audience_label: 'High-asset travellers',
+        audience_n: 223,
+        audience_w: 47000,
+        file_n: 25000,
+        file_w: 47_000_000,
+      },
+      {
+        audience_label: 'Senior buyers',
+        audience_n: 180,
+        audience_w: 12000,
+        file_n: 8000,
+        file_w: 2_000_000,
+      },
+      {
+        audience_label: 'North region',
+        audience_n: 412,
+        audience_w: 88000,
+        file_n: 5000,
+        file_w: 1_500_000,
+      },
+    ];
+    for (const sample of cases) {
+      const view = resultViewFromToolResults({
+        audience_label: sample.audience_label,
+        audience_filter: { column: 'aud', op: '=', value: '1' },
+        answered_n: sample.file_n,
+        weight: {
+          column: 'proj_weight',
+          label: 'Projection weight (people)',
+          unweighted_n: sample.file_n,
+          weighted_n: sample.file_w,
+          universe_thousands: sample.file_w / 1000,
+        },
+        banner_columns: [
+          {
+            id: 'total',
+            label: 'Total',
+            bases: { column: { unweighted_n: sample.file_n, weighted_n: sample.file_w } },
+          },
+          {
+            id: 'audience',
+            label: sample.audience_label,
+            bases: { column: { unweighted_n: sample.audience_n, weighted_n: sample.audience_w } },
+          },
+        ],
+        rows: [
+          {
+            id: 'r1',
+            label: 'Alpha Daily ~ Past 30 days reach',
+            kind: 'value',
+            cells: [
+              { banner_id: 'total', percent: 13.4, projected_thousands: 100, index: 100 },
+              {
+                banner_id: 'audience',
+                percent: 68.2,
+                projected_thousands: 32,
+                index: 509,
+              },
+            ],
+          },
+        ],
+      });
+      expect(view.baseDetail || '').toContain(
+        `base = ${sample.audience_n.toLocaleString('en-GB')}`
+      );
+      expect(view.baseDetail || '').not.toContain(
+        `base = ${sample.file_n.toLocaleString('en-GB')} (${sample.file_w.toLocaleString('en-GB')} weighted)`
+      );
+      expect(view.tables[0]?.rows[0]?.[0]).toBe('Alpha Daily');
+      expect(view.tables[0]?.columns.some(column => /index/i.test(column))).toBe(true);
+    }
+  });
 });

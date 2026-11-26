@@ -1198,7 +1198,9 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
       matrix.push([label, ...blank]);
       continue;
     }
+    // Strip shared question stems (colon or tilde) so chat rows show the brand/item.
     if (label.includes(': ')) label = label.split(': ').slice(-1)[0].trim() || label;
+    if (label.includes(' ~ ')) label = label.split(' ~ ')[0].trim() || label;
     const cells = Array.isArray(row.cells)
       ? row.cells.filter(
           (item): item is Record<string, unknown> =>
@@ -1241,7 +1243,54 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
   };
 }
 
+function audienceColumnBase(
+  record: Record<string, unknown>
+): { unweighted: number; weighted: number | null } | null {
+  const audienceLabel = cell(record.audience_label).toLowerCase();
+  if (!audienceLabel) return null;
+  const columns = Array.isArray(record.banner_columns) ? record.banner_columns : [];
+  for (const item of columns) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const column = item as {
+      id?: unknown;
+      label?: unknown;
+      bases?: { column?: { unweighted_n?: unknown; weighted_n?: unknown } };
+    };
+    const id = cell(column.id).toLowerCase();
+    const label = cell(column.label).toLowerCase();
+    if (id === 'total' || label === 'total') continue;
+    const matches =
+      label === audienceLabel ||
+      label.includes(audienceLabel) ||
+      audienceLabel.includes(label) ||
+      id === 'audience';
+    if (!matches) continue;
+    const base = column.bases?.column;
+    const unweighted = wholeNumber(base?.unweighted_n);
+    if (unweighted == null) continue;
+    return { unweighted, weighted: wholeNumber(base?.weighted_n) };
+  }
+  // Fall back to answered_n when the book already restricted rows to the audience.
+  const answered = typeof record.answered_n === 'number' ? wholeNumber(record.answered_n) : null;
+  if (answered != null && answered > 0) {
+    return { unweighted: answered, weighted: null };
+  }
+  return null;
+}
+
 function rememberTableBase(record: Record<string, unknown>, sample: SampleBits): void {
+  // Prefer the audience column base when a named audience is on the book — never
+  // the full-file weight block that would report the universe as the table base.
+  if (!sample.sawTotalColumn && bannerRecord(record)) {
+    const audienceBase = audienceColumnBase(record);
+    if (audienceBase) {
+      sample.tableUnweighted = audienceBase.unweighted;
+      sample.tableWeighted = audienceBase.weighted;
+      sample.sawTableBase = true;
+      sample.sawTotalColumn = true;
+      return;
+    }
+  }
   const weight = record.weight;
   if (
     !sample.sawTotalColumn &&
