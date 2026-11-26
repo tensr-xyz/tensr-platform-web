@@ -44,9 +44,11 @@ import {
 import { formatApiErrorMessage } from '@/lib/api-error';
 import {
   BLANK_START_OPTION,
+  copySetupDisclosureLabel,
   defaultTemplateName,
   flattenStartOptions,
   parseStartSelection,
+  partitionStartOptions,
   startSelectionKey,
   thenNoteForSelection,
   type ProjectStartOption,
@@ -746,6 +748,7 @@ export function NewProjectDialog({
   const [qualtricsOpen, setQualtricsOpen] = useState(false);
   const [startKey, setStartKey] = useState('blank');
   const [startOptions, setStartOptions] = useState<ProjectStartOption[]>([BLANK_START_OPTION]);
+  const [copySetupOpen, setCopySetupOpen] = useState(false);
   const [thenNote, setThenNote] = useState('');
   const [templateNote, setTemplateNote] = useState('');
   const createdProjectId = useRef<string | null>(null);
@@ -765,8 +768,17 @@ export function NewProjectDialog({
   const thenHint = thenNoteForSelection(startKey, thenNote);
   const selectedStart =
     startOptions.find(row => startSelectionKey(row) === startKey) || BLANK_START_OPTION;
+  const {
+    blank: blankStart,
+    projects: copyProjects,
+    templates: teamTemplates,
+  } = useMemo(() => partitionStartOptions(startOptions), [startOptions]);
   const canSaveSourceTemplate =
     startSource.source_kind === 'project' && Boolean(startSource.source_id);
+
+  useEffect(() => {
+    if (startSource.source_kind === 'project') setCopySetupOpen(true);
+  }, [startSource.source_kind, startKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -801,6 +813,7 @@ export function NewProjectDialog({
     setProposal(null);
     setQualtricsOpen(false);
     setStartKey('blank');
+    setCopySetupOpen(false);
     setTemplateNote('');
     createdProjectId.current = null;
     uploadedDataset.current = null;
@@ -929,8 +942,8 @@ export function NewProjectDialog({
           if (!next) reset();
         }}
       >
-        <DialogContent className="new-project-dialog">
-          <DialogHeader>
+        <DialogContent className="new-project-dialog flow-modal">
+          <DialogHeader className="flow-modal-head">
             <DialogTitle>{step === 1 ? 'New project' : 'Add data'}</DialogTitle>
             <DialogDescription>
               {step === 1
@@ -938,170 +951,231 @@ export function NewProjectDialog({
                 : `Bring data into ${name.trim() || 'the project'}. You can add more files from Sources.`}
             </DialogDescription>
           </DialogHeader>
-          {step === 1 ? (
-            <div className="new-project-fields">
-              <label className="new-project-field">
-                <span>Name</span>
-                <Input
-                  autoFocus
-                  value={name}
-                  placeholder="e.g. Brand tracker wave 4"
-                  aria-label="Project name"
-                  onChange={event => setName(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter' && name.trim()) setStep(2);
-                  }}
-                />
-              </label>
-              <label className="new-project-field">
-                <span>Folder (optional)</span>
-                <ChoiceSelect
-                  aria-label="Folder"
-                  value={folder}
-                  onValueChange={setFolder}
-                  options={[
-                    { value: '', label: 'No folder' },
-                    ...folders.map(item => ({ value: item.name, label: item.name })),
-                  ]}
-                />
-              </label>
-              <div className="new-project-start">
-                <p className="new-project-start-label">Start from</p>
-                <div className="new-project-start-list" role="radiogroup" aria-label="Start from">
-                  {startOptions.map(option => {
-                    const key = startSelectionKey(option);
-                    return (
-                      <Button
-                        key={key}
-                        type="button"
-                        role="radio"
-                        aria-checked={startKey === key}
-                        className="new-project-choice"
-                        data-active={startKey === key}
-                        onClick={() => setStartKey(key)}
-                      >
-                        <strong>{option.title}</strong>
-                        <span>{option.blurb}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-              {thenHint ? (
-                <div className="new-project-then">
-                  <p className="new-project-start-label">Then</p>
-                  <p className="new-project-then-note">{thenHint}</p>
-                </div>
-              ) : null}
-              {templateNote ? <p className="flow-muted">{templateNote}</p> : null}
-            </div>
-          ) : proposal ? (
-            <UploadPrepCard
-              proposal={proposal.prep}
-              fileName={file?.name || ''}
-              applying={busy}
-              onApply={kept => {
-                const bearer = getStytchBearerForTensrApi();
-                const projectId = createdProjectId.current;
-                if (!bearer || !projectId) {
-                  setError('Sign in again to prepare the file.');
-                  return;
-                }
-                setBusy(true);
-                void applyUploadPrep(proposal.id, bearer, kept)
-                  .then(saved =>
-                    moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
-                  )
-                  .then(async datasetId => {
-                    await flowJson(`/api/projects/${projectId}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ active_dataset_id: datasetId }),
-                    });
-                    await onCreated();
-                    onOpenChange(false);
-                    reset();
-                    router.push(`/flow/p/${projectId}/sources`);
-                  })
-                  .catch(err => setError(formatApiErrorMessage(err)))
-                  .finally(() => setBusy(false));
-              }}
-              onSkip={() => {
-                const bearer = getStytchBearerForTensrApi();
-                const projectId = createdProjectId.current;
-                if (bearer) void skipUploadPrep(proposal.id, bearer);
-                onOpenChange(false);
-                reset();
-                if (projectId) router.push(`/flow/p/${projectId}/sources`);
-              }}
-            />
-          ) : (
-            <div className="new-project-data">
-              {(
-                [
-                  [
-                    'upload',
-                    'Upload a file',
-                    '.sav, .zsav, .dta, CSV, TSV, Excel, Triple-S or Parquet',
-                  ],
-                  ['qualtrics', 'Connect Qualtrics', 'Pull responses and labels with an API token'],
-                  ['existing', 'Use a dataset you have', 'Moves it into this project'],
-                  ['skip', 'Skip for now', 'Add data later from Sources'],
-                ] as const
-              ).map(([value, title, note]) => (
-                <Button
-                  key={value}
-                  type="button"
-                  className="new-project-choice"
-                  data-active={choice === value}
-                  onClick={() => {
-                    setChoice(value);
-                    if (value === 'qualtrics') setQualtricsOpen(true);
-                  }}
-                >
-                  <strong>{title}</strong>
-                  <span>{note}</span>
-                </Button>
-              ))}
-              {choice === 'upload' ? (
-                <div className="new-project-file">
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    {file ? 'Choose another file' : 'Choose file'}
-                  </Button>
-                  <span className="flow-muted">{file ? file.name : 'No file chosen'}</span>
+          <div className="flow-modal-body">
+            {step === 1 ? (
+              <div className="new-project-fields">
+                <label className="new-project-field">
+                  <span>Name</span>
                   <Input
-                    ref={fileInput}
-                    className="sources-file-input"
-                    type="file"
-                    accept={ACCEPTED_UPLOAD_ACCEPT}
-                    aria-label="Upload file"
-                    onChange={event => {
-                      setFile(event.target.files?.[0] || null);
-                      event.target.value = '';
+                    autoFocus
+                    value={name}
+                    placeholder="e.g. Brand tracker wave 4"
+                    aria-label="Project name"
+                    onChange={event => setName(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' && name.trim()) setStep(2);
                     }}
                   />
-                </div>
-              ) : choice === 'existing' ? (
-                pickable.length ? (
+                </label>
+                <label className="new-project-field">
+                  <span>Folder (optional)</span>
                   <ChoiceSelect
-                    aria-label="Dataset"
-                    value={existing}
-                    onValueChange={setExisting}
-                    placeholder="Choose a dataset"
-                    options={pickable}
+                    aria-label="Folder"
+                    value={folder}
+                    onValueChange={setFolder}
+                    options={[
+                      { value: '', label: 'No folder' },
+                      ...folders.map(item => ({ value: item.name, label: item.name })),
+                    ]}
                   />
-                ) : (
-                  <p className="flow-muted">You have no datasets yet. Upload one instead.</p>
-                )
-              ) : null}
-            </div>
-          )}
-          {progress !== null && busy ? <p className="flow-muted">Uploading… {progress}%</p> : null}
-          {error ? <p className="flow-error">{error}</p> : null}
-          <div className="new-project-foot">
+                </label>
+                <div className="new-project-start">
+                  <p className="new-project-start-label">Start from</p>
+                  <div className="new-project-start-list" role="radiogroup" aria-label="Start from">
+                    <Button
+                      type="button"
+                      role="radio"
+                      aria-checked={startKey === startSelectionKey(blankStart)}
+                      className="new-project-choice"
+                      data-active={startKey === startSelectionKey(blankStart)}
+                      onClick={() => setStartKey(startSelectionKey(blankStart))}
+                    >
+                      <strong>{blankStart.title}</strong>
+                      <span>{blankStart.blurb}</span>
+                    </Button>
+                    {copyProjects.length ? (
+                      <>
+                        <Button
+                          type="button"
+                          className="new-project-copy-toggle"
+                          aria-expanded={copySetupOpen}
+                          aria-controls="new-project-copy-list"
+                          onClick={() => setCopySetupOpen(open => !open)}
+                        >
+                          <strong>Copy another project’s setup</strong>
+                          <span>
+                            {copySetupDisclosureLabel(copyProjects.length, copySetupOpen)}
+                          </span>
+                        </Button>
+                        {copySetupOpen ? (
+                          <div
+                            id="new-project-copy-list"
+                            className="new-project-copy-list"
+                            role="group"
+                            aria-label="Copy another project’s setup"
+                          >
+                            {copyProjects.map(option => {
+                              const key = startSelectionKey(option);
+                              return (
+                                <Button
+                                  key={key}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={startKey === key}
+                                  className="new-project-choice"
+                                  data-active={startKey === key}
+                                  onClick={() => setStartKey(key)}
+                                >
+                                  <strong>{option.title}</strong>
+                                  <span>{option.blurb}</span>
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {teamTemplates.map(option => {
+                      const key = startSelectionKey(option);
+                      return (
+                        <Button
+                          key={key}
+                          type="button"
+                          role="radio"
+                          aria-checked={startKey === key}
+                          className="new-project-choice"
+                          data-active={startKey === key}
+                          onClick={() => setStartKey(key)}
+                        >
+                          <strong>{option.title}</strong>
+                          <span>{option.blurb}</span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {thenHint ? (
+                  <div className="new-project-then">
+                    <p className="new-project-start-label">Then</p>
+                    <p className="new-project-then-note">{thenHint}</p>
+                  </div>
+                ) : null}
+                {templateNote ? <p className="flow-muted">{templateNote}</p> : null}
+              </div>
+            ) : proposal ? (
+              <UploadPrepCard
+                proposal={proposal.prep}
+                fileName={file?.name || ''}
+                applying={busy}
+                onApply={kept => {
+                  const bearer = getStytchBearerForTensrApi();
+                  const projectId = createdProjectId.current;
+                  if (!bearer || !projectId) {
+                    setError('Sign in again to prepare the file.');
+                    return;
+                  }
+                  setBusy(true);
+                  void applyUploadPrep(proposal.id, bearer, kept)
+                    .then(saved =>
+                      moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
+                    )
+                    .then(async datasetId => {
+                      await flowJson(`/api/projects/${projectId}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ active_dataset_id: datasetId }),
+                      });
+                      await onCreated();
+                      onOpenChange(false);
+                      reset();
+                      router.push(`/flow/p/${projectId}/sources`);
+                    })
+                    .catch(err => setError(formatApiErrorMessage(err)))
+                    .finally(() => setBusy(false));
+                }}
+                onSkip={() => {
+                  const bearer = getStytchBearerForTensrApi();
+                  const projectId = createdProjectId.current;
+                  if (bearer) void skipUploadPrep(proposal.id, bearer);
+                  onOpenChange(false);
+                  reset();
+                  if (projectId) router.push(`/flow/p/${projectId}/sources`);
+                }}
+              />
+            ) : (
+              <div className="new-project-data">
+                {(
+                  [
+                    [
+                      'upload',
+                      'Upload a file',
+                      '.sav, .zsav, .dta, CSV, TSV, Excel, Triple-S or Parquet',
+                    ],
+                    [
+                      'qualtrics',
+                      'Connect Qualtrics',
+                      'Pull responses and labels with an API token',
+                    ],
+                    ['existing', 'Use a dataset you have', 'Moves it into this project'],
+                    ['skip', 'Skip for now', 'Add data later from Sources'],
+                  ] as const
+                ).map(([value, title, note]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    className="new-project-choice"
+                    data-active={choice === value}
+                    onClick={() => {
+                      setChoice(value);
+                      if (value === 'qualtrics') setQualtricsOpen(true);
+                    }}
+                  >
+                    <strong>{title}</strong>
+                    <span>{note}</span>
+                  </Button>
+                ))}
+                {choice === 'upload' ? (
+                  <div className="new-project-file">
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                    >
+                      {file ? 'Choose another file' : 'Choose file'}
+                    </Button>
+                    <span className="flow-muted">{file ? file.name : 'No file chosen'}</span>
+                    <Input
+                      ref={fileInput}
+                      className="sources-file-input"
+                      type="file"
+                      accept={ACCEPTED_UPLOAD_ACCEPT}
+                      aria-label="Upload file"
+                      onChange={event => {
+                        setFile(event.target.files?.[0] || null);
+                        event.target.value = '';
+                      }}
+                    />
+                  </div>
+                ) : choice === 'existing' ? (
+                  pickable.length ? (
+                    <ChoiceSelect
+                      aria-label="Dataset"
+                      value={existing}
+                      onValueChange={setExisting}
+                      placeholder="Choose a dataset"
+                      options={pickable}
+                    />
+                  ) : (
+                    <p className="flow-muted">You have no datasets yet. Upload one instead.</p>
+                  )
+                ) : null}
+              </div>
+            )}
+            {progress !== null && busy ? (
+              <p className="flow-muted">Uploading… {progress}%</p>
+            ) : null}
+            {error ? <p className="flow-error">{error}</p> : null}
+          </div>
+          <div className="new-project-foot flow-modal-foot">
             {step === 1 ? (
               <Button
                 type="button"

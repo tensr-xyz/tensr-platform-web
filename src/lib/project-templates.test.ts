@@ -1,8 +1,10 @@
 import {
   BLANK_START_OPTION,
+  copySetupDisclosureLabel,
   defaultTemplateName,
   flattenStartOptions,
   parseStartSelection,
+  partitionStartOptions,
   startSelectionKey,
   thenNoteForSelection,
 } from './project-templates';
@@ -61,5 +63,33 @@ describe('project start-from options (TEN-196)', () => {
   it('names a saved template from the project label', () => {
     expect(defaultTemplateName('Brand tracker W4')).toBe('Brand tracker W4 template');
     expect(defaultTemplateName('')).toBe('Project template');
+  });
+
+  it('partitions blank, copy-setup projects and templates for the capped dialog', () => {
+    const projects = Array.from({ length: 15 }, (_, i) => ({
+      id: `p${i + 1}`,
+      kind: 'project' as const,
+      title: `Study ${i + 1} (copy setup)`,
+      blurb: 'Keeps setup. Leaves data behind.',
+    }));
+    const rows = flattenStartOptions({
+      blank: BLANK_START_OPTION,
+      projects,
+      templates: [
+        {
+          id: 't1',
+          kind: 'template',
+          title: 'Team template · Ad-hoc',
+          blurb: 'Saved by your team',
+        },
+      ],
+      then_note: 'Upload the new wave.',
+    });
+    const parts = partitionStartOptions(rows);
+    expect(parts.blank.title).toBe('Blank project');
+    expect(parts.projects).toHaveLength(15);
+    expect(parts.templates).toHaveLength(1);
+    expect(copySetupDisclosureLabel(15, false)).toBe('15 projects · ▾');
+    expect(copySetupDisclosureLabel(1, true)).toBe('1 project · ▴');
   });
 });

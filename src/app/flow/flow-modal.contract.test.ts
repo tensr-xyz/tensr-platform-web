@@ -35,4 +35,10 @@ describe('flow-modal long dialog shell', () => {
     expect(css).toMatch(/\.flow-modal-head\s*,\s*\.flow-modal-foot\s*\{[^}]*flex-shrink:\s*0/);
     expect(ruleBody('.flow-modal-body')).toMatch(/overflow:\s*auto/);
   });
+
+  it('caps the New project dialog at 85vh and ~680 wide', () => {
+    const body = ruleBody('.new-project-dialog');
+    expect(body).toMatch(/max-height:\s*85vh/);
+    expect(body).toMatch(/max-width:\s*680px/);
+  });
 });
