@@ -24,10 +24,12 @@ export function accumulateThinkingLines(prev: string[] | undefined, next: string
   return [...(prev ?? []), trimmed];
 }
 
-/** Paper 14b: big-table building card (Loaded N of M columns, Building the table). */
+/** Paper 14b: big-table / standout building card (Loaded N of M columns, Building the table). */
 export function isBuildingTableProgress(lines: string[]): boolean {
   return lines.some(line =>
-    /building the table|loaded\s+[\d,]+\s+of\s+[\d,]+\s+columns|counting weighted/i.test(line)
+    /building the (?:table|standout)|standout stats|scanning (?:questions|the file)|loaded\s+[\d,]+\s+of\s+[\d,]+\s+columns|counting weighted/i.test(
+      line
+    )
   );
 }
 
@@ -82,9 +84,17 @@ export function BuildingTableCard({
     ? Math.min(92, Math.max(8, Math.round((columnProgress.loaded / columnProgress.total) * 100)))
     : Math.round(stepFraction * 100);
 
-  const titleLine = lines.find(line => /building the table/i.test(line));
-  const title = titleLine ? stripStepMarker(titleLine) : 'Building the table';
-  const bodyLines = lines.filter(line => !/building the table/i.test(line));
+  const titleLine = lines.find(line =>
+    /building the (?:table|standout)|standout stats/i.test(line)
+  );
+  const title = titleLine
+    ? stripStepMarker(titleLine)
+    : lines.some(line => /standout/i.test(line))
+      ? 'Building standout stats'
+      : 'Building the table';
+  const bodyLines = lines.filter(
+    line => !/building the (?:table|standout)|standout stats/i.test(line)
+  );
 
   return (
     <div

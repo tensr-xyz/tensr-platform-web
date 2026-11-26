@@ -2963,6 +2963,25 @@ select.flow-input {
   opacity: 0.55;
 }
 
+.chat-analysis-failed {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 36rem;
+  padding: 18px 20px;
+  border: 1px solid var(--color-line, #e7e6e1);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.chat-analysis-failed p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-ink, #1b1c1a);
+}
+
 .analysis-table {
   min-width: 0;
   max-width: 100%;

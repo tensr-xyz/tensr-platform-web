@@ -1199,6 +1199,44 @@ function succeeded(item: ToolResult): boolean {
   return nested.ok !== false && !nested.error;
 }
 
+/** True while a 202-queued analysis has not written its finished book (TEN-269 / 14b). */
+export function isAnalysisPending(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => {
+    if (!succeeded(item)) return false;
+    const nested = item.result || {};
+    const summary = summaryOf(item);
+    if (summary.pending === true || nested.pending === true) return true;
+    const status = String(nested.status || '').toLowerCase();
+    return status === 'pending' || status === 'running';
+  });
+}
+
+/** Plain worker failure for the chat Retry card (TEN-269). */
+export function analysisFailureMessage(results: ToolResult[] | undefined): string {
+  for (const item of analysisItems(results)) {
+    const nested = item.result || {};
+    const summary = summaryOf(item);
+    const failed =
+      item.ok === false ||
+      Boolean(item.error) ||
+      nested.ok === false ||
+      Boolean(nested.error) ||
+      String(nested.status || '').toLowerCase() === 'failed';
+    if (!failed) continue;
+    const detail = String(
+      summary.error ||
+        summary.line ||
+        nested.error ||
+        nested.message ||
+        item.error ||
+        'The analysis did not finish.'
+    ).trim();
+    if (detail && !/model call failed|this turn stopped/i.test(detail)) return detail;
+    return detail || 'The analysis did not finish.';
+  }
+  return '';
+}
+
 /** Saved run ids on this turn, for the server exports. A failed step is not an output. */
 export function outputRunIds(results: ToolResult[] | undefined): string[] {
   const items = analysisItems(results).filter(succeeded);
@@ -1229,6 +1267,20 @@ export function hasSummaryTable(results: ToolResult[] | undefined): boolean {
   });
 }
 
+function hasStandoutThemes(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => {
+    if (procedureOf(item) !== 'standout_stats' || !succeeded(item)) return false;
+    const nested = item.result || {};
+    const book =
+      nested.result && typeof nested.result === 'object'
+        ? (nested.result as Record<string, unknown>)
+        : nested;
+    const summary = summaryOf(item);
+    const themes = book.themes || summary.themes;
+    return Array.isArray(themes) && themes.length > 0;
+  });
+}
+
 /** The output card is a successful result. A failed turn stays in the thread. */
 export function outputCardReady(
   turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
@@ -1238,9 +1290,20 @@ export function outputCardReady(
   // TEN-242: model-unavailable with a finished table still opens the card (Paper 14b).
   const statusOk = turn.status === 'ok' || turn.status === 'llm_unavailable';
   if (!statusOk) return false;
+  // TEN-269 / Paper 14b: a pending run id must not open an empty Output card.
+  if (isAnalysisPending(turn.tool_results)) return false;
   // A plan with no table yet is still the approval card. A table in the stream opens the panel.
   if (plan) return hasSummaryTable(turn.tool_results);
-  if (outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results)) return true;
+  if (hasSummaryTable(turn.tool_results) || hasStandoutThemes(turn.tool_results)) return true;
+  const runIds = outputRunIds(turn.tool_results);
+  if (runIds.length > 0) {
+    // Standout without themes is still building or empty — wait for the poll.
+    const onlyStandout = analysisItems(turn.tool_results).every(
+      item => procedureOf(item) === 'standout_stats'
+    );
+    if (onlyStandout) return false;
+    return true;
+  }
   // Finished deck with a download (or pending job id) still gets the chat card.
   return (turn.tool_results || []).some(item => {
     if (procedureOf(item) !== 'build_client_deck') return false;

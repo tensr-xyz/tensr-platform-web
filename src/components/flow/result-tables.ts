@@ -1702,19 +1702,34 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       record.result && typeof record.result === 'object'
         ? (record.result as Record<string, unknown>)
         : null;
-    const source = nested || record;
-    const analysisType = cell(source.analysis_type) || procedure || kind;
+    // Client poll wraps the engine book as result.result (TEN-269).
+    const book =
+      nested?.result && typeof nested.result === 'object'
+        ? (nested.result as Record<string, unknown>)
+        : null;
+    const summary =
+      record.summary && typeof record.summary === 'object'
+        ? (record.summary as Record<string, unknown>)
+        : {};
+    const source = book || nested || record;
+    const analysisType =
+      cell(source.analysis_type) || cell(nested?.analysis_type) || procedure || kind;
     if (analysisType !== 'standout_stats') return;
-    const themes = source.themes;
+    const themes = source.themes || summary.themes;
     if (!Array.isArray(themes) || !themes.length) return;
     view.standout = {
       themes: themes as StandoutPanelData['themes'],
-      lead: cell(source.lead) || undefined,
-      audience_label: cell(source.audience_label) || undefined,
+      lead: cell(source.lead) || cell(summary.line) || undefined,
+      audience_label: cell(source.audience_label) || cell(summary.audience_label) || undefined,
       audience_definition: cell(source.audience_definition) || undefined,
-      audience_n: typeof source.audience_n === 'number' ? source.audience_n : undefined,
+      audience_n:
+        typeof source.audience_n === 'number'
+          ? source.audience_n
+          : typeof summary.audience_n === 'number'
+            ? summary.audience_n
+            : undefined,
       comparison_label: cell(source.comparison_label) || undefined,
-      weight_phrase: cell(source.weight_phrase) || undefined,
+      weight_phrase: cell(source.weight_phrase) || cell(summary.weight_phrase) || undefined,
       n_stats: typeof source.n_stats === 'number' ? source.n_stats : undefined,
       n_above_average:
         typeof source.n_above_average === 'number' ? source.n_above_average : undefined,

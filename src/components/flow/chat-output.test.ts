@@ -8,6 +8,8 @@ import {
   isDeferredResultProse,
   isProcedurePlaceholder,
   hasSummaryTable,
+  analysisFailureMessage,
+  isAnalysisPending,
   outputCardReady,
   outputKind,
   restoreListBreaks,
@@ -810,6 +812,42 @@ describe('chat output panel', () => {
         true
       )
     ).toBe(false);
+  });
+
+  it('TEN-269: pending standout run id does not open an empty Output card', () => {
+    const pending = [
+      {
+        ok: true,
+        procedure: 'standout_stats',
+        run_id: 'pending-standout-1',
+        summary: { line: '', pending: true },
+        result: { ok: true, pending: true, status: 'pending', run_id: 'pending-standout-1' },
+      },
+    ];
+    expect(isAnalysisPending(pending)).toBe(true);
+    expect(outputCardReady({ status: 'ok', tool_results: pending }, false)).toBe(false);
+    expect(analysisFailureMessage(pending)).toBe('');
+  });
+
+  it('TEN-269: failed standout surfaces the real reason for Retry', () => {
+    const failed = [
+      {
+        ok: false,
+        procedure: 'standout_stats',
+        run_id: 'failed-standout-1',
+        error: 'The worker timed out while scanning the file.',
+        summary: { line: 'The worker timed out while scanning the file.', pending: false },
+        result: {
+          ok: false,
+          pending: false,
+          status: 'failed',
+          error: 'The worker timed out while scanning the file.',
+        },
+      },
+    ];
+    expect(isAnalysisPending(failed)).toBe(false);
+    expect(analysisFailureMessage(failed)).toMatch(/timed out/i);
+    expect(outputCardReady({ status: 'ok', tool_results: failed }, false)).toBe(false);
   });
 
   it('keeps a finding and drops a card that is only the base line', () => {

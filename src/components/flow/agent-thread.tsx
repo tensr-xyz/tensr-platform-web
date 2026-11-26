@@ -38,9 +38,11 @@ import {
   withoutResultTokens,
   withoutStrayEnding,
   outputBaseClause,
+  analysisFailureMessage,
   outputCardReady,
   outputChecks,
   hasSummaryTable,
+  isAnalysisPending,
   isClientDeckResult,
   analysisReportHref,
   analysisSlideHref,
@@ -61,6 +63,7 @@ import {
   isDeferredResultProse,
   titledWithQuestion,
 } from '@/components/flow/chat-output';
+import { BuildingTableCard } from '@/components/organisms/agent-panel/agent-chat-chrome';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
 import {
   answerResultTables,
@@ -1612,6 +1615,36 @@ export function AgentThreadColumn({
             )}
           </div>
         ) : null}
+        {(() => {
+          const pendingScan = isAnalysisPending(thread.toolResults);
+          const failure = analysisFailureMessage(thread.toolResults);
+          if (pendingScan && !thread.resultView.standout && !thread.plan) {
+            const lines = thread.steps.length
+              ? thread.steps
+              : ['Building standout stats', 'Scanning questions across the file'];
+            return <BuildingTableCard lines={lines} isStreaming={thread.runBusy || pendingScan} />;
+          }
+          if (failure && !thread.resultView.standout && !thread.plan) {
+            return (
+              <div
+                className="chat-analysis-failed"
+                data-testid="analysis-failure-card"
+                role="alert"
+              >
+                <p>{failure}</p>
+                <Button
+                  className="flow-btn primary"
+                  type="button"
+                  disabled={!thread.sent || thread.runBusy}
+                  onClick={() => thread.send(thread.sent)}
+                >
+                  Retry
+                </Button>
+              </div>
+            );
+          }
+          return null;
+        })()}
         {(thread.answer ||
           thread.structuredTables.length ||
           thread.resultCharts.length ||
