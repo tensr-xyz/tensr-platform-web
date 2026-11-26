@@ -5,7 +5,12 @@ import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectSessions } from '@/hooks/api/use-project-data';
+import {
+  useDatasetAudiences,
+  useMe,
+  useProjectMembers,
+  useProjectSessions,
+} from '@/hooks/api/use-project-data';
 import { invalidateProjectSessions, projectQueryKeys } from '@/lib/project-query-cache';
 import {
   Empty,
@@ -1399,60 +1404,20 @@ export function AgentThreadColumn({
 }) {
   const router = useRouter();
   const [stepsOpen, setStepsOpen] = useState(true);
-  const [asker, setAsker] = useState(false);
   const [askedOwner, setAskedOwner] = useState(false);
-  const [audiences, setAudiences] = useState<
-    { name: string; label: string; description?: string }[]
-  >([]);
-  useEffect(() => {
-    if (!thread.projectId) return;
-    let live = true;
-    void flowJson<{ user_id?: string; user?: { id?: string } }>('/me')
-      .then(me =>
-        flowJson<{ members?: { user_id?: string; role?: string }[] }>(
-          `/api/projects/${thread.projectId}/members`
-        ).then(page => {
-          if (!live) return;
-          const userId = me.user_id || me.user?.id || '';
-          const mine = (page.members || []).find(member => member.user_id === userId);
-          setAsker(mine?.role === 'asker');
-        })
-      )
-      .catch(() => {
-        if (live) setAsker(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [thread.projectId]);
-  useEffect(() => {
-    if (!asker || !thread.datasetId) {
-      setAudiences([]);
-      return;
-    }
-    let live = true;
-    void flowJson<{ audiences?: { name?: string; label?: string; description?: string }[] }>(
-      `/datasets/${thread.datasetId}/audiences`
-    )
-      .then(page => {
-        if (!live) return;
-        setAudiences(
-          (page.audiences || [])
-            .map(item => ({
-              name: String(item.name || '').trim(),
-              label: String(item.label || item.name || '').trim(),
-              description: String(item.description || '').trim(),
-            }))
-            .filter(item => item.label)
-        );
-      })
-      .catch(() => {
-        if (live) setAudiences([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [asker, thread.datasetId]);
+  const meQuery = useMe(Boolean(thread.projectId));
+  const membersQuery = useProjectMembers(thread.projectId || null);
+  const userId = meQuery.data?.user_id || meQuery.data?.user?.id || '';
+  const asker =
+    (membersQuery.data || []).find(member => member.user_id === userId)?.role === 'asker';
+  const audiencesQuery = useDatasetAudiences(asker ? thread.datasetId || null : null);
+  const audiences = (audiencesQuery.data?.audiences || [])
+    .map(item => ({
+      name: String(item.name || '').trim(),
+      label: String(item.label || item.name || '').trim(),
+      description: String(item.description || '').trim(),
+    }))
+    .filter(item => item.label);
   const notInData =
     asker &&
     Boolean(thread.answer) &&

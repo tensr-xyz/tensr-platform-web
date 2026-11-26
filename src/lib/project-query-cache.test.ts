@@ -37,6 +37,7 @@ describe('projectQueryKeys', () => {
     expect(PROJECT_STALE_MS.report).toBe(10_000);
     expect(PROJECT_STALE_MS.page).toBe(60_000);
     expect(PROJECT_STALE_MS.details).toBe(60_000);
+    expect(PROJECT_STALE_MS.session).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('keys Details tab reads under the shared root', () => {
@@ -47,6 +48,7 @@ describe('projectQueryKeys', () => {
     expect(projectQueryKeys.preview('d1')).toEqual(['project-data', 'preview', 'd1']);
     expect(projectQueryKeys.audiences('d1')).toEqual(['project-data', 'audiences', 'd1']);
     expect(projectQueryKeys.detail('p1')).toEqual(['project-data', 'detail', 'p1']);
+    expect(projectQueryKeys.datasets('p1')).toEqual(['project-data', 'datasets', 'p1']);
   });
 
   it('matches a project id anywhere in the key', () => {

@@ -51,7 +51,7 @@ export function useDatasetColumns(datasetId: string | undefined | null) {
     queryFn: () => flowJson<DatasetColumnsPayload>(`/datasets/${datasetId}/metadata`),
     enabled: Boolean(datasetId),
     staleTime: PROJECT_STALE_MS.columns,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
@@ -149,37 +149,35 @@ export async function prefetchProjectTab(
     jobs.push(
       client.prefetchQuery({
         queryKey: projectQueryKeys.contextDocs(projectId),
-        queryFn: async () => {
-          const page = await flowJson<{ docs?: ProjectContextDoc[] }>(
-            `/api/projects/${projectId}/context-docs`
-          );
-          return page.docs || [];
-        },
+        queryFn: () => fetchProjectContextDocs(projectId),
         staleTime: PROJECT_STALE_MS.details,
       }),
       client.prefetchQuery({
         queryKey: projectQueryKeys.members(projectId),
-        queryFn: async () => {
-          const page = await flowJson<{ members?: ProjectMemberRow[] }>(
-            `/api/projects/${projectId}/members`
-          );
-          return page.members || [];
-        },
+        queryFn: () => fetchProjectMembers(projectId),
         staleTime: PROJECT_STALE_MS.details,
       }),
       client.prefetchQuery({
         queryKey: projectQueryKeys.askerLog(projectId),
-        queryFn: async () => {
-          const page = await flowJson<{ turns?: AskerLogTurn[] }>(
-            `/api/projects/${projectId}/asker-log`
-          );
-          return page.turns || [];
-        },
+        queryFn: () => fetchProjectAskerLog(projectId),
         staleTime: PROJECT_STALE_MS.details,
       }),
       client.prefetchQuery({
         queryKey: projectQueryKeys.me(),
-        queryFn: () => flowJson<MePayload>('/me'),
+        queryFn: fetchMe,
+        staleTime: PROJECT_STALE_MS.session,
+      }),
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.detail(projectId),
+        queryFn: () => fetchProjectDetail(projectId),
+        staleTime: PROJECT_STALE_MS.details,
+      }),
+      client.prefetchQuery({
+        queryKey: projectQueryKeys.datasets(projectId),
+        queryFn: async () => {
+          const page = await fetchProjectDetail(projectId);
+          return page.datasets || [];
+        },
         staleTime: PROJECT_STALE_MS.details,
       })
     );
@@ -187,26 +185,16 @@ export async function prefetchProjectTab(
       jobs.push(
         client.prefetchQuery({
           queryKey: projectQueryKeys.preview(datasetId),
-          queryFn: () =>
-            flowJson<DatasetPreviewPayload>(
-              `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
-            ),
+          queryFn: () => fetchDatasetPreview(datasetId),
           staleTime: PROJECT_STALE_MS.columns,
         }),
         client.prefetchQuery({
           queryKey: projectQueryKeys.audiences(datasetId),
-          queryFn: () => flowJson<DatasetAudiencesPayload>(`/datasets/${datasetId}/audiences`),
+          queryFn: () => fetchDatasetAudiences(datasetId),
           staleTime: PROJECT_STALE_MS.details,
         })
       );
     }
-    jobs.push(
-      client.prefetchQuery({
-        queryKey: projectQueryKeys.detail(projectId),
-        queryFn: () => flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`),
-        staleTime: PROJECT_STALE_MS.details,
-      })
-    );
   }
   if (tab === 'chat') {
     jobs.push(
@@ -268,16 +256,21 @@ export type ProjectMemberRow = { user_id: string; role?: string };
 
 export type AskerLogTurn = {
   id?: string;
+  turn_id?: string;
   question?: string;
   answer?: string;
   created_at?: string;
   user_id?: string;
+  checked?: boolean;
+  status?: string;
+  owner_note?: string;
 };
 
 export type MePayload = {
-  user?: { id?: string };
+  email?: string;
+  user?: { id?: string; email?: string; name?: string };
   user_id?: string;
-  active_organization?: { id?: string };
+  active_organization?: { id?: string; name?: string };
 };
 
 export type DatasetPreviewPayload = {
@@ -312,77 +305,146 @@ export type ProjectDetailPayload = {
   datasets?: unknown[];
 };
 
+/** Shared fetchers so every caller hits the same TanStack Query key. */
+export function fetchMe(): Promise<MePayload> {
+  return flowJson<MePayload>('/me');
+}
+
+export async function fetchProjectMembers(projectId: string): Promise<ProjectMemberRow[]> {
+  const page = await flowJson<{ members?: ProjectMemberRow[] }>(
+    `/api/projects/${projectId}/members`
+  );
+  return page.members || [];
+}
+
+export async function fetchProjectAskerLog(projectId: string): Promise<AskerLogTurn[]> {
+  const page = await flowJson<{ turns?: AskerLogTurn[] }>(`/api/projects/${projectId}/asker-log`);
+  return page.turns || [];
+}
+
+export async function fetchProjectContextDocs(projectId: string): Promise<ProjectContextDoc[]> {
+  const page = await flowJson<{ docs?: ProjectContextDoc[] }>(
+    `/api/projects/${projectId}/context-docs`
+  );
+  return page.docs || [];
+}
+
+export function fetchDatasetAudiences(datasetId: string): Promise<DatasetAudiencesPayload> {
+  return flowJson<DatasetAudiencesPayload>(`/datasets/${datasetId}/audiences`);
+}
+
+export function fetchDatasetPreview(datasetId: string): Promise<DatasetPreviewPayload> {
+  return flowJson<DatasetPreviewPayload>(
+    `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
+  );
+}
+
+export function fetchProjectDetail(projectId: string): Promise<ProjectDetailPayload> {
+  return flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`);
+}
+
+/** Ensure one in-flight / cached read for session profile. */
+export function ensureMe(client: QueryClient): Promise<MePayload> {
+  return client.ensureQueryData({
+    queryKey: projectQueryKeys.me(),
+    queryFn: fetchMe,
+    staleTime: PROJECT_STALE_MS.session,
+  });
+}
+
+export function ensureProjectMembers(
+  client: QueryClient,
+  projectId: string
+): Promise<ProjectMemberRow[]> {
+  return client.ensureQueryData({
+    queryKey: projectQueryKeys.members(projectId),
+    queryFn: () => fetchProjectMembers(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+  });
+}
+
+export function ensureProjectAskerLog(
+  client: QueryClient,
+  projectId: string
+): Promise<AskerLogTurn[]> {
+  return client.ensureQueryData({
+    queryKey: projectQueryKeys.askerLog(projectId),
+    queryFn: () => fetchProjectAskerLog(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+  });
+}
+
 export function useProjectDetail(projectId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.detail(projectId || ''),
-    queryFn: () => flowJson<ProjectDetailPayload>(`/api/projects/${projectId}`),
+    queryFn: () => fetchProjectDetail(projectId || ''),
     enabled: Boolean(projectId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
+  });
+}
+
+/** Project-scoped dataset list (seeded from /api/projects/:id). */
+export function useProjectDatasets(projectId: string | undefined | null) {
+  return useQuery({
+    queryKey: projectQueryKeys.datasets(projectId || ''),
+    queryFn: async () => {
+      const page = await fetchProjectDetail(projectId || '');
+      return page.datasets || [];
+    },
+    enabled: Boolean(projectId),
+    staleTime: PROJECT_STALE_MS.details,
+    refetchOnMount: false,
   });
 }
 
 export function useDatasetAudiences(datasetId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.audiences(datasetId || ''),
-    queryFn: () => flowJson<DatasetAudiencesPayload>(`/datasets/${datasetId}/audiences`),
+    queryFn: () => fetchDatasetAudiences(datasetId || ''),
     enabled: Boolean(datasetId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
 export function useProjectContextDocs(projectId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.contextDocs(projectId || ''),
-    queryFn: async () => {
-      const page = await flowJson<{ docs?: ProjectContextDoc[] }>(
-        `/api/projects/${projectId}/context-docs`
-      );
-      return page.docs || [];
-    },
+    queryFn: () => fetchProjectContextDocs(projectId || ''),
     enabled: Boolean(projectId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
 export function useProjectMembers(projectId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.members(projectId || ''),
-    queryFn: async () => {
-      const page = await flowJson<{ members?: ProjectMemberRow[] }>(
-        `/api/projects/${projectId}/members`
-      );
-      return page.members || [];
-    },
+    queryFn: () => fetchProjectMembers(projectId || ''),
     enabled: Boolean(projectId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
 export function useProjectAskerLog(projectId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.askerLog(projectId || ''),
-    queryFn: async () => {
-      const page = await flowJson<{ turns?: AskerLogTurn[] }>(
-        `/api/projects/${projectId}/asker-log`
-      );
-      return page.turns || [];
-    },
+    queryFn: () => fetchProjectAskerLog(projectId || ''),
     enabled: Boolean(projectId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
-export function useMe() {
+export function useMe(enabled = true) {
   return useQuery({
     queryKey: projectQueryKeys.me(),
-    queryFn: () => flowJson<MePayload>('/me'),
-    staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    queryFn: fetchMe,
+    enabled,
+    staleTime: PROJECT_STALE_MS.session,
+    refetchOnMount: false,
   });
 }
 
@@ -397,7 +459,7 @@ export function useOrganizationMembers(orgId: string | undefined | null) {
     },
     enabled: Boolean(orgId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
@@ -408,17 +470,16 @@ export function useOrganizationDetail(orgId: string | undefined | null) {
       flowJson<{ organization?: { ai_enabled?: boolean } }>(`/api/organizations/${orgId}`),
     enabled: Boolean(orgId),
     staleTime: PROJECT_STALE_MS.details,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
 
 export function useDatasetPreview(datasetId: string | undefined | null) {
   return useQuery({
     queryKey: projectQueryKeys.preview(datasetId || ''),
-    queryFn: () =>
-      flowJson<DatasetPreviewPayload>(`/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`),
+    queryFn: () => fetchDatasetPreview(datasetId || ''),
     enabled: Boolean(datasetId),
     staleTime: PROJECT_STALE_MS.columns,
-    refetchOnMount: true,
+    refetchOnMount: false,
   });
 }
