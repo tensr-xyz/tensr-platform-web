@@ -146,6 +146,12 @@ export type AnalysisReportChart =
       y_label: string;
       categories: string[];
       series: AnalysisReportCategorySeries[];
+      /** Per-category bar fills (e.g. accent highlight + grey rest). Falls back to series palette. */
+      category_fills?: string[];
+      /** Draw the value next to each bar (Paper 14c ranked reach). */
+      data_labels?: boolean;
+      /** Category whose label uses the accent weight/colour when category_fills is set. */
+      highlight_category?: string;
     } & ChartAxisHints)
   | ({
       kind: 'line' | 'bar' | 'area';

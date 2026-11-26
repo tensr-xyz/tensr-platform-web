@@ -437,6 +437,41 @@ describe('ReportChart palette kinds', () => {
     expect(container.textContent).toContain('Brand A');
   });
 
+  it('draws ranked horizontal bars with accent highlight, grey rest, and data labels', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'bar_horizontal',
+          title: 'Reach',
+          x_label: 'Percent',
+          y_label: '',
+          categories: ['Brand A', 'Brand B', 'Brand C'],
+          series: [{ name: 'Audience', values: [53, 32, 21], letters: ['', 'B', ''] }],
+          category_fills: ['#CFCFCB', '#CFCFCB', '#1E6B58'],
+          data_labels: true,
+          highlight_category: 'Brand C',
+          significance_note: 'Column proportions test at 95%',
+        }}
+        density="comfortable"
+      />
+    );
+    const svg = container.querySelector('[data-chart-kind="bar_horizontal"]');
+    expect(svg?.getAttribute('data-chart-highlight')).toBe('Brand C');
+    expect(svg?.getAttribute('data-data-labels')).toBe('on');
+    expect(svg?.getAttribute('data-significance')).toBe('on');
+    expect(container.querySelectorAll('[data-chart-data-label]')).toHaveLength(3);
+    expect(container.querySelector('[data-chart-data-label]')?.textContent).toMatch(/%/);
+    expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('B');
+    expect(container.querySelector('[data-chart-footnote]')?.textContent).toContain(
+      'Column proportions'
+    );
+    const fills = Array.from(container.querySelectorAll('rect')).map(node =>
+      node.getAttribute('fill')
+    );
+    expect(fills).toContain('#1E6B58');
+    expect(fills.filter(fill => fill === '#CFCFCB').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('draws a donut with an inner hole and column letters', () => {
     const { container } = render(
       <ReportChart

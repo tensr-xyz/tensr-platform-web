@@ -44,13 +44,26 @@ jest.mock('@/lib/flow-api', () => ({
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
 
 describe('the deck and refresh screens', () => {
-  it('greys the audience profile slide when no audience is selected', () => {
+  it('greys the audience profile and size slides when no audience is selected', () => {
     const slides = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Total sample');
     const profile = slides.find(slide => slide.id === 'profile');
+    const size = slides.find(slide => slide.id === 'size');
     expect(profile?.unsupported).toBe(true);
     expect(profile?.reason).toMatch(/audience/i);
+    expect(size?.unsupported).toBe(true);
+    expect(size?.reason).toMatch(/audience/i);
     const ready = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Weekday readers');
     expect(ready.find(slide => slide.id === 'profile')?.unsupported).toBeFalsy();
+    expect(ready.find(slide => slide.id === 'size')?.unsupported).toBeFalsy();
+  });
+
+  it('lists Audience size and Reach comparison in the default slide set', () => {
+    expect(OVERVIEW_SLIDES.some(slide => slide.id === 'size' && /size/i.test(slide.title))).toBe(
+      true
+    );
+    expect(
+      OVERVIEW_SLIDES.some(slide => slide.id === 'reach' && /reach comparison/i.test(slide.title))
+    ).toBe(true);
   });
 
   it('lists the template slides, the low-base flag, and the saved recipe', async () => {

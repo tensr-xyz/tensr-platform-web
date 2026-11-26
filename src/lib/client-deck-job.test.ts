@@ -324,6 +324,7 @@ describe('client-deck-job', () => {
       tables_total: 23,
     });
     expect(out.answer_markdown || '').toContain('Writing insights');
+    expect(out.answer_markdown || '').not.toContain('Report pages:');
     expect(out.answer_markdown || '').not.toContain('Report pages: 24');
     expect(out.answer_markdown || '').not.toMatch(/Ask me to continue/i);
     const result = out.tool_results?.[0]?.result as Record<string, unknown>;

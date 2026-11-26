@@ -16,6 +16,11 @@ import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
 import { exportSvgElementAsPng } from '@/utils/chart-export';
 import { ExplainThisPanel } from '@/components/flow/explain-this-panel';
 import { DuplicationPanel, type DuplicationPanelData } from '@/components/flow/duplication-panel';
+import {
+  StandoutStatsPanel,
+  standoutMetaLine,
+  type StandoutPanelData,
+} from '@/components/flow/standout-stats-panel';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -42,7 +47,10 @@ export function AnalysisResult({
   templateName,
   templateBase64,
   duplication,
+  standout,
   audience,
+  onStandoutAddProfileSlide,
+  onStandoutCompare,
 }: {
   lead?: string;
   tables: RunTable[];
@@ -58,7 +66,10 @@ export function AnalysisResult({
   templateName?: string;
   templateBase64?: string;
   duplication?: DuplicationPanelData;
+  standout?: StandoutPanelData;
   audience?: string;
+  onStandoutAddProfileSlide?: () => void;
+  onStandoutCompare?: () => void;
 }) {
   const [places, setPlaces] = useState(() =>
     typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
@@ -166,20 +177,26 @@ export function AnalysisResult({
           .filter(Boolean)
           .join('\n')
       : lead;
-  const foot = duplication ? '' : [footnote, checkNote].filter(Boolean).join(' · ');
-  if (!leadText && !tables.length && !charts.length && !foot && !duplication) return null;
+  const foot = duplication || standout ? '' : [footnote, checkNote].filter(Boolean).join(' · ');
+  if (!leadText && !tables.length && !charts.length && !foot && !duplication && !standout) {
+    return null;
+  }
   const explainTitle =
     (duplication ? 'Duplication' : '') ||
+    (standout ? 'Standout stats' : '') ||
     tables.find(table => table.title)?.title ||
     (charts[0] && 'title' in charts[0] ? String(charts[0].title || '') : '') ||
     'This output';
-  const shownTables = duplication ? [] : tables;
+  const shownTables = duplication || standout ? [] : tables;
   const splitLead = leadText
     ? leadText
         .split(/\n\n+/)
         .map(part => part.trim())
         .filter(Boolean)
     : [];
+  const standoutHeadline = standout
+    ? String(standout.lead || '').trim() || (splitLead.length ? splitLead[0] : leadText || '')
+    : '';
   const headline = duplication && splitLead.length > 1 ? splitLead[0] : '';
   const bodyLead = duplication && splitLead.length > 1 ? splitLead.slice(1).join('\n\n') : leadText;
   return (
@@ -297,7 +314,21 @@ export function AnalysisResult({
           />
         </div>
       ) : null}
-      {!duplication && leadText ? (
+      {standout && !duplication ? (
+        <div className="standout-stats-output" data-testid="standout-stats-output">
+          <div className="standout-stats-meta">
+            <span className="standout-stats-badge">Standout stats</span>
+            <span className="standout-stats-meta-line">{standoutMetaLine(standout)}</span>
+          </div>
+          {standoutHeadline ? <p className="standout-stats-headline">{standoutHeadline}</p> : null}
+          <StandoutStatsPanel
+            panel={standout}
+            onAddProfileSlide={onStandoutAddProfileSlide}
+            onCompare={onStandoutCompare}
+          />
+        </div>
+      ) : null}
+      {!duplication && !standout && leadText ? (
         <div className="analysis-lead">
           <FlowMarkdown>{leadText}</FlowMarkdown>
         </div>

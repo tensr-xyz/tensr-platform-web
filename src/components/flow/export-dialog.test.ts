@@ -3,8 +3,13 @@ import {
   pipelineExportPayload,
   reportExportFormatMeta,
   tableSpecIdsFromReportDocument,
+  workbookFromRunDocument,
 } from '@/components/flow/export-dialog';
 import { groupReportExportPages, pagesFromReportDocument } from '@/lib/office-deck-job';
+
+jest.mock('@/lib/report-export', () => ({
+  downloadReportXlsx: jest.fn(async () => undefined),
+}));
 
 describe('reportExportFormatMeta', () => {
   it('lists Word, PowerPoint, Excel, PDF, Markdown and SPSS data (Paper 6i)', () => {
@@ -82,6 +87,40 @@ describe('tableSpecIdsFromReportDocument', () => {
   it('returns an empty list when the document has no linked tables', () => {
     expect(tableSpecIdsFromReportDocument({ pages: [{ objects: [] }] })).toEqual([]);
     expect(tableSpecIdsFromReportDocument(null)).toEqual([]);
+  });
+});
+
+describe('workbookFromRunDocument', () => {
+  it('sends the output tables to the report Excel export', async () => {
+    const { downloadReportXlsx } = jest.requireMock('@/lib/report-export') as {
+      downloadReportXlsx: jest.Mock;
+    };
+    downloadReportXlsx.mockClear();
+    await workbookFromRunDocument(
+      {
+        title: 'Reach by region',
+        op: 'banner_table',
+        summary: 'North leads.',
+        base: null,
+        createdAt: '2026-11-26T00:00:00Z',
+        tables: [
+          {
+            title: 'Reach by region',
+            columns: ['Stub', 'Total'],
+            rows: [['North', '41%']],
+          },
+        ],
+        checks: [],
+        script: '',
+      },
+      'reach-by-region',
+      { datasetId: 'ds-1' }
+    );
+    expect(downloadReportXlsx).toHaveBeenCalledTimes(1);
+    const [report, options] = downloadReportXlsx.mock.calls[0];
+    expect(report.meta.title).toBe('reach-by-region');
+    expect(report.tables[0].rows).toEqual([['North', '41%']]);
+    expect(options).toEqual({ datasetId: 'ds-1' });
   });
 });
 

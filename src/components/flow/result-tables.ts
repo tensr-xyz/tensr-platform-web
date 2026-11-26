@@ -2,6 +2,7 @@ import type { RunTable } from '@/components/flow/run-document';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 import type { DuplicationPanelData } from '@/components/flow/duplication-panel';
+import type { StandoutPanelData } from '@/components/flow/standout-stats-panel';
 import { bannerHeading } from '@/lib/flow-survey';
 
 export type ResultView = {
@@ -29,6 +30,8 @@ export type ResultView = {
   universeThousands?: number;
   /** Paper 6n structured duplication card when the run is brand_duplication. */
   duplication?: DuplicationPanelData;
+  /** Paper 14a themed standout stats card when the run is standout_stats. */
+  standout?: StandoutPanelData;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -1621,7 +1624,9 @@ function focusRun(results: unknown): unknown {
   if (!Array.isArray(results)) return results;
   const names = results.map(procedureOfRecord);
   const drop =
-    names.includes('brand_duplication') || names.includes('paired_brand_test')
+    names.includes('brand_duplication') ||
+    names.includes('paired_brand_test') ||
+    names.includes('standout_stats')
       ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table', 'funnel'])
       : names.includes('funnel')
         ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table'])
@@ -1671,6 +1676,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     letterNote: '',
     weightSource: '',
     duplication: undefined,
+    standout: undefined,
   };
 
   const takeDuplicationPanel = (record: Record<string, unknown>) => {
@@ -1684,6 +1690,38 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       typeof panel === 'object'
     ) {
       view.duplication = panel as DuplicationPanelData;
+    }
+  };
+
+  const takeStandoutPanel = (record: Record<string, unknown>) => {
+    if (view.standout) return;
+    const kind = cell(record.kind);
+    const procedure = procedureOfRecord(record);
+    const nested =
+      record.result && typeof record.result === 'object'
+        ? (record.result as Record<string, unknown>)
+        : null;
+    const source = nested || record;
+    const analysisType = cell(source.analysis_type) || procedure || kind;
+    if (analysisType !== 'standout_stats') return;
+    const themes = source.themes;
+    if (!Array.isArray(themes) || !themes.length) return;
+    view.standout = {
+      themes: themes as StandoutPanelData['themes'],
+      lead: cell(source.lead) || undefined,
+      audience_label: cell(source.audience_label) || undefined,
+      audience_definition: cell(source.audience_definition) || undefined,
+      audience_n: typeof source.audience_n === 'number' ? source.audience_n : undefined,
+      comparison_label: cell(source.comparison_label) || undefined,
+      weight_phrase: cell(source.weight_phrase) || undefined,
+      n_stats: typeof source.n_stats === 'number' ? source.n_stats : undefined,
+      n_above_average:
+        typeof source.n_above_average === 'number' ? source.n_above_average : undefined,
+      low_base_mark: typeof source.low_base_mark === 'number' ? source.low_base_mark : undefined,
+      min_base: typeof source.min_base === 'number' ? source.min_base : undefined,
+    };
+    if (!view.audience && view.standout.audience_label) {
+      view.audience = view.standout.audience_label;
     }
   };
   const seen = new Set<string>();
@@ -1891,6 +1929,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       );
     }
     takeDuplicationPanel(record);
+    takeStandoutPanel(record);
     const mark = record.r_syntax_verification;
     if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };

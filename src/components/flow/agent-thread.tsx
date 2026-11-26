@@ -28,6 +28,7 @@ import {
   publishLiveChatRun,
   subscribeLiveChatRun,
 } from '@/components/flow/chat-live-run';
+import { answerIsNotInData, stripNotInDataLead } from '@/components/flow/asker-answer';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import {
@@ -660,6 +661,7 @@ export function useAgentThread({
           message: text,
           mode: nextMode,
           datasetId: datasetId || null,
+          projectId: projectId || null,
           attachments: turnFiles,
           agentVersion: 'v2',
           sessionId: sessionRef.current,
@@ -872,6 +874,7 @@ export function useAgentThread({
       message: sent,
       mode,
       datasetId: datasetId || null,
+      projectId: projectId || null,
       attachments: attachmentsRef.current,
       agentVersion: 'v2',
       sessionId: plan.session_id || sessionRef.current,
@@ -1115,7 +1118,9 @@ export function useAgentThread({
             setStatus(null);
             setRunBusy(false);
             // Failed tool steps still leave tool_results; only a ready output opens the column.
-            setPanelOpen(outputCardReady(restoredTurn, Boolean(pending)));
+            // Decks stay on the chat card — Open goes to Report, not the empty inspector.
+            const restoredDeck = isClientDeckResult(restoredTurn?.tool_results);
+            setPanelOpen(outputCardReady(restoredTurn, Boolean(pending)) && !restoredDeck);
           });
           // Reopen: resolve a finished job immediately, then keep watching if still live.
           // Saved turns often stay on mid-build status after the job completed in the background.
@@ -1141,7 +1146,9 @@ export function useAgentThread({
                   setNextSteps(
                     nextStepsForResult(resolved, columnLabels, reportPinsRef.current.length > 0)
                   );
-                  setPanelOpen(outputCardReady(resolved, false));
+                  setPanelOpen(
+                    outputCardReady(resolved, false) && !isClientDeckResult(resolved.tool_results)
+                  );
                 });
                 onFinishedRef.current?.(resolved);
                 if (clientDeckStillPending(resolved)) {
@@ -1224,12 +1231,14 @@ export function useAgentThread({
   }, [projectId, question]);
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
-  // TEN-192: when a pending banner finishes on poll, replace deferred chat prose with the lead.
+  // TEN-192: when a pending banner finishes on poll, replace deferred / empty chat prose with the lead.
   useEffect(() => {
     if (!toolResults?.length || runBusy) return;
     const next = readableTurnAnswer(turn?.status || 'ok', answer, toolResults);
     if (!next || next === answer) return;
+    const blank = !String(answer || '').trim();
     if (
+      !blank &&
       !isDeferredResultProse(answer) &&
       answer !== EMPTY_TURN_ANSWER &&
       answer !== CONTINUING_TURN_ANSWER &&
@@ -1257,8 +1266,9 @@ export function useAgentThread({
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
     // Open on the first real output; close again if the latest turn has none (e.g. a failed run).
-    setPanelOpen(outputReady);
-  }, [outputReady]);
+    // Client decks open in Report (Paper 2c Open → slides), not the empty Outputs inspector.
+    setPanelOpen(outputReady && !clientDeck);
+  }, [outputReady, clientDeck]);
   const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
@@ -1407,7 +1417,7 @@ export function AgentThreadColumn({
     asker &&
     Boolean(thread.answer) &&
     (!thread.plan || thread.approving) &&
-    thread.answer.trim().toLowerCase().startsWith('not in this data');
+    answerIsNotInData(thread.answer);
   const reportPins = useProjectPins(
     thread.projectId || '',
     thread.datasetId ? [thread.datasetId] : []
@@ -1595,17 +1605,23 @@ export function AgentThreadColumn({
             )}
           </div>
         ) : null}
-        {thread.answer && (!thread.plan || thread.approving) ? (
+        {(thread.answer ||
+          thread.structuredTables.length ||
+          thread.resultCharts.length ||
+          thread.resultView.duplication ||
+          thread.resultView.standout ||
+          thread.lead) &&
+        (!thread.plan || thread.approving) ? (
           notInData ? (
             <div className="asker-not-in-data" role="status">
               <p>
-                <strong>Not in this data.</strong>{' '}
-                {thread.answer.replace(/^not in this data\.?\s*/i, '')}
+                <strong>Not in this data.</strong> {stripNotInDataLead(thread.answer)}
               </p>
             </div>
           ) : thread.structuredTables.length ||
             thread.resultCharts.length ||
-            thread.resultView.duplication ? (
+            thread.resultView.duplication ||
+            thread.resultView.standout ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
@@ -1619,6 +1635,7 @@ export function AgentThreadColumn({
               datasetId={thread.datasetId || undefined}
               projectId={thread.projectId || undefined}
               duplication={thread.resultView.duplication}
+              standout={thread.resultView.standout}
               audience={thread.resultView.audience}
             />
           ) : thread.prose || thread.lead ? (
@@ -1710,32 +1727,56 @@ export function AgentThreadColumn({
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
-            <Button
-              type="button"
-              className="chat-result-top"
-              aria-pressed={thread.panelOpen}
-              aria-label={
-                thread.panelOpen ? `${thread.title}, output open` : `Show output: ${thread.title}`
-              }
-              onClick={() => thread.setPanelOpen(true)}
-            >
-              <span className="chat-result-icon" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 14 14">
-                  <path
-                    d="M3 11V7M6 11V4M9 11V6M12 11V3"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-              <div>
-                <strong>{thread.title}</strong>
-                <div className="flow-muted">{thread.kind} · Output</div>
-              </div>
-              {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
-            </Button>
+            {thread.clientDeck ? (
+              <Link
+                className="chat-result-top"
+                href={clientDeckReportHref(projectHref)}
+                aria-label={`Open in Report: ${thread.title}`}
+              >
+                <span className="chat-result-icon" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 14 14">
+                    <path
+                      d="M3 11V7M6 11V4M9 11V6M12 11V3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <strong>{thread.title}</strong>
+                  <div className="flow-muted">{thread.kind} · Output</div>
+                </div>
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                className="chat-result-top"
+                aria-pressed={thread.panelOpen}
+                aria-label={
+                  thread.panelOpen ? `${thread.title}, output open` : `Show output: ${thread.title}`
+                }
+                onClick={() => thread.setPanelOpen(true)}
+              >
+                <span className="chat-result-icon" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 14 14">
+                    <path
+                      d="M3 11V7M6 11V4M9 11V6M12 11V3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <strong>{thread.title}</strong>
+                  <div className="flow-muted">{thread.kind} · Output</div>
+                </div>
+                {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
+              </Button>
+            )}
             <div className="chat-result-actions">
               {asker ? (
                 <>

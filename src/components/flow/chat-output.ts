@@ -56,6 +56,7 @@ const KIND_LABELS: Record<string, string> = {
   brand_duplication: 'Duplication',
   paired_brand_test: 'Paired comparison',
   turf: 'TURF',
+  standout_stats: 'Standout stats',
 };
 
 function procedureOf(item: ToolResult): string {
@@ -181,8 +182,12 @@ export function isDeferredResultProse(text: string): boolean {
   if (/\{\{|\}\}/.test(raw)) return true;
   const low = raw.toLowerCase();
   if (isInvalidContractLead(low)) return true;
+  // TEN-40: internal run ids must never appear as the chat reply.
+  if (/\brun\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(raw)) {
+    return true;
+  }
   // TEN-192: denial drafts written before the banner landed are not a reply.
-  return /still building|table is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending/i.test(
+  return /still building|table is still pending|is still pending|pull (?:the body|its figures)|has not returned|was not returned|no projected|no figures|engine has not|once it finishes|current status:\s*pending|no column percentages/i.test(
     low
   );
 }
@@ -433,13 +438,15 @@ export function readableTurnAnswer(
 ): string {
   const kept = visibleTurnAnswer(status, text);
   if (status === 'awaiting_approval') return kept;
+  // TEN-242: "model call failed" is not a finished reply when the card has numbers.
   const unfinished =
     !kept ||
     kept === EMPTY_TURN_ANSWER ||
     kept === CONTINUING_TURN_ANSWER ||
     kept === UNFINISHED_TURN_ANSWER ||
     /\{\{|\}\}/.test(kept) ||
-    isDeferredResultProse(kept);
+    isDeferredResultProse(kept) ||
+    /model call failed|this turn stopped/i.test(kept);
   if (!unfinished) return kept;
   const salvaged = resultLead(kept, results).trim();
   if (salvaged && salvaged !== EMPTY_TURN_ANSWER && !/\{\{|\}\}/.test(salvaged)) {
@@ -581,9 +588,9 @@ export function resultLead(
       /no real link|move together|move in opposite/i.test(finding));
   const preferFinding =
     Boolean(finding && hasDigits(finding)) && (!prose || codeHeavy(prose) || repeatedContract);
-  // Duplication leads are stamped by the engine (Paper 6n). Prefer them over model prose
-  // so the card does not repeat net reach in two formats.
-  const duplicationFinding =
+  // Duplication / standout leads are stamped by the engine (Paper 6n / 14a). Prefer them
+  // over model prose so the card does not repeat the finding in two formats.
+  const engineLeadFinding =
     Boolean(finding) &&
     Array.isArray(results) &&
     results.some(item => {
@@ -593,11 +600,33 @@ export function resultLead(
       return (
         record.kind === 'brand_duplication' ||
         record.analysis_type === 'brand_duplication' ||
-        record.procedure === 'brand_duplication'
+        record.procedure === 'brand_duplication' ||
+        record.kind === 'standout_stats' ||
+        record.analysis_type === 'standout_stats' ||
+        record.procedure === 'standout_stats'
       );
     });
+  // Prefer the one-sentence standout lead when the engine stamped it.
+  const standoutLead = (() => {
+    if (!Array.isArray(results)) return '';
+    for (const item of results) {
+      const nested = item?.result && typeof item.result === 'object' ? item.result : item;
+      const record =
+        nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : {};
+      if (
+        record.analysis_type === 'standout_stats' ||
+        record.procedure === 'standout_stats' ||
+        record.kind === 'standout_stats'
+      ) {
+        const lead = typeof record.lead === 'string' ? record.lead.trim() : '';
+        if (lead) return lead;
+      }
+    }
+    return '';
+  })();
   const text =
-    (duplicationFinding ? finding : '') ||
+    standoutLead ||
+    (engineLeadFinding ? finding : '') ||
     (preferFinding ? finding : '') ||
     (hasFigure(prose) && !codeHeavy(prose) ? prose : '') ||
     (hasFigure(finding) ? finding : '') ||
@@ -608,7 +637,7 @@ export function resultLead(
     (unfinishedStub ? '' : outputTakeaway(answer));
   // TEN-40: a tool name, flags stub, or progress line is never the card lead.
   const stubLead =
-    /^(?:banner_table|brand_duplication|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
+    /^(?:banner_table|brand_duplication|standout_stats|paired_brand_test|chi_square|descriptives|frequencies|compute|rake|nps|funnel|correlation|correlations|ttest_paired)\b/i.test(
       text.trim()
     ) ||
     /building the (?:table|deck)/i.test(text) ||
@@ -890,6 +919,7 @@ function summaryLine(
         : undefined;
     const summary = item?.summary || nestedSummary;
     if (typeof summary?.line === 'string') push(summary.line);
+    if (typeof summary?.statistic === 'string') push(summary.statistic);
     // Report answer is the same contract when the summary line was stripped.
     for (const layer of [item?.result, nested]) {
       if (!layer || typeof layer !== 'object') continue;
@@ -898,6 +928,26 @@ function summaryLine(
       const block = report as { answer_from_result?: unknown; answer?: unknown };
       if (block.answer_from_result === true && typeof block.answer === 'string') {
         push(block.answer);
+      }
+    }
+    // TEN-242: empty line with a finished table still yields a readable lead.
+    if (!lines.length && summary && typeof summary === 'object') {
+      const tables = Array.isArray(summary.table) ? summary.table : [];
+      for (const table of tables) {
+        if (!table || typeof table !== 'object') continue;
+        const rows = Array.isArray((table as { rows?: unknown }).rows)
+          ? ((table as { rows: unknown[] }).rows as unknown[])
+          : [];
+        const bits: string[] = [];
+        for (const row of rows.slice(0, 6)) {
+          if (!Array.isArray(row) || row.length < 2) continue;
+          const label = String(row[0] ?? '').trim();
+          const value = String(row[1] ?? '').trim();
+          if (!label || !value || !/\d/.test(value)) continue;
+          if (/^(total|base|missing)$/i.test(label)) continue;
+          bits.push(`${label} ${value}`);
+        }
+        if (bits.length) push(bits.join('; ') + '.');
       }
     }
   }
@@ -1184,7 +1234,10 @@ export function outputCardReady(
   turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
   plan: boolean
 ): boolean {
-  if (!turn || turn.status !== 'ok') return false;
+  if (!turn) return false;
+  // TEN-242: model-unavailable with a finished table still opens the card (Paper 14b).
+  const statusOk = turn.status === 'ok' || turn.status === 'llm_unavailable';
+  if (!statusOk) return false;
   // A plan with no table yet is still the approval card. A table in the stream opens the panel.
   if (plan) return hasSummaryTable(turn.tool_results);
   if (outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results)) return true;

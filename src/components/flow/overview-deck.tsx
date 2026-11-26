@@ -34,11 +34,15 @@ export type OverviewSlide = {
 
 export const OVERVIEW_SLIDES: OverviewSlide[] = [
   { id: 'title', title: 'Title', note: 'Title layout · audience definition as subtitle' },
-  { id: 'size', title: 'Size and market split', note: 'People (000s)' },
+  {
+    id: 'size',
+    title: 'Audience size',
+    note: 'People count, share of total, share of market',
+  },
   {
     id: 'reach',
-    title: 'Title reach vs total, with index',
-    note: 'Reach %, people (000s), index',
+    title: 'Reach comparison',
+    note: 'Ranked bars · highlighted title · index vs total',
   },
   {
     id: 'demographics',
@@ -58,7 +62,7 @@ export const OVERVIEW_SLIDES: OverviewSlide[] = [
   },
 ];
 
-/** Grey the profile slide when no audience is selected (Paper 8a). */
+/** Grey size/profile when no audience is selected (Paper 8a / 14c). */
 export function withOverviewSlideSupport(
   slides: OverviewSlide[],
   audience: string
@@ -68,14 +72,17 @@ export function withOverviewSlideSupport(
     !['total sample', 'total', 'everyone', 'all'].includes(audience.trim().toLowerCase())
   );
   return slides.map(slide => {
-    if (slide.id !== 'profile') return slide;
+    if (slide.id !== 'profile' && slide.id !== 'size') return slide;
     if (hasAudience) {
       return { ...slide, unsupported: false, reason: undefined };
     }
     return {
       ...slide,
       unsupported: true,
-      reason: 'Pick an audience to profile against the total.',
+      reason:
+        slide.id === 'size'
+          ? 'Pick an audience to show its size.'
+          : 'Pick an audience to profile against the total.',
     };
   });
 }

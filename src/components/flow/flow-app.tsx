@@ -3258,13 +3258,19 @@ function ChatScreen({
           <Skeleton className="h-8 w-full" />
         ) : (
           <>
-            {recipes.map(recipe => {
+            {recipes.map((recipe, recipeIndex) => {
               const steps = Array.isArray(recipe.ops)
                 ? recipe.ops.filter(step => (step as { op?: string } | null)?.op !== 'import')
                     .length
                 : 0;
               return (
-                <div key={recipe.recipe_id}>
+                <div
+                  key={
+                    recipe.recipe_id
+                      ? `${recipe.recipe_id}:${recipeIndex}`
+                      : `recipe-${recipeIndex}`
+                  }
+                >
                   <div className="chat-recipe-row">
                     <Button
                       className="chat-recipe"
@@ -5552,6 +5558,7 @@ function ReportScreen({
   const [wavePrevious, setWavePrevious] = useState<WaveColumn[]>([]);
   const [waveNext, setWaveNext] = useState<WaveColumn[]>([]);
   const [waveFileName, setWaveFileName] = useState('');
+  const [waveDatasetId, setWaveDatasetId] = useState('');
   const [waveMovers, setWaveMovers] = useState<WaveMover[]>([]);
   const [waveChoosing, setWaveChoosing] = useState(false);
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
@@ -6423,9 +6430,7 @@ function ReportScreen({
             fileName={waveFileName || undefined}
             deckLabel={
               marketDecks[0]?.name ||
-              (overviewSlides.length
-                ? `Audience overview (${overviewSlides.length} slides)`
-                : undefined)
+              (selected.length ? `Saved tables (${selected.length})` : undefined)
             }
             audienceLabel={audienceNames[0] || undefined}
             movers={waveMovers}
@@ -6456,6 +6461,7 @@ function ReportScreen({
                   .filter(column => column.name && !isInternalColumn(column.name));
                 setWaveNext(columns);
                 setWaveFileName(file.name);
+                setWaveDatasetId(datasetId);
                 setWaveMovers([]);
               } catch (err) {
                 setError(
@@ -6470,8 +6476,23 @@ function ReportScreen({
               if (!exportFileId) {
                 throw new Error('Open a dataset on Report before refreshing a wave.');
               }
-              // Recipe lives on the open file. Match mapping is validated against the
-              // second wave; refresh stamps a new export and keeps prior versions.
+              if (!waveDatasetId) {
+                throw new Error('Choose a second-wave file before building a new version.');
+              }
+              // Adopt the uploaded wave as a child tip, remap the recipe, retab there.
+              // The open tip and its prior deck export stay as they are.
+              const columnMap: Record<string, string> = {};
+              for (const name of request.matchedByName) {
+                columnMap[name] = name;
+              }
+              const excludePrevious: string[] = [];
+              for (const item of request.matchedByLabel) {
+                if (request.kept[item.previous] === false) {
+                  excludePrevious.push(item.previous);
+                } else {
+                  columnMap[item.previous] = item.next;
+                }
+              }
               const variables = [
                 ...request.matchedByName.map(name => {
                   const column = wavePrevious.find(item => item.name === name);
@@ -6481,15 +6502,24 @@ function ReportScreen({
                   .filter(item => request.kept[item.previous] !== false)
                   .map(item => {
                     const prior = wavePrevious.find(column => column.name === item.previous);
-                    return { name: item.previous, label: prior?.label || item.label };
+                    return {
+                      name: item.next,
+                      label: prior?.label || item.label,
+                    };
                   }),
               ];
-              // Unmatched (dropped or still missing) stay out of the remapped list.
               const droppedLabels = new Set(
                 Object.entries(request.dropped)
                   .filter(([, value]) => value)
                   .map(([label]) => label)
               );
+              for (const label of request.missing) {
+                if (!droppedLabels.has(label)) continue;
+                const prior = wavePrevious.find(
+                  column => column.label === label || column.name === label
+                );
+                if (prior?.name) excludePrevious.push(prior.name);
+              }
               const wanted = variables.filter(item => !droppedLabels.has(item.label));
               const deckId = marketDecks[0]?.id || '';
               const specIds = selected.map(table => table.id).filter(Boolean);
@@ -6502,20 +6532,35 @@ function ReportScreen({
                 unmatched?: string[];
                 export_id?: string;
                 n_versions?: number;
+                dataset_id?: string;
+                parent_dataset_id?: string | null;
+                wave_adopted?: boolean;
               }>(`/datasets/${exportFileId}/export/deck/refresh`, {
                 method: 'POST',
                 body: JSON.stringify({
                   deck_spec_id: deckId || undefined,
                   spec_ids: deckId ? undefined : specIds,
                   variables: wanted,
+                  wave_dataset_id: waveDatasetId,
+                  column_map: columnMap,
+                  exclude_previous: excludePrevious,
                 }),
               });
               setWaveMovers(Array.isArray(refreshed.movers) ? refreshed.movers : []);
+              const childId = String(refreshed.dataset_id || '').trim();
+              if (childId && childId !== exportFileId && projectId) {
+                await flowJson(`/api/projects/${projectId}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ active_dataset_id: childId }),
+                });
+                await queryClient.invalidateQueries({ queryKey: projectQueryKeys.root });
+                setRefreshKey(value => value + 1);
+              }
               const unmatched = (refreshed.unmatched || []).filter(Boolean);
               const summary = String(refreshed.movers_summary || '').trim();
               setNote(
                 [
-                  'Built a new deck version. The original stays as it is.',
+                  'Built a new deck version on the new wave. The original stays as it is.',
                   waveFileName ? `Matched against ${waveFileName}.` : '',
                   summary,
                   unmatched.length
@@ -6530,6 +6575,7 @@ function ReportScreen({
             onClose={() => {
               setWaveOpen(false);
               setWaveChoosing(false);
+              setWaveDatasetId('');
             }}
           />
         ) : null}
@@ -6637,6 +6683,7 @@ function ReportScreen({
                 onClick={() => {
                   setWaveNext([]);
                   setWaveFileName('');
+                  setWaveDatasetId('');
                   setWaveMovers([]);
                   setWaveChoosing(false);
                   if (exportFileId) {

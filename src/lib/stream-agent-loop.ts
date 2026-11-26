@@ -265,6 +265,7 @@ export async function streamAgentLoop(
               message: params.resume ? '' : params.message,
               mode: params.mode,
               dataset_id: params.datasetId ?? null,
+              project_id: params.projectId ?? null,
               session_id: params.sessionId ?? null,
               resume: Boolean(params.resume || params.approvedBatch),
               approved_batch: params.approvedBatch ?? null,

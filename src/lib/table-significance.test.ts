@@ -114,7 +114,7 @@ describe('table significance settings', () => {
     );
   });
 
-  it('prefers arrows footnote over a stale McNemar letter_test at the chosen confidence', () => {
+  it('keeps Paired McNemar on item tables even when chrome is set to arrows', () => {
     expect(
       significanceFootnoteLine(
         {
@@ -126,7 +126,9 @@ describe('table significance settings', () => {
         },
         { ...DEFAULT_TABLE_SIGNIFICANCE, showAs: 'arrows', confidence: 90 }
       )
-    ).toBe('Arrows: higher or lower than the total at 90%');
+    ).toBe(
+      'Paired McNemar test at 90%. A letter marks a value significantly higher than that column.'
+    );
     expect(
       significanceFootnoteLine(
         {
@@ -141,5 +143,18 @@ describe('table significance settings', () => {
     ).toBe(
       'Paired McNemar test at 90%. A letter marks a value significantly higher than that column.'
     );
+  });
+
+  it('still uses arrows for non-paired tables at the chosen confidence', () => {
+    expect(
+      significanceFootnoteLine(
+        {
+          significance_display: 'cell_comparisons',
+          significance_alpha: 0.05,
+          banner_columns: [{ id: 'a' }, { id: 'total' }],
+        },
+        { ...DEFAULT_TABLE_SIGNIFICANCE, showAs: 'arrows', confidence: 90 }
+      )
+    ).toBe('Arrows: higher or lower than the total at 90%');
   });
 });

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { answerIsNotInData, stripNotInDataLead } from '@/components/flow/asker-answer';
 import { analysisReportHref } from '@/components/flow/chat-output';
 import { flowJson } from '@/lib/flow-api';
 import { useProjectAskerLog } from '@/hooks/api/use-project-data';
@@ -13,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 export type AskerTurn = {
   turn_id: string;
   user_id?: string;
+  user_name?: string;
   question: string;
   answer: string;
   checked?: boolean;
@@ -32,14 +34,15 @@ export type AskerTurn = {
 type FilterId = 'to_check' | 'checked' | 'not_in_data' | 'all';
 
 function askerBucket(turn: AskerTurn): 'to_check' | 'checked' | 'not_in_data' {
-  if (
-    turn.status === 'not_in_data' ||
-    turn.answer.trim().toLowerCase().startsWith('not in this data')
-  ) {
+  if (turn.status === 'not_in_data' || answerIsNotInData(turn.answer)) {
     return 'not_in_data';
   }
   if (turn.status === 'checked' || turn.checked) return 'checked';
   return 'to_check';
+}
+
+function askerLabel(turn: AskerTurn): string {
+  return String(turn.user_name || '').trim() || String(turn.user_id || '').trim() || 'Asker';
 }
 
 function statusLabel(turn: AskerTurn): string {
@@ -181,7 +184,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
             >
               <span className="asker-log-row-top">
                 <span className="flow-muted">
-                  {turn.user_id || 'Asker'} · {whenLabel(turn.created_at)}
+                  {askerLabel(turn)} · {whenLabel(turn.created_at)}
                 </span>
                 <span className={`asker-log-status status-${askerBucket(turn)}`}>
                   {statusLabel(turn)}
@@ -198,7 +201,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
         {open ? (
           <>
             <p className="flow-muted">
-              {(open.user_id || 'Asker') + ' (Asker) asked '}
+              {askerLabel(open) + ' (Asker) asked '}
               {whenLabel(open.created_at) || 'recently'}
               {open.status === 'check_requested' ? ' · asked you to check' : ''}
             </p>
@@ -210,8 +213,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
             >
               {askerBucket(open) === 'not_in_data' ? (
                 <p>
-                  <strong>Not in this data.</strong>{' '}
-                  {open.answer.replace(/^not in this data\.?\s*/i, '')}
+                  <strong>Not in this data.</strong> {stripNotInDataLead(open.answer)}
                 </p>
               ) : (
                 <>
@@ -246,7 +248,7 @@ export function AskerQuestionsScreen({ projectId }: { projectId: string }) {
               </div>
             )}
             <label className="asker-note">
-              <span className="flow-muted">Note to asker (optional)</span>
+              <span className="flow-muted">Note to {askerLabel(open)} (optional)</span>
               <Textarea
                 value={note}
                 onChange={event => setNote(event.target.value)}

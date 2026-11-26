@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import {
   AgentWorkingLabel,
+  BuildingTableCard,
   CHAT_THREAD_CLOSE_BUTTON_CLASS,
   ChatThreadCloseButton,
   accumulateThinkingLines,
+  isBuildingTableProgress,
   visibleThinkingLines,
 } from './agent-chat-chrome';
 
@@ -14,6 +16,31 @@ describe('agent chat chrome', () => {
     expect(label).toHaveClass('animate-pulse', 'text-muted-foreground');
     expect(label).not.toHaveClass('bg-primary');
     expect(container.querySelector('[aria-hidden]')).toBeNull();
+  });
+
+  it('TEN-191: detects big-table building progress for Paper 14b', () => {
+    expect(isBuildingTableProgress(['Reading the request'])).toBe(false);
+    expect(isBuildingTableProgress(['Loaded 4 of 1,501 columns'])).toBe(true);
+    expect(isBuildingTableProgress(['Building the table', 'Counting weighted reach'])).toBe(true);
+  });
+
+  it('TEN-191: building card shows Loaded N of M and keep-working copy', () => {
+    render(
+      <BuildingTableCard
+        lines={[
+          'Building the table',
+          'Loaded 4 of 1,501 columns',
+          'Counting weighted reach, index vs total',
+        ]}
+        isStreaming
+      />
+    );
+    expect(screen.getByTestId('building-table-card')).toBeInTheDocument();
+    expect(screen.getByText('Building the table')).toBeInTheDocument();
+    expect(screen.getByText(/Loaded 4 of 1,501 columns/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/You can keep working\. The answer is written here when the numbers land\./)
+    ).toBeInTheDocument();
   });
 
   it('hides planning progress once the result is on screen', () => {

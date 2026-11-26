@@ -276,7 +276,9 @@ export function significanceFootnoteLine(
       book.significance_display,
       (book.spec as { comparison_type?: string } | undefined)?.comparison_type
     );
-  if (showAs === 'off') return '';
+  const namedEarly = String(book.letter_test || '').trim();
+  const pairedEarly =
+    Boolean(book.paired_within_items) || namedEarly.toLowerCase().startsWith('paired');
   const alpha =
     settings != null
       ? alphaFromConfidence(settings.confidence)
@@ -287,6 +289,9 @@ export function significanceFootnoteLine(
           ? (book.spec as { significance_alpha: number }).significance_alpha
           : 0.05;
   const confidence = confidenceFromAlpha(alpha);
+  // Paired item tables always name McNemar, even when column-letter chrome is off
+  // or no lettered cell survived (TEN-190).
+  if (showAs === 'off' && !pairedEarly) return '';
   const mccRaw = String(
     settings?.multipleComparison ||
       (book.tests as { mcc?: { default?: string } } | undefined)?.mcc?.default ||
@@ -308,7 +313,7 @@ export function significanceFootnoteLine(
     column => column.id && column.id !== 'total'
   ).length;
   // Arrows vs total always describe the chosen confidence — never a stale McNemar line.
-  if (showAs === 'arrows') {
+  if (showAs === 'arrows' && !pairedEarly) {
     const correction =
       mcc === 'none'
         ? ''
@@ -317,8 +322,8 @@ export function significanceFootnoteLine(
           : ', FDR-corrected';
     return `Arrows: higher or lower than the total at ${confidence}%${correction}`;
   }
-  const named = String(book.letter_test || '').trim();
-  if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+  const named = namedEarly;
+  if (pairedEarly) {
     // Rebuild from the live confidence so a hard-coded engine string cannot drift.
     return `Paired McNemar test at ${confidence}%. A letter marks a value significantly higher than that column.`;
   }

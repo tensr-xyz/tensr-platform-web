@@ -375,7 +375,8 @@ export function applyClientDeckJobSnapshot(
     const status = String(job.status || 'pending');
     const running = status === 'running' || status === 'pending';
     // Mid-run copy is stage progress only (tables → insights → PowerPoint).
-    // Draft "Report pages: N" counts look finished while the job is still live.
+    // Draft "Report pages: N" counts look finished while the job is still live;
+    // Report pages land atomically after narrative (TEN-240 / TEN-244).
     // "Ask me to continue" is for stalled/failed polls, not live progress.
     const answer = [line, running ? '' : 'Ask me to continue when you want the PowerPoint file.']
       .filter(Boolean)

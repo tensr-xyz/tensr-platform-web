@@ -1,4 +1,5 @@
 import type { AnalysisReportChart } from './analysis-report-types';
+import { CHART_HIGHLIGHT_ACCENT, CHART_HIGHLIGHT_MUTED } from './chart-theme';
 import { significanceFootnoteLine, type TableSignificanceSettings } from './table-significance';
 
 export type BannerColumn = {
@@ -121,13 +122,33 @@ function isAffirmativeBannerToken(text: string): boolean {
   return Number.isFinite(asNumber) && asNumber === 1;
 }
 
+function looksLikeColumnCode(text: string, column = ''): boolean {
+  const value = text.trim();
+  if (!value) return true;
+  if (value.includes('_') && !value.includes(' ')) return true;
+  const name = column.trim();
+  return Boolean(name && value.toLowerCase() === name.toLowerCase() && name.includes('_'));
+}
+
 /** Banner column label a person reads. Bare 0/1 codes use the variable / audience name. */
 export function bannerHeading(column: BannerColumn, audienceLabel = ''): string {
   const raw = column.label || column.id;
   const splitAt = raw.indexOf('=');
   const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
   const generic = value.trim().toLowerCase();
-  const variable = (column.column_label || audienceLabel || '').trim();
+  const codeName = String(column.codes?.[0]?.column || '').trim();
+  const columnLabel = (column.column_label || '').trim();
+  const audience = audienceLabel.trim();
+  // Prefer a person-facing name: audience, then a real variable label, never a code.
+  const variable = (
+    (audience && (isAffirmativeBannerToken(value) || generic === '0' || generic === '0.0')
+      ? audience
+      : '') ||
+    (columnLabel && !looksLikeColumnCode(columnLabel, codeName) ? columnLabel : '') ||
+    audience ||
+    columnLabel ||
+    ''
+  ).trim();
   // Affirmative 0/1 codes ("1", "1.0", Selected, Yes) show the item label, not the code.
   const affirmative = isAffirmativeBannerToken(value);
   const negative =
@@ -156,7 +177,7 @@ export function bannerHeading(column: BannerColumn, audienceLabel = ''): string 
   if (code != null && String(code).trim() && !isAffirmativeBannerToken(String(code))) {
     return String(code);
   }
-  if (audienceLabel.trim() && affirmative) return audienceLabel.trim();
+  if (audience && affirmative) return audience;
   const split = label.indexOf('=');
   return split >= 0 ? label.slice(split + 1) : label;
 }
@@ -431,14 +452,14 @@ export function bannerFootnote(
   const sigLine = significanceFootnoteLine(book, settings);
   if (sigLine) parts.push(sigLine);
   else {
+    const named = String(book.letter_test || '').trim();
+    const paired = Boolean(book.paired_within_items) || named.toLowerCase().startsWith('paired');
     const letters = book.letters as unknown[] | undefined;
-    if (String(book.significance_display || '') !== 'none' && letters?.length) {
-      const named = String(book.letter_test || '').trim();
-      if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
-        parts.push(named || 'Paired McNemar test at 95%');
-      } else {
-        parts.push(named || 'Column proportions test at 95%');
-      }
+    // Paired McNemar must stay named even when no lettered cell survived.
+    if (paired) {
+      parts.push(named || 'Paired McNemar test at 95%');
+    } else if (String(book.significance_display || '') !== 'none' && letters?.length) {
+      parts.push(named || 'Column proportions test at 95%');
     }
   }
   return parts.join(' · ');
@@ -496,6 +517,7 @@ export type BannerChartKind =
   | 'stacked'
   | 'stacked_100'
   | 'horizontal'
+  | 'ranked'
   | 'line'
   | 'area'
   | 'pie'
@@ -506,6 +528,7 @@ export const BANNER_CHART_KINDS: { value: BannerChartKind; label: string }[] = [
   { value: 'stacked', label: 'Stacked' },
   { value: 'stacked_100', label: '100%' },
   { value: 'horizontal', label: 'Horizontal' },
+  { value: 'ranked', label: 'Ranked' },
   { value: 'line', label: 'Line' },
   { value: 'area', label: 'Area' },
   { value: 'pie', label: 'Pie' },
@@ -519,20 +542,121 @@ function seriesLetters(values: BannerChartValue[], categories: string[]): string
   return letters.some(Boolean) ? letters : undefined;
 }
 
+function pickHighlightLabel(
+  labels: string[],
+  highlightAnswer: string | undefined
+): string | undefined {
+  if (!labels.length) return undefined;
+  const needle = String(highlightAnswer || '')
+    .trim()
+    .toLowerCase();
+  if (needle) {
+    const exact = labels.find(label => label.toLowerCase() === needle);
+    if (exact) return exact;
+    const partial = labels.find(
+      label => label.toLowerCase().includes(needle) || needle.includes(label.toLowerCase())
+    );
+    if (partial) return partial;
+  }
+  return labels[0];
+}
+
+/**
+ * Ranked horizontal bars: stub rows as categories, sorted by the chosen banner
+ * column, with one answer in the accent colour and the rest grey (Paper 14c).
+ */
+export function rankedHighlightCategoryLabels(series: BannerChartSeries[]): string[] {
+  if (!series.length) return [];
+  if (series.length === 1 && (series[0]?.values.length ?? 0) > 1) {
+    return series[0]!.values.map(item => item.name);
+  }
+  return series.map(row => row.label);
+}
+
 /**
  * Same table cells as a report chart. Pie uses one series across categories:
  * a single stub row → pie of banner columns; several rows → pie of the first column.
  * Column letters (and significance_note) match the table when the book was tested.
+ * Ranked pivots stub rows onto the Y axis, sorts by %, and accents one answer.
  */
 export function chartFromBannerSeries(
   series: BannerChartSeries[],
   kind: BannerChartKind,
-  opts?: { title?: string; yLabel?: string; significanceNote?: string }
+  opts?: {
+    title?: string;
+    yLabel?: string;
+    significanceNote?: string;
+    /** Label to accent on ranked charts (rest grey). Defaults to the top row. */
+    highlightAnswer?: string;
+    /** Banner column to plot on ranked charts when stubs are the categories. */
+    valueColumn?: string;
+    accent?: string;
+    muted?: string;
+  }
 ): AnalysisReportChart | null {
   if (!series.length) return null;
   const title = opts?.title || '';
   const y_label = opts?.yLabel || 'Percent';
   const significance_note = opts?.significanceNote?.trim() || undefined;
+
+  if (kind === 'ranked') {
+    type RankedRow = { label: string; value: number; letter: string };
+    let rows: RankedRow[];
+    let seriesName = y_label;
+    if (series.length === 1 && (series[0]?.values.length ?? 0) > 1) {
+      rows = series[0]!.values.map(item => ({
+        label: item.name,
+        value: item.value,
+        letter: item.letter?.trim() || '',
+      }));
+    } else {
+      const columnNames = series[0]!.values.map(item => item.name);
+      const prefer =
+        (opts?.valueColumn && columnNames.includes(opts.valueColumn)
+          ? opts.valueColumn
+          : undefined) ||
+        columnNames.find(name => name.toLowerCase() !== 'total') ||
+        columnNames[0] ||
+        '';
+      seriesName = prefer || y_label;
+      rows = series.map(row => {
+        const cell = row.values.find(item => item.name === prefer) ??
+          row.values[0] ?? {
+            name: '',
+            value: 0,
+          };
+        return {
+          label: row.label,
+          value: cell.value,
+          letter: cell.letter?.trim() || '',
+        };
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    const categories = rows.map(row => row.label);
+    const highlight = pickHighlightLabel(categories, opts?.highlightAnswer);
+    const accent = opts?.accent || CHART_HIGHLIGHT_ACCENT;
+    const muted = opts?.muted || CHART_HIGHLIGHT_MUTED;
+    const letters = rows.map(row => row.letter);
+    return {
+      kind: 'bar_horizontal',
+      title,
+      x_label: y_label,
+      y_label: '',
+      categories,
+      series: [
+        {
+          name: seriesName,
+          values: rows.map(row => row.value),
+          ...(letters.some(Boolean) ? { letters } : {}),
+        },
+      ],
+      category_fills: categories.map(label => (label === highlight ? accent : muted)),
+      data_labels: true,
+      ...(highlight ? { highlight_category: highlight } : {}),
+      ...(significance_note ? { significance_note } : {}),
+    };
+  }
 
   if (kind === 'pie' || kind === 'donut') {
     const pieKind = kind === 'donut' ? 'donut' : 'pie';

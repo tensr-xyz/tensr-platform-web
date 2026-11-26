@@ -137,6 +137,19 @@ describe('flow survey grid', () => {
         'US institutional investors'
       )
     ).toBe('US institutional investors');
+    // Audience wording wins over a column_label that is still the variable name.
+    expect(
+      bannerHeading(
+        {
+          id: 'inv=1',
+          label: '1',
+          column_label: 'inv_institutional',
+          codes: [{ column: 'inv_institutional', code: '1' }],
+          letter_slot: 'A',
+        },
+        'US institutional investors'
+      )
+    ).toBe('US institutional investors');
   });
 
   it('shows rake efficiency as a percent', () => {
@@ -216,6 +229,17 @@ describe('flow survey grid', () => {
         letter_test: 'Paired McNemar test at 95%.',
         significance_display: 'column_letters',
         letters: [{ stub_row_id: 'a:1', banner_id: 'total', letter: 'B' }],
+      })
+    ).toContain('Paired McNemar test at 95%');
+  });
+
+  it('still names Paired McNemar when no lettered cell survived and display is none', () => {
+    expect(
+      bannerFootnote({
+        paired_within_items: true,
+        letter_test: 'Paired McNemar test at 95%.',
+        significance_display: 'none',
+        letters: [],
       })
     ).toContain('Paired McNemar test at 95%');
   });
@@ -340,6 +364,23 @@ describe('flow survey grid', () => {
       categories: ['East', 'North'],
     });
 
+    const ranked = chartFromBannerSeries(series, 'ranked', {
+      title: 'Reach',
+      highlightAnswer: 'No',
+      accent: '#1E6B58',
+      muted: '#CFCFCB',
+    });
+    expect(ranked).toMatchObject({
+      kind: 'bar_horizontal',
+      title: 'Reach',
+      data_labels: true,
+      highlight_category: 'No',
+      // Sorted by East % descending: Yes 60, No 40 — highlight stays on No.
+      categories: ['Yes', 'No'],
+      series: [{ name: 'East', values: [60, 40] }],
+      category_fills: ['#CFCFCB', '#1E6B58'],
+    });
+
     const pie = chartFromBannerSeries(series, 'pie', { title: 'Awareness' });
     expect(pie).toEqual({
       kind: 'pie',
@@ -430,6 +471,18 @@ describe('flow survey grid', () => {
     expect(chartFromBannerSeries(series, 'horizontal', { significanceNote: note })).toMatchObject({
       kind: 'bar_horizontal',
       series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+    });
+    expect(
+      chartFromBannerSeries(series, 'ranked', {
+        significanceNote: note,
+        highlightAnswer: 'Yes',
+      })
+    ).toMatchObject({
+      kind: 'bar_horizontal',
+      data_labels: true,
+      highlight_category: 'Yes',
+      series: [{ letters: ['B', ''] }],
+      significance_note: note,
     });
 
     const pie = chartFromBannerSeries([series[0]!], 'pie', { significanceNote: note });

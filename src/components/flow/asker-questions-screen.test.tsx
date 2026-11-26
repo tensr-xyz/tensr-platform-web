@@ -22,6 +22,7 @@ const turns: AskerTurn[] = [
   {
     turn_id: 't1',
     user_id: 'priya',
+    user_name: 'Priya Shah',
     question: 'How many institutional investors do we reach in the US?',
     answer: 'Northwind Post reaches 41.2%.',
     status: 'check_requested',
@@ -38,14 +39,16 @@ const turns: AskerTurn[] = [
   {
     turn_id: 't2',
     user_id: 'priya',
+    user_name: 'Priya Shah',
     question: 'And how many of them are hedge fund managers?',
-    answer: 'Not in this data. The survey records investor type but not fund type.',
-    status: 'not_in_data',
+    answer: 'That is not in this data. The survey records investor type but not fund type.',
+    status: 'to_check',
     created_at: '2026-11-21T10:44:00Z',
   },
   {
     turn_id: 't3',
     user_id: 'james',
+    user_name: 'James Cole',
     question: 'Age profile of our digital readers vs total',
     answer: 'Digital readers skew younger.',
     status: 'checked',
@@ -87,6 +90,7 @@ describe('AskerQuestionsScreen', () => {
     expect(screen.getByRole('heading', { level: 2 }).textContent).toMatch(
       /institutional investors/i
     );
+    expect(screen.getByText(/Priya Shah \(Asker\) asked/)).toBeTruthy();
     expect(screen.getByText('How it was worked out')).toBeTruthy();
     expect(screen.getAllByText(/Institutional investors, US/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/171 respondents/).length).toBeGreaterThan(0);
@@ -105,5 +109,12 @@ describe('AskerQuestionsScreen', () => {
         expect.objectContaining({ method: 'POST' })
       )
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /Not in data · 1/ }));
+    expect(
+      await screen.findByRole('heading', { level: 2, name: /hedge fund managers/i })
+    ).toBeTruthy();
+    expect(screen.getByText(/Not in this data/)).toBeTruthy();
+    expect(screen.getByText(/investor type but not fund type/i)).toBeTruthy();
   });
 });
