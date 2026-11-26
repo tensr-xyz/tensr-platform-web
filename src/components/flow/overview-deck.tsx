@@ -65,18 +65,22 @@ export const OVERVIEW_SLIDES: OverviewSlide[] = [
   },
 ];
 
-/** Grey size/profile when no audience is selected (Paper 8a / 14c). */
+/** Grey size/profile when no audience is selected (Paper 8a / 14c).
+ * One-copy-per-market treats each market as the audience, so size/profile stay on.
+ */
 export function withOverviewSlideSupport(
   slides: OverviewSlide[],
-  audience: string
+  audience: string,
+  opts?: { perMarket?: boolean }
 ): OverviewSlide[] {
   const hasAudience = Boolean(
     audience &&
     !['total sample', 'total', 'everyone', 'all'].includes(audience.trim().toLowerCase())
   );
+  const marketAsAudience = Boolean(opts?.perMarket);
   return slides.map(slide => {
     if (slide.id !== 'profile' && slide.id !== 'size') return slide;
-    if (hasAudience) {
+    if (hasAudience || marketAsAudience) {
       return { ...slide, unsupported: false, reason: undefined };
     }
     return {
@@ -88,6 +92,11 @@ export function withOverviewSlideSupport(
           : 'Pick an audience to profile against the total.',
     };
   });
+}
+
+/** How many overview layouts will export (skips greyed size/profile). */
+export function supportedOverviewSlideCount(slides: OverviewSlide[]): number {
+  return slides.filter(slide => !slide.unsupported).length;
 }
 
 export type OverviewBuildRequest = {
@@ -309,11 +318,6 @@ export function OverviewDeck({
   ) => Promise<void> | void;
   onClose: () => void;
 }) {
-  const initial = useMemo(
-    () => withOverviewSlideSupport(slides || OVERVIEW_SLIDES, audience || ''),
-    [slides, audience]
-  );
-  const [order, setOrder] = useState(initial);
   const [chosenAudience, setChosenAudience] = useState(audience || '');
   const [saved, setSaved] = useState(false);
   const [downloadNote, setDownloadNote] = useState('');
@@ -328,13 +332,21 @@ export function OverviewDeck({
     // Keep the picker on the audience the parent passed (do not snap to Total).
     if (audience) setChosenAudience(audience);
   }, [audience]);
-  useEffect(() => {
-    setOrder(current => withOverviewSlideSupport(current, chosenAudience));
-  }, [chosenAudience]);
   const [headline, setHeadline] = useState(true);
   const [footnote, setFootnote] = useState(true);
   const [hideLow, setHideLow] = useState(false);
   const [perMarket, setPerMarket] = useState(Boolean(datasetId));
+  const initial = useMemo(
+    () =>
+      withOverviewSlideSupport(slides || OVERVIEW_SLIDES, audience || '', {
+        perMarket: Boolean(datasetId),
+      }),
+    [slides, audience, datasetId]
+  );
+  const [order, setOrder] = useState(initial);
+  useEffect(() => {
+    setOrder(current => withOverviewSlideSupport(current, chosenAudience, { perMarket }));
+  }, [chosenAudience, perMarket]);
   const [groupColumn, setGroupColumn] = useState('');
   const [groupOptions, setGroupOptions] = useState<{ value: string; label: string }[]>([]);
   const [groupValues, setGroupValues] = useState<ColumnValues | null>(null);
@@ -726,7 +738,8 @@ export function OverviewDeck({
                     Market decks · {selectedMarkets.length} of {visibleMarkets.length} selected
                   </h3>
                   <p className="flow-muted">
-                    One deck per value of {groupColumnLabel}. Same {order.length}
+                    One deck per value of {groupColumnLabel}. Same{' '}
+                    {supportedOverviewSlideCount(order)}
                     {' slides '}
                     in each, built on that market&apos;s audience.
                   </p>
