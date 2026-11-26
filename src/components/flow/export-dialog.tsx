@@ -345,7 +345,7 @@ export async function bannerBookFromTables(
   }
   if (!specIds.length && opts?.projectId) {
     const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
-      `/projects/${opts.projectId}/tables`
+      `/api/projects/${opts.projectId}/tables`
     );
     specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
   }
