@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ANALYSIS_RUN_POLL_MS,
   attachStoredRuns,
   fetchAnalysisRun,
   waitForAnalysisRun,
@@ -62,11 +61,9 @@ export function useEnrichedToolResults<T>(results: T[] | undefined): T[] | undef
       ids.split('|').map(async id => {
         const first = await fetchAnalysisRun(id);
         if (!first) return null;
-        if (String(first.status || '') !== 'pending') return first;
-        return waitForAnalysisRun(id, {
-          intervalMs: ANALYSIS_RUN_POLL_MS,
-          signal: controller.signal,
-        });
+        if (String(first.status || '').toLowerCase() !== 'pending') return first;
+        // Backoff lives in waitForAnalysisRun (1s → 2s → 4s → max 10s).
+        return waitForAnalysisRun(id, { signal: controller.signal });
       })
     ).then(loaded => {
       if (cancelled) return;

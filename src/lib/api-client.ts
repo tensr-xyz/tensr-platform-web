@@ -50,10 +50,15 @@ function mapDatasetListRow(d: Record<string, unknown>) {
   };
 }
 
-/** High-frequency collab/health endpoints — tracking these floods POST /usage/track. */
-function shouldSkipUsageTracking(endpoint: string): boolean {
+/**
+ * High-frequency collab/health/poll endpoints — tracking these floods POST /usage/track.
+ * `/datasets/.../runs` matches list polls; `/datasets/analysis-runs/` is the per-run
+ * poller (TEN-272) — note `analysis-runs` does not contain the `/runs` substring.
+ */
+export function shouldSkipUsageTracking(endpoint: string): boolean {
   const path = endpoint.split('?')[0] || '';
   if (path === '/sessions' || path.startsWith('/sessions/')) return true;
+  if (path.includes('/analysis-runs')) return true;
   if (path.includes('/runs')) return true;
   if (path.startsWith('/usage/')) return true;
   if (path === '/assistant/capabilities' || path === '/health') return true;
