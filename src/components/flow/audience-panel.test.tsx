@@ -1,7 +1,12 @@
 import type { ReactElement } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { audienceDefinitionText, audienceFilter, audienceQuestions } from './audience-filter';
+import {
+  audienceDefinitionText,
+  audienceFilter,
+  audienceQuestions,
+  conditionsFromFilter,
+} from './audience-filter';
 import { AudiencePanel } from './audience-panel';
 
 jest.mock('@/lib/tensr-api-url', () => ({
@@ -56,6 +61,51 @@ describe('audience filter', () => {
         columns
       )
     ).toBe('Which place is not Often');
+  });
+
+  it('nests AND with an any-of group and a not condition', () => {
+    const nested = audienceFilter('and', [
+      { column: 'market', op: '=', value: '1', exclude: false },
+      {
+        column: '',
+        op: '=',
+        value: '',
+        exclude: false,
+        group: [
+          { column: 'role', op: '=', value: '1', exclude: false },
+          { column: 'role', op: '=', value: '2', exclude: true },
+        ],
+      },
+    ]);
+    expect(nested).toEqual({
+      combine: 'and',
+      filters: [
+        { column: 'market', op: '=', value: '1' },
+        {
+          combine: 'or',
+          filters: [
+            { column: 'role', op: '=', value: '1' },
+            { op: 'not', combine: 'and', filters: [{ column: 'role', op: '=', value: '2' }] },
+          ],
+        },
+      ],
+    });
+    expect(conditionsFromFilter(nested)).toEqual({
+      combine: 'and',
+      conditions: [
+        { column: 'market', op: '=', value: '1', values: ['1'], exclude: false },
+        {
+          column: '',
+          op: '=',
+          value: '',
+          exclude: false,
+          group: [
+            { column: 'role', op: '=', value: '1', values: ['1'], exclude: false },
+            { column: 'role', op: '=', value: '2', values: ['2'], exclude: true },
+          ],
+        },
+      ],
+    });
   });
 
   it('offers a question by its label and writes the definition in those words', () => {
@@ -321,6 +371,92 @@ describe('audience panel', () => {
     );
     expect(await screen.findByText(/Low base/)).toBeTruthy();
     expect(screen.queryByText(/Used in/)).toBeNull();
+  });
+
+  it('saves a nested any-of group with an is-not condition', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ audiences: [] }),
+    });
+    renderPanel(
+      <AudiencePanel
+        datasetId="file-1"
+        columns={[
+          {
+            name: 'market',
+            label: 'Market',
+            value_labels: { '1': 'United States', '2': 'United Kingdom' },
+          },
+          {
+            name: 'role',
+            label: 'Role',
+            value_labels: { '1': 'Director', '2': 'Manager' },
+          },
+        ]}
+      />
+    );
+    expect(await screen.findByText('No audiences yet.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '+ New audience' }));
+    fireEvent.change(screen.getByLabelText('Add a question, search by label'), {
+      target: { value: 'Market' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Market' }));
+    fireEvent.click(screen.getByRole('button', { name: 'United States' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Group (any of)' }));
+    // The group's search sits above the top-level "+ Add a question" row.
+    const groupSearch = screen.getAllByLabelText('Add a question, search by label')[0];
+    expect(groupSearch).toBeTruthy();
+    fireEvent.change(groupSearch!, { target: { value: 'Role' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Role' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Director' }));
+    fireEvent.click(screen.getByRole('button', { name: /Match operator for Role/ }));
+    expect(screen.getByRole('button', { name: /Match operator for Role/ }).textContent).toMatch(
+      /is not/
+    );
+    fireEvent.change(screen.getByLabelText('Name · what people will type in chat'), {
+      target: { value: 'US directors only' },
+    });
+    fireEvent.change(screen.getByLabelText('Plain description · shown in answers and footnotes'), {
+      target: { value: 'United States and not Director' },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'US directors only',
+        label: 'US directors only',
+        description: 'United States and not Director',
+        filter: {
+          combine: 'and',
+          filters: [
+            { column: 'market', op: '=', value: '1' },
+            {
+              combine: 'or',
+              filters: [
+                { op: 'not', combine: 'and', filters: [{ column: 'role', op: '=', value: '1' }] },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save audience' }));
+    expect(await screen.findByText('US directors only')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      call => call[1]?.method === 'POST' && !String(call[0]).endsWith('/preview')
+    );
+    const body = JSON.parse(String(post?.[1].body));
+    expect(body.filter).toEqual({
+      combine: 'and',
+      filters: [
+        { column: 'market', op: '=', value: '1' },
+        {
+          combine: 'or',
+          filters: [
+            { op: 'not', combine: 'and', filters: [{ column: 'role', op: '=', value: '1' }] },
+          ],
+        },
+      ],
+    });
   });
 
   it('toggles is to is not so the condition is stored as not', async () => {

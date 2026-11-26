@@ -15756,6 +15756,20 @@ button.audience-op {
   padding: 0 28px 16px;
 }
 
+.deck-builder-error-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 28px 16px;
+}
+
+.deck-builder-error-row .deck-builder-error {
+  padding: 0;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
 .deck-columns-markets {
   flex: 1 1 auto;
   min-height: 0;
@@ -15977,6 +15991,10 @@ button.audience-op {
 
 .deck-markets-row .status.ready {
   color: var(--color-accent);
+}
+
+.deck-markets-row .status.building {
+  color: var(--color-muted);
 }
 
 .deck-markets-row .status.warn {

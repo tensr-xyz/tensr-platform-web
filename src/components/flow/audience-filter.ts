@@ -228,6 +228,18 @@ function conditionFromClause(item: StoredFilter, exclude: boolean): AudienceCond
   };
 }
 
+/** A group child may be a leaf or a not-wrapped leaf. Nested groups stay flat. */
+function conditionFromGroupChild(item: StoredFilter): AudienceCondition | null {
+  if (Array.isArray(item.filters) && !item.column) {
+    if (item.op === 'not') {
+      const leaf = item.filters[0];
+      return leaf ? conditionFromClause(leaf, true) : null;
+    }
+    return null;
+  }
+  return conditionFromClause(item, false);
+}
+
 export function conditionsFromFilter(
   filter: { combine?: string; filters?: unknown[] } | undefined
 ): {
@@ -244,7 +256,7 @@ export function conditionsFromFilter(
         return clause ? [clause] : [];
       }
       const group = item.filters.flatMap(clause => {
-        const built = conditionFromClause(clause, false);
+        const built = conditionFromGroupChild(clause);
         return built ? [built] : [];
       });
       return group.length ? [{ ...BLANK, group }] : [];

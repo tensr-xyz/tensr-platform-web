@@ -287,11 +287,32 @@ export async function deckBatchFromTables(
   );
 }
 
+/** Spec ids linked on Report pages, using the same page ids as the export picker. */
+export function tableSpecIdsFromReportPages(
+  document: { pages?: unknown } | null | undefined,
+  pageIds?: string[]
+): string[] {
+  const pages = pagesFromReportDocument(document);
+  const wanted = pageIds?.length
+    ? new Set(pageIds.map(id => String(id || '').trim()).filter(Boolean))
+    : null;
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const page of pages) {
+    if (wanted && !wanted.has(page.id)) continue;
+    const specId = String(page.tableSpecId || '').trim();
+    if (!specId || seen.has(specId)) continue;
+    seen.add(specId);
+    ids.push(specId);
+  }
+  return ids;
+}
+
 /** Banner book Excel: prefer Report page tables (selected pages), else every saved table. */
 export async function bannerBookFromTables(
   datasetId: string,
   stem: string,
-  opts?: { pageIds?: string[]; specIds?: string[] }
+  opts?: { pageIds?: string[]; specIds?: string[]; projectId?: string }
 ) {
   if (!datasetId) throw new Error('Open a file first.');
   let specIds = (opts?.specIds || []).map(id => String(id || '').trim()).filter(Boolean);
@@ -309,24 +330,22 @@ export async function bannerBookFromTables(
     } catch {
       /* Fall back to saved tables when the document route fails. */
     }
-    if (reportDocument && pageIds.length) {
-      const pages = Array.isArray(reportDocument.pages) ? reportDocument.pages : [];
-      const wanted = new Set(pageIds);
-      reportDocument = {
-        ...reportDocument,
-        pages: pages.filter(
-          page =>
-            page &&
-            typeof page === 'object' &&
-            wanted.has(String((page as { id?: string }).id || '').trim())
-        ),
-      };
+    // Use picker page ids (pagesFromReportDocument) so missing raw page.id
+    // values still match the checkboxes in the Export dialog.
+    specIds = tableSpecIdsFromReportPages(reportDocument, pageIds.length ? pageIds : undefined);
+    if (!specIds.length) {
+      specIds = tableSpecIdsFromReportDocument(reportDocument);
     }
-    specIds = tableSpecIdsFromReportDocument(reportDocument);
   }
   if (!specIds.length) {
     const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
       `/datasets/${datasetId}/tables`
+    );
+    specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  }
+  if (!specIds.length && opts?.projectId) {
+    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+      `/api/projects/${opts.projectId}/tables`
     );
     specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
   }
@@ -694,6 +713,7 @@ export function ExportDialog({
           run: () =>
             bannerBookFromTables(datasetId || '', stem, {
               pageIds: selectedPageIds,
+              projectId,
             }),
         };
       }

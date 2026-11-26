@@ -17,9 +17,12 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-logic';
 import { flowJson } from '@/lib/flow-api';
 import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
+import type { OverviewDeckProgress } from '@/lib/office-deck-job';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
 import { formatMoverChange, formatMoverDetail, type WaveMover } from '@/lib/wave-movers';
 import { ACCEPTED_UPLOAD_ACCEPT } from '@/lib/accepted-upload-types';
+
+export type { OverviewDeckProgress };
 
 export type OverviewSlide = {
   id: string;
@@ -300,7 +303,10 @@ export function OverviewDeck({
   /** Active weight label, when the project has one. */
   weightLabel?: string;
   onReplaceTemplate?: () => void;
-  onBuild?: (request: OverviewBuildRequest) => Promise<void> | void;
+  onBuild?: (
+    request: OverviewBuildRequest,
+    opts?: { onProgress?: (progress: OverviewDeckProgress) => void }
+  ) => Promise<void> | void;
   onClose: () => void;
 }) {
   const initial = useMemo(
@@ -313,6 +319,11 @@ export function OverviewDeck({
   const [downloadNote, setDownloadNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [buildMessage, setBuildMessage] = useState('');
+  const [marketStatus, setMarketStatus] = useState<Record<string, 'building' | 'done' | 'failed'>>(
+    {}
+  );
+  const [activeMarket, setActiveMarket] = useState('');
   useEffect(() => {
     // Keep the picker on the audience the parent passed (do not snap to Total).
     if (audience) setChosenAudience(audience);
@@ -467,28 +478,87 @@ export function OverviewDeck({
     setBusy(true);
     setError('');
     setDownloadNote('');
+    setBuildMessage(perMarket ? 'Building overview tables…' : 'Building the PowerPoint file…');
+    setMarketStatus({});
+    setActiveMarket('');
     const buildAudience = chosenAudience || audience || 'Total sample';
     const nDecks = perMarket ? values.length : 1;
+    const doneMarkets = new Set<string>();
     void Promise.resolve(
-      onBuild({
-        audience: buildAudience,
-        slides: order,
-        headline,
-        footnote,
-        hideLow,
-        lowBaseThreshold: LOW_BASE_THRESHOLD,
-        ...(perMarket ? { perMarket: { groupColumn, values } } : {}),
-      })
+      onBuild(
+        {
+          audience: buildAudience,
+          slides: order,
+          headline,
+          footnote,
+          hideLow,
+          lowBaseThreshold: LOW_BASE_THRESHOLD,
+          ...(perMarket ? { perMarket: { groupColumn, values } } : {}),
+        },
+        {
+          onProgress: progress => {
+            setBuildMessage(progress.message || 'Building…');
+            const value = String(progress.marketValue || '').trim();
+            const label = String(progress.marketLabel || '').trim();
+            if (value || label) {
+              const key =
+                values.find(item => item === value) ||
+                marketRows.find(row => row.label === label)?.value ||
+                value ||
+                label;
+              if (key) {
+                setActiveMarket(key);
+                setMarketStatus(current => {
+                  const next = { ...current };
+                  if (key && !doneMarkets.has(key)) {
+                    next[key] = 'building';
+                  }
+                  // Markets before the active index are done.
+                  const idx = values.indexOf(key);
+                  if (idx > 0) {
+                    values.slice(0, idx).forEach(prior => {
+                      doneMarkets.add(prior);
+                      next[prior] = 'done';
+                    });
+                  }
+                  return next;
+                });
+              }
+            }
+          },
+        }
+      )
     )
       .then(() => {
         setSaved(true);
+        setBuildMessage('');
+        setActiveMarket('');
+        setMarketStatus(current => {
+          const next = { ...current };
+          values.forEach(value => {
+            next[value] = 'done';
+          });
+          return next;
+        });
         setDownloadNote(
           perMarket
             ? `Downloaded ${nDecks} deck${nDecks === 1 ? '' : 's'} for ${buildAudience}.`
             : `Downloaded the overview deck for ${buildAudience}.`
         );
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'The deck did not build.'))
+      .catch(err => {
+        const message = err instanceof Error ? err.message : 'The deck did not build.';
+        setError(message);
+        setBuildMessage('');
+        setMarketStatus(current => {
+          const next = { ...current };
+          const failed =
+            Object.keys(next).find(key => next[key] === 'building') ||
+            values.find(value => next[value] === 'building');
+          if (failed) next[failed] = 'failed';
+          return next;
+        });
+      })
       .finally(() => setBusy(false));
   };
   const eyebrow = projectLabel ? `${projectLabel} · Report` : 'Report';
@@ -496,10 +566,14 @@ export function OverviewDeck({
     ? 'New audience overview · one copy per market'
     : 'New audience overview deck';
   const primaryLabel = busy
-    ? 'Building…'
-    : perMarket
-      ? `Build ${selectedMarkets.length} deck${selectedMarkets.length === 1 ? '' : 's'}`
-      : `Build ${order.length} slides`;
+    ? buildMessage
+      ? buildMessage.replace(/\.\.\.$/, '…').slice(0, 42)
+      : 'Building…'
+    : error
+      ? 'Retry'
+      : perMarket
+        ? `Build ${selectedMarkets.length} deck${selectedMarkets.length === 1 ? '' : 's'}`
+        : `Build ${order.length} slides`;
   const shownData = dataLabel || metaDataLabel;
   const shownWeight = weightLabel || metaWeightLabel;
   const setupColumn = (
@@ -694,6 +768,22 @@ export function OverviewDeck({
                   visibleMarkets.map(row => {
                     const skipped = row.lowBase;
                     const checked = !skipped && pickedGroups[row.value] !== false;
+                    const buildState = marketStatus[row.value];
+                    let statusLabel = 'Ready';
+                    let statusClass = 'status ready';
+                    if (skipped) {
+                      statusLabel = `Base under ${LOW_BASE_THRESHOLD} · skipped`;
+                      statusClass = 'status warn';
+                    } else if (buildState === 'building' || activeMarket === row.value) {
+                      statusLabel = 'Building…';
+                      statusClass = 'status building';
+                    } else if (buildState === 'done') {
+                      statusLabel = 'Done';
+                      statusClass = 'status ready';
+                    } else if (buildState === 'failed') {
+                      statusLabel = 'Failed';
+                      statusClass = 'status warn';
+                    }
                     return (
                       <label
                         key={row.value}
@@ -703,7 +793,7 @@ export function OverviewDeck({
                         <span className="check">
                           <Checkbox
                             checked={checked}
-                            disabled={skipped}
+                            disabled={skipped || busy}
                             onCheckedChange={on => {
                               if (skipped) return;
                               setPickedGroups(current => ({
@@ -718,9 +808,7 @@ export function OverviewDeck({
                         <span>{row.label}</span>
                         <span className="num">{formatCount(row.respondents)}</span>
                         <span className="num">{formatCount(row.people)}</span>
-                        <span className={skipped ? 'status warn' : 'status ready'}>
-                          {skipped ? `Base under ${LOW_BASE_THRESHOLD} · skipped` : 'Ready'}
-                        </span>
+                        <span className={statusClass}>{statusLabel}</span>
                       </label>
                     );
                   })
@@ -786,7 +874,25 @@ export function OverviewDeck({
             </div>
           )}
         </div>
-        {error ? <p className="flow-error deck-builder-error">{error}</p> : null}
+        {busy && buildMessage ? (
+          <p className="flow-muted deck-builder-saved" data-testid="overview-deck-progress">
+            {buildMessage}
+          </p>
+        ) : null}
+        {error ? (
+          <div className="deck-builder-error-row" data-testid="overview-deck-error">
+            <p className="flow-error deck-builder-error">{error}</p>
+            <Button
+              type="button"
+              className="flow-btn"
+              disabled={busy}
+              onClick={() => build()}
+              data-testid="overview-deck-retry"
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
         {saved ? (
           <p className="flow-muted deck-builder-saved" data-testid="overview-deck-saved">
             {downloadNote ? `${downloadNote} ` : ''}
