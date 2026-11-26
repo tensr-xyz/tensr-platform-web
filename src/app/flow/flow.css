@@ -7344,12 +7344,28 @@ button.chat-result-top {
   flex-direction: column;
 }
 
-/* Keep figure cells readable when the main column is narrow: scroll the sheet
-   instead of letting fixed-layout columns crush nowrap text into neighbours. */
+/* Tables sheet (Paper 5 · Project · Tables): keep the stub lane at ~140px so a
+   one-column table still shows Total without sideways scroll when the agent
+   panel is open. Extra banner columns keep an 82px figure lane and the sheet
+   scrolls when their count exceeds the pane — do not switch to auto/max-content
+   or a long question header eats the number column again (TEN-250). */
 .tables-sheet .banner-grid {
-  table-layout: auto;
+  table-layout: fixed;
   width: max-content;
   min-width: 100%;
+}
+
+.tables-sheet .banner-grid thead th:first-child,
+.tables-sheet .banner-grid tbody th:not([colspan]) {
+  width: 140px;
+  max-width: 140px;
+  min-width: 0;
+}
+
+.tables-sheet .banner-grid thead th:not(:first-child),
+.tables-sheet .banner-grid td {
+  width: 82px;
+  min-width: 82px;
 }
 
 .banner-grid tbody tr:last-child th,
