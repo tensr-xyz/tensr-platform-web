@@ -3850,6 +3850,11 @@ export function TablesBuilder({
                             series={chartSeriesFromBook(book)}
                             title={title}
                             significanceNote={chartSignificanceNote(book)}
+                            highlightAnswer={
+                              typeof book.highlight_answer === 'string'
+                                ? book.highlight_answer
+                                : undefined
+                            }
                             onAddToReport={
                               projectId && datasetId && (book.run_id || specId)
                                 ? () => {

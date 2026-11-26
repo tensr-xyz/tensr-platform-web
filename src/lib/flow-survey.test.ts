@@ -364,6 +364,23 @@ describe('flow survey grid', () => {
       categories: ['East', 'North'],
     });
 
+    const ranked = chartFromBannerSeries(series, 'ranked', {
+      title: 'Reach',
+      highlightAnswer: 'No',
+      accent: '#1E6B58',
+      muted: '#CFCFCB',
+    });
+    expect(ranked).toMatchObject({
+      kind: 'bar_horizontal',
+      title: 'Reach',
+      data_labels: true,
+      highlight_category: 'No',
+      // Sorted by East % descending: Yes 60, No 40 — highlight stays on No.
+      categories: ['Yes', 'No'],
+      series: [{ name: 'East', values: [60, 40] }],
+      category_fills: ['#CFCFCB', '#1E6B58'],
+    });
+
     const pie = chartFromBannerSeries(series, 'pie', { title: 'Awareness' });
     expect(pie).toEqual({
       kind: 'pie',
@@ -454,6 +471,18 @@ describe('flow survey grid', () => {
     expect(chartFromBannerSeries(series, 'horizontal', { significanceNote: note })).toMatchObject({
       kind: 'bar_horizontal',
       series: [{ name: 'Yes', letters: ['B', ''] }, { name: 'No' }],
+    });
+    expect(
+      chartFromBannerSeries(series, 'ranked', {
+        significanceNote: note,
+        highlightAnswer: 'Yes',
+      })
+    ).toMatchObject({
+      kind: 'bar_horizontal',
+      data_labels: true,
+      highlight_category: 'Yes',
+      series: [{ letters: ['B', ''] }],
+      significance_note: note,
     });
 
     const pie = chartFromBannerSeries([series[0]!], 'pie', { significanceNote: note });

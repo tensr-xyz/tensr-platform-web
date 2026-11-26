@@ -269,6 +269,33 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
         ${errorBarFootnote(chart) ? `<p style="font-size:12px;color:#64748b">${escHtml(errorBarFootnote(chart) || '')}</p>` : ''}
         </figure>`;
     }
+    if (chart.kind === 'bar_horizontal' && chart.category_fills?.length) {
+      const fills = chart.category_fills;
+      const rows = (chart.categories ?? [])
+        .map((cat, i) => {
+          const v = Number(values[i] ?? 0);
+          const w = Math.max(4, Math.round((Math.abs(v) / max) * 100));
+          const fill = fills[i] || '#CFCFCB';
+          const label = escHtml(cat);
+          const pct =
+            Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}%` : `${Number(v).toFixed(1)}%`;
+          return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+            <span style="width:110px;text-align:right;font-size:12px;color:${
+              cat === chart.highlight_category ? fill : '#64748b'
+            };font-weight:${cat === chart.highlight_category ? 600 : 450}">${label}</span>
+            <div style="height:14px;width:${w}%;max-width:320px;background:${fill};border-radius:2px" title="${escHtml(String(v))}"></div>
+            <span style="font-size:12px;color:${
+              cat === chart.highlight_category ? fill : '#52525b'
+            };font-weight:${cat === chart.highlight_category ? 600 : 450}">${pct}</span>
+          </div>`;
+        })
+        .join('');
+      return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}</figcaption>
+        <div>${rows}</div>
+        <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label || 'Percent')}</p>
+        ${errorBarFootnote(chart) ? `<p style="font-size:12px;color:#64748b">${escHtml(errorBarFootnote(chart) || '')}</p>` : ''}
+        </figure>`;
+    }
     const bars = (chart.categories ?? [])
       .map((cat, i) => {
         const v = Number(values[i] ?? 0);

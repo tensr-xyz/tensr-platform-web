@@ -727,7 +727,11 @@ function ChartBody({
 
   if (chart.kind === 'bar_horizontal') {
     const { categories, series } = chart;
+    const categoryFills = chart.category_fills;
+    const showDataLabels = Boolean(chart.data_labels);
+    const highlightCategory = String(chart.highlight_category || '').trim();
     const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
+    const hideLegend = Boolean(categoryFills?.length) && series.length === 1;
     // Grouped horizontal: each series is a parallel bar; use max absolute for scale.
     const ySamples = series.flatMap(s =>
       s.values.flatMap((value, index) => {
@@ -739,7 +743,8 @@ function ChartBody({
     const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
     const minV = Math.min(0, dataMin);
     const maxRaw = Math.max(dataMax, minV === 0 ? 1 : 0);
-    const maxV = hasLetters ? maxRaw + Math.max(0.5, (maxRaw - minV) * 0.08) : maxRaw;
+    const endPad = hasLetters || showDataLabels ? Math.max(0.5, (maxRaw - minV) * 0.12) : 0;
+    const maxV = maxRaw + endPad;
     const legendMax = baseLayout.density === 'comfortable' ? 28 : 16;
     const labelChars = baseLayout.density === 'comfortable' ? 28 : 18;
     const labelPad = Math.min(
@@ -754,10 +759,9 @@ function ChartBody({
         )
       )
     );
-    const legendGutter = Math.min(
-      160,
-      Math.max(72, Math.round(legendMax * baseLayout.fontSize * 0.6 + 20))
-    );
+    const legendGutter = hideLegend
+      ? Math.max(baseLayout.padR, showDataLabels ? 48 : 24)
+      : Math.min(160, Math.max(72, Math.round(legendMax * baseLayout.fontSize * 0.6 + 20)));
     const layout = {
       ...baseLayout,
       padL: Math.max(baseLayout.padL, labelPad),
@@ -787,12 +791,20 @@ function ChartBody({
     const footnoteLineH = layout.fontSize + 4;
     const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
     const letterSize = Math.max(9, layout.fontSize - 1);
+    const formatDataLabel = (value: number) => {
+      if (!Number.isFinite(value)) return '';
+      return Math.abs(value - Math.round(value)) < 0.05
+        ? `${Math.round(value)}%`
+        : `${value.toFixed(1)}%`;
+    };
 
     return (
       <svg
         data-chart-kind="bar_horizontal"
+        data-chart-highlight={highlightCategory || undefined}
         data-error-bars={errorBarFootnoteLines(chart).length ? 'on' : undefined}
         data-significance={hasLetters ? 'on' : undefined}
+        data-data-labels={showDataLabels ? 'on' : undefined}
         viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -806,6 +818,16 @@ function ChartBody({
             const x = Math.min(xZero, xVal);
             const letter = String(ser.letters?.[gi] || '').trim();
             const yMid = y + barH / 2;
+            const isHighlight = Boolean(highlightCategory) && cat === highlightCategory;
+            const fill =
+              categoryFills?.[gi] ||
+              seriesFill[si % seriesFill.length] ||
+              seriesFill[0] ||
+              '#4F81BD';
+            const labelFill = isHighlight ? fill : '#71717a';
+            const valueAnchor = Math.max(xVal, xZero) + 6;
+            const letterX =
+              valueAnchor + (showDataLabels && si === 0 ? Math.max(28, letterSize * 2.4) : 0);
             return (
               <g key={`${gi}-${si}`}>
                 <rect
@@ -813,13 +835,25 @@ function ChartBody({
                   y={y}
                   width={Math.max(0, Math.abs(xVal - xZero))}
                   height={Math.max(1, barH - 1)}
-                  fill={seriesFill[si % seriesFill.length]}
+                  fill={fill}
                   rx={1}
                 />
+                {showDataLabels && si === 0 ? (
+                  <text
+                    data-chart-data-label
+                    x={valueAnchor}
+                    y={yMid + layout.fontSize * 0.35}
+                    textAnchor="start"
+                    fill={isHighlight ? fill : '#52525b'}
+                    style={{ fontSize: layout.fontSize, fontWeight: isHighlight ? 600 : 450 }}
+                  >
+                    {formatDataLabel(v)}
+                  </text>
+                ) : null}
                 {letter ? (
                   <text
                     data-chart-letter
-                    x={Math.max(xVal, xZero) + 6}
+                    x={letterX}
                     y={yMid + letterSize * 0.35}
                     textAnchor="start"
                     fill="#27272a"
@@ -833,8 +867,8 @@ function ChartBody({
                     x={padL - 8}
                     y={padT + gi * groupH + groupH / 2 + layout.fontSize * 0.35}
                     textAnchor="end"
-                    fill="#71717a"
-                    style={{ fontSize: layout.fontSize }}
+                    fill={labelFill}
+                    style={{ fontSize: layout.fontSize, fontWeight: isHighlight ? 600 : 450 }}
                   >
                     {truncateLabel(cat, labelChars)}
                   </text>
@@ -850,16 +884,18 @@ function ChartBody({
           xAxisLabel={chart.x_label}
           yAxisLabel={chart.y_label}
         />
-        <g transform={`translate(${padL + plotW + 10} ${padT + 4})`}>
-          {series.map((ser, si) => (
-            <g key={ser.name} transform={`translate(0 ${si * (layout.fontSize + 4)})`}>
-              <rect width={8} height={8} fill={seriesFill[si % seriesFill.length]} rx={1} />
-              <text x={12} y={7} fill="#52525b" style={{ fontSize: layout.fontSize }}>
-                {truncateLabel(ser.name, legendMax)}
-              </text>
-            </g>
-          ))}
-        </g>
+        {hideLegend ? null : (
+          <g transform={`translate(${padL + plotW + 10} ${padT + 4})`}>
+            {series.map((ser, si) => (
+              <g key={ser.name} transform={`translate(0 ${si * (layout.fontSize + 4)})`}>
+                <rect width={8} height={8} fill={seriesFill[si % seriesFill.length]} rx={1} />
+                <text x={12} y={7} fill="#52525b" style={{ fontSize: layout.fontSize }}>
+                  {truncateLabel(ser.name, legendMax)}
+                </text>
+              </g>
+            ))}
+          </g>
+        )}
         {footnoteLines.map((line, index) => (
           <text
             key={line}
