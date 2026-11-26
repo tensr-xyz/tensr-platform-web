@@ -21,7 +21,11 @@ import { StackWaves } from '@/components/flow/stack-waves';
 import { JoinFiles } from '@/components/flow/join-files';
 import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
-import { exportDatasetFormat, exportDatasetSavAndSps, exportStem } from '@/lib/dataset-data-export';
+import {
+  exportDatasetFormat,
+  exportDatasetSavAndSps,
+  exportStemFromVersion,
+} from '@/lib/dataset-data-export';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   applyUploadPrep,
@@ -452,7 +456,7 @@ export function SourcesScreen({
   const fileRow = (file: SourceFile, note: string, action: ReactNode) => {
     const id = datasetRowId(file);
     const inUse = id === project?.active_dataset_id;
-    const stem = exportStem(sourceFileName(file));
+    const stem = exportStemFromVersion(file);
     return (
       <div key={id} className="sources-dataset" data-active={inUse}>
         <span className="sources-kind">{sourceFileMark(file, datasets)}</span>
@@ -470,9 +474,18 @@ export function SourcesScreen({
             Export as SPSS (.sav + .sps)
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => exportFile(file, () => exportDatasetFormat(id, stem, 'csv'))}
+            onSelect={() =>
+              exportFile(file, () => exportDatasetFormat(id, stem, 'csv', { headers: 'labels' }))
+            }
           >
-            Export as CSV
+            Export as CSV (labels)
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() =>
+              exportFile(file, () => exportDatasetFormat(id, stem, 'csv', { headers: 'names' }))
+            }
+          >
+            Export as CSV (names)
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => exportFile(file, () => exportDatasetFormat(id, stem, 'dta'))}

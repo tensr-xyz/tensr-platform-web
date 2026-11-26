@@ -15,7 +15,12 @@ import { shellDatasetId, type ShellDataset } from '@/components/flow/flow-shell'
 import { MoveToProjectDialog } from '@/components/flow/move-dataset';
 import { downloadExport } from '@/components/flow/survey-screens';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
-import { exportDatasetFormat, exportDatasetSavAndSps, exportStem } from '@/lib/dataset-data-export';
+import {
+  exportDatasetFormat,
+  exportDatasetSavAndSps,
+  exportStem,
+  exportStemFromVersion,
+} from '@/lib/dataset-data-export';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
@@ -316,7 +321,7 @@ export function DatasetsScreen({
         <DropdownMenuItem
           onSelect={() =>
             downloadAs(row, () =>
-              exportDatasetSavAndSps(shellDatasetId(row), exportStem(row.original_filename))
+              exportDatasetSavAndSps(shellDatasetId(row), exportStemFromVersion(row))
             )
           }
         >
@@ -325,16 +330,29 @@ export function DatasetsScreen({
         <DropdownMenuItem
           onSelect={() =>
             downloadAs(row, () =>
-              exportDatasetFormat(shellDatasetId(row), exportStem(row.original_filename), 'csv')
+              exportDatasetFormat(shellDatasetId(row), exportStemFromVersion(row), 'csv', {
+                headers: 'labels',
+              })
             )
           }
         >
-          Export as CSV
+          Export as CSV (labels)
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
             downloadAs(row, () =>
-              exportDatasetFormat(shellDatasetId(row), exportStem(row.original_filename), 'dta')
+              exportDatasetFormat(shellDatasetId(row), exportStemFromVersion(row), 'csv', {
+                headers: 'names',
+              })
+            )
+          }
+        >
+          Export as CSV (names)
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            downloadAs(row, () =>
+              exportDatasetFormat(shellDatasetId(row), exportStemFromVersion(row), 'dta')
             )
           }
         >
