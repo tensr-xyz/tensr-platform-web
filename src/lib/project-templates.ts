@@ -38,6 +38,26 @@ export function flattenStartOptions(
   return [blank, ...projects, ...templates];
 }
 
+/** Split start options so the UI can keep Blank first and collapse copy-setup. */
+export function partitionStartOptions(rows: ProjectStartOption[]): {
+  blank: ProjectStartOption;
+  projects: ProjectStartOption[];
+  templates: ProjectStartOption[];
+} {
+  const blank = rows.find(row => row.kind === 'blank') || BLANK_START_OPTION;
+  return {
+    blank,
+    projects: rows.filter(row => row.kind === 'project'),
+    templates: rows.filter(row => row.kind === 'template'),
+  };
+}
+
+export function copySetupDisclosureLabel(count: number, open: boolean): string {
+  const n = Math.max(0, count);
+  const noun = n === 1 ? 'project' : 'projects';
+  return `${n} ${noun} · ${open ? '▴' : '▾'}`;
+}
+
 export function startSelectionKey(option: ProjectStartOption): string {
   if (option.kind === 'blank') return 'blank';
   return `${option.kind}:${option.id || ''}`;

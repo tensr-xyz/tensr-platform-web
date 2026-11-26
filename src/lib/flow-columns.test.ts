@@ -525,4 +525,33 @@ describe('outline linked other-choice and full stems', () => {
     expect(outline[0].kind).toBe('multi');
     expect(outline[0].columns).toEqual(['read_alpha', 'read_beta', 'read_gamma']);
   });
+
+  it('infers identical slash-joined brand labels as one multi stub (TEN-246)', () => {
+    const { questionnaireOutline: outlineFn, tableStubPickerOptions } = jest.requireActual(
+      './flow-columns'
+    ) as typeof import('./flow-columns');
+    const stem = 'Read or visited in last 30 days';
+    const brands = [
+      'Northern Herald',
+      'Coastal Courier',
+      'Prairie Post',
+      'Summit Tribune',
+      'Harbor Gazette',
+    ];
+    const slash = `${stem}: ${brands.join(' / ')}`;
+    const columns = brands.map((brand, index) => ({
+      name: `title_${index}`,
+      label: slash,
+    }));
+    const outline = outlineFn([...columns, { name: 'region', label: 'Region' }], [], {
+      kinds: { region: 'single' },
+    });
+    expect(outline.map(item => item.label)).toEqual([stem, 'Region']);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].columns).toEqual(columns.map(column => column.name));
+    const stubs = tableStubPickerOptions([...columns, { name: 'region', label: 'Region' }], []);
+    expect(stubs[0]).toEqual({ value: stem, label: stem });
+    expect(stubs.map(item => item.label)).toContain(stem);
+    expect(stubs.length).toBe(1); // region alone without kinds may be open and dropped
+  });
 });

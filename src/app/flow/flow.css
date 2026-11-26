@@ -13252,9 +13252,45 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   text-decoration: none;
 }
 
-/* QA round 3 / TEN-196 Paper 10e. New project dialog. */
+/* QA round 3 / TEN-196 Paper 10e. New project dialog.
+ * TEN-268: same long-modal shell as Share — 85vh cap, pinned foot, ~680 wide. */
 .new-project-dialog {
-  max-width: 520px;
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px !important;
+  max-height: 85vh !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden;
+}
+
+.new-project-dialog .flow-modal-head {
+  padding: 22px 24px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.new-project-dialog .flow-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px;
+}
+
+.new-project-dialog .flow-modal-foot,
+.new-project-dialog .new-project-foot {
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--color-line);
+}
+
+.new-project-dialog .prep-row-name {
+  width: 120px;
+}
+
+.new-project-dialog .prep-row-body,
+.new-project-dialog .prep-row-body span {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .new-project-fields,
@@ -13293,6 +13329,43 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.new-project-copy-toggle {
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-canvas);
+  text-align: left;
+  white-space: normal;
+}
+
+.new-project-copy-toggle strong {
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 18px;
+  color: var(--color-ink);
+}
+
+.new-project-copy-toggle span {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.new-project-copy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(280px, 36vh);
+  overflow: auto;
+  padding: 2px;
 }
 
 .new-project-then-note {
