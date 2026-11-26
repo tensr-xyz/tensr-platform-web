@@ -105,7 +105,7 @@ import {
 } from '@/lib/chat-turn-parity';
 import { ChatTurnChangesPanel } from '@/components/flow/chat-turn-changes';
 import { DATASET_VERSION_RESTORED_NOTE } from '@/lib/dataset-version-undo';
-import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
+import { keepFirstSessionTitle, sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
   documentFromPins,
   parseReportReshapeRequest,
@@ -373,13 +373,20 @@ export function useAgentThread({
     (sessionId: string, title: string) => {
       sessionRef.current = sessionId;
       rememberChat(sessionId);
-      const row = {
+      const clipped = title.length > 80 ? `${title.slice(0, 77)}…` : title;
+      if (!aliveRef.current) return;
+      let row: AgentChatSession = {
         session_id: sessionId,
-        title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+        title: clipped,
         updated_at: new Date().toISOString(),
       };
-      if (!aliveRef.current) return;
       setSessions(current => {
+        const existing = (current || []).find(item => item.session_id === sessionId);
+        row = {
+          session_id: sessionId,
+          title: keepFirstSessionTitle(existing?.title, clipped),
+          updated_at: new Date().toISOString(),
+        };
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
         const next = sortSessionsByRecency([row, ...rest]);
         if (projectId) queryClient.setQueryData(projectQueryKeys.sessions(projectId), next);
