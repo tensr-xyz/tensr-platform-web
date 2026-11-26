@@ -22,6 +22,8 @@ export const projectQueryKeys = {
   root: ['project-data'] as const,
   detail: (projectId: string) => [...projectQueryKeys.root, 'detail', projectId] as const,
   datasets: (projectId: string) => [...projectQueryKeys.root, 'datasets', projectId] as const,
+  /** Workspace tips list (GET /datasets?scope=all) — not required on project tabs. */
+  workspaceDatasets: () => [...projectQueryKeys.root, 'workspaceDatasets'] as const,
   columns: (datasetId: string) => [...projectQueryKeys.root, 'columns', datasetId] as const,
   overview: (projectId: string, fileKey: string) =>
     [...projectQueryKeys.root, 'overview', projectId, fileKey] as const,

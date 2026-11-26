@@ -90,6 +90,7 @@ import {
   ensureProjectAskerLog,
   ensureProjectDetail,
   ensureProjectMembers,
+  ensureWorkspaceDatasets,
   useDatasetColumns,
   useMe,
   usePrefetchProjectTab,
@@ -437,6 +438,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthReady, isAuthenticated } = useAuth();
+  const projectQueryClient = useQueryClient();
   const [palette, setPalette] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -497,6 +499,16 @@ export function FlowApp({ slug }: { slug: string[] }) {
     ) as Record<string, string[]>;
   }, []);
 
+  const mergeWorkspaceDatasets = useCallback((incoming: DatasetRow[]) => {
+    // A project page may already have loaded every version. The workspace list
+    // keeps one file per origin, so a refresh must not drop the rest.
+    setDatasets(current => {
+      const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
+      const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
+      return [...incoming, ...kept];
+    });
+  }, []);
+
   const reload = useCallback(async () => {
     try {
       // Projects and folders paint first; the workspace file list can arrive after.
@@ -519,24 +531,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
       setFolders(folderPage.folders || []);
       setError(null);
       setWorkspacePhase('ready');
-      // Tips only — working versions load lazily via GET /datasets/:id/versions.
-      void flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets?scope=all')
-        .then(filePage => {
-          const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
-          // A project page may already have loaded every version. The workspace list
-          // keeps one file per origin, so a refresh must not drop the rest.
-          setDatasets(current => {
-            const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
-            const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
-            return [...incoming, ...kept];
-          });
-        })
-        .catch(() => undefined);
+      // Drop a stale tips list so home / Datasets re-reads after uploads.
+      // Project tabs keep using /api/projects/:id and never wait on this.
+      void projectQueryClient.invalidateQueries({
+        queryKey: projectQueryKeys.workspaceDatasets(),
+      });
+      if (!routeProjectId) {
+        void ensureWorkspaceDatasets(projectQueryClient)
+          .then(rows => mergeWorkspaceDatasets(rows as DatasetRow[]))
+          .catch(() => undefined);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load the workspace');
       setWorkspacePhase('error');
     }
-  }, [membersFor]);
+  }, [membersFor, projectQueryClient, routeProjectId, mergeWorkspaceDatasets]);
 
   const loadMoreProjects = useCallback(async () => {
     if (!projectCursor || loadingMore) return;
@@ -621,7 +630,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [askerTurns, setAskerTurns] = useState<AskerTurn[] | null>(null);
   const prefetchTab = usePrefetchProjectTab();
-  const projectQueryClient = useQueryClient();
+  // Home / Datasets need the workspace tips list. Project tabs use project detail.
+  useEffect(() => {
+    if (!isAuthenticated || projectId) return;
+    if (workspacePhase !== 'ready') return;
+    void ensureWorkspaceDatasets(projectQueryClient)
+      .then(rows => mergeWorkspaceDatasets(rows as DatasetRow[]))
+      .catch(() => undefined);
+  }, [isAuthenticated, projectId, workspacePhase, projectQueryClient, mergeWorkspaceDatasets]);
   const projectFileKey = datasets
     .filter(row => row.project_id === projectId)
     .map(row => datasetRowId(row))
