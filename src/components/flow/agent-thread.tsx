@@ -77,6 +77,7 @@ import {
   type StoredChatTurn,
 } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
+import { clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -232,24 +233,7 @@ function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
 }
 
 function clientDeckStillPending(result: AgentLoopResponse): boolean {
-  return (result.tool_results || []).some(item => {
-    const payload = item.result;
-    if (!payload || typeof payload !== 'object') return false;
-    const procedure = String(item.name || payload.procedure || '');
-    if (
-      procedure !== 'build_client_deck' &&
-      String(payload.procedure || '') !== 'build_client_deck'
-    ) {
-      return false;
-    }
-    const status = String(payload.status || '');
-    return (
-      payload.pending === true ||
-      status === 'pending' ||
-      status === 'running' ||
-      Boolean(String(payload.job_id || '').trim() && status !== 'complete' && status !== 'failed')
-    );
-  });
+  return clientDeckNeedsLiveResolve(result.tool_results);
 }
 
 function reportPagesFromResult(result: AgentLoopResponse): number {

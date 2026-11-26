@@ -2,6 +2,7 @@ import {
   applyClientDeckJobSnapshot,
   clientDeckExportRef,
   clientDeckJobIsLive,
+  clientDeckNeedsLiveResolve,
   clientDeckProgressLine,
   exportClientDeckAgain,
   pendingClientDeckFromToolResults,
@@ -103,10 +104,46 @@ describe('client-deck-job', () => {
             procedure: 'build_client_deck',
             job_id: 'job-done',
             dataset_id: 'ds-done',
+            answer_markdown: 'Done · 41 slides\nPowerPoint: client-deck.pptx',
           },
         },
       ])
     ).toBeNull();
+    expect(
+      clientDeckNeedsLiveResolve([
+        {
+          name: 'build_client_deck',
+          result: {
+            status: 'complete',
+            procedure: 'build_client_deck',
+            job_id: 'job-done',
+            answer_markdown: 'Done · 41 slides',
+          },
+        },
+      ])
+    ).toBe(false);
+  });
+
+  it('reopens a finished job when the saved card still shows mid-build copy', () => {
+    const stale = [
+      {
+        name: 'build_client_deck',
+        result: {
+          pending: false,
+          status: 'complete',
+          procedure: 'build_client_deck',
+          job_id: 'job-stale',
+          dataset_id: 'ds-stale',
+          answer_markdown: 'still being built\nComputing tables 9 of 23\nReport pages: 5',
+        },
+      },
+    ];
+    expect(clientDeckNeedsLiveResolve(stale)).toBe(true);
+    expect(pendingClientDeckFromToolResults(stale)).toEqual({
+      datasetId: 'ds-stale',
+      jobId: 'job-stale',
+      entryIndex: 0,
+    });
   });
 
   it('progress lines stay plain and numbered', () => {
@@ -287,7 +324,7 @@ describe('client-deck-job', () => {
       tables_total: 23,
     });
     expect(out.answer_markdown || '').toContain('Writing insights');
-    expect(out.answer_markdown || '').toContain('Report pages: 24');
+    expect(out.answer_markdown || '').not.toContain('Report pages: 24');
     expect(out.answer_markdown || '').not.toMatch(/Ask me to continue/i);
     const result = out.tool_results?.[0]?.result as Record<string, unknown>;
     expect(result.stage).toBe('narrative');

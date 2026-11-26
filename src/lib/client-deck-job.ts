@@ -34,6 +34,37 @@ export type ClientDeckJobSnapshot = {
   result?: Record<string, unknown>;
 };
 
+/** True when a saved deck turn still needs a live job peek (mid-build or stale copy). */
+export function clientDeckNeedsLiveResolve(results: AgentLoopToolResult[] | undefined): boolean {
+  if (!results?.length) return false;
+  return results.some(entry => {
+    const payload = entry?.result;
+    if (!payload || typeof payload !== 'object') return false;
+    const procedure = String(entry.name || payload.procedure || '');
+    if (procedure !== 'build_client_deck' && payload.procedure !== 'build_client_deck') {
+      return false;
+    }
+    const status = String(payload.status || '');
+    const jobId = String(payload.job_id || '').trim();
+    if (
+      payload.pending === true ||
+      status === 'pending' ||
+      status === 'running' ||
+      Boolean(jobId && status !== 'complete' && status !== 'failed')
+    ) {
+      return true;
+    }
+    // Saved turns often keep mid-build answer text after the job finished.
+    if (!jobId || status === 'failed') return false;
+    const answer = String(
+      payload.answer_markdown || payload.progress_message || payload.message || ''
+    );
+    return /computing tables|writing insights|building the (powerpoint|deck)|still being built|report pages:\s*\d+/i.test(
+      answer
+    );
+  });
+}
+
 /** Pending/running build_client_deck result that still needs a background job poll. */
 export function pendingClientDeckFromToolResults(
   results: AgentLoopToolResult[] | undefined,
@@ -64,6 +95,20 @@ export function pendingClientDeckFromToolResults(
     if (live && jobId && datasetId) {
       return { datasetId, jobId, entryIndex: index };
     }
+  }
+  // Stale finished copy: still return the job so reopen can resolve to Done.
+  for (let index = 0; index < results.length; index += 1) {
+    const entry = results[index];
+    const result = entry?.result;
+    if (!result || typeof result !== 'object') continue;
+    const procedure = String(entry.name || result.procedure || '');
+    if (procedure !== 'build_client_deck' && result.procedure !== 'build_client_deck') continue;
+    if (!clientDeckNeedsLiveResolve([entry])) continue;
+    const jobId = String(result.job_id || '').trim();
+    const datasetId = String(
+      result.dataset_id || entry.args?.dataset_id || entry.args?.input || fallback || ''
+    ).trim();
+    if (jobId && datasetId) return { datasetId, jobId, entryIndex: index };
   }
   return null;
 }
@@ -329,15 +374,10 @@ export function applyClientDeckJobSnapshot(
     const pages = job.report_pages;
     const status = String(job.status || 'pending');
     const running = status === 'running' || status === 'pending';
-    // Mid-run copy is progress only. "Ask me to continue" is for stalled/failed
-    // polls — saying it while tables still compute looks like a finished pause.
-    const answer = [
-      line,
-      typeof pages === 'number' && pages > 0 ? `Report pages: ${pages}` : '',
-      running
-        ? ''
-        : 'Report pages already saved will stay. Ask me to continue when you want the PowerPoint file.',
-    ]
+    // Mid-run copy is stage progress only (tables → insights → PowerPoint).
+    // Draft "Report pages: N" counts look finished while the job is still live.
+    // "Ask me to continue" is for stalled/failed polls, not live progress.
+    const answer = [line, running ? '' : 'Ask me to continue when you want the PowerPoint file.']
       .filter(Boolean)
       .join('\n');
     entry.result = {

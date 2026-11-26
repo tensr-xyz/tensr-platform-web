@@ -865,11 +865,77 @@ describe('reshapeReportDocument', () => {
         {
           id: 'study',
           title: 'Study',
+          section: 'Title',
           objects: [
             {
               id: 'title',
               kind: 'text',
               text: 'Study',
+              text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
+            },
+            {
+              id: 'body',
+              kind: 'text',
+              text: 'Executive summary, 10 to 15 insight slides with a clear narrative.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+          ],
+        },
+        {
+          id: 'exec',
+          title: 'Executive summary',
+          section: 'Executive summary',
+          objects: [
+            {
+              id: 'exec-body',
+              kind: 'text',
+              text: '• Blue leads at 62%.',
+              text_style: { font_family: 'Inter', font_size_pt: 14 },
+            },
+          ],
+        },
+      ],
+    });
+    const fitted = fitDocumentTextFrames(doc);
+    // Empty opening brief (chat ask only) is removed; exec summary stays.
+    expect(fitted.pages.map(page => page.id)).toEqual(['exec']);
+  });
+
+  it('remints duplicate page ids so React keys stay unique', () => {
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: '8faf62c889f071704fa1893ab2b84cc9-NPR',
+          title: 'Insight A',
+          objects: [
+            { id: 'obj-dup', kind: 'text', text: 'A1' },
+            { id: 'obj-dup', kind: 'text', text: 'A2' },
+          ],
+        },
+        {
+          id: '8faf62c889f071704fa1893ab2b84cc9-NPR',
+          title: 'Insight B',
+          objects: [{ id: 'obj-b', kind: 'text', text: 'B' }],
+        },
+      ],
+    });
+    expect(doc.pages).toHaveLength(2);
+    expect(doc.pages[0]!.id).not.toBe(doc.pages[1]!.id);
+    expect(doc.pages[0]!.objects[0]!.id).not.toBe(doc.pages[0]!.objects[1]!.id);
+  });
+
+  it('clears a Title-section body that stored the deck chat request', () => {
+    const doc = normalizeReportDocument({
+      pages: [
+        {
+          id: 'title-page',
+          title: 'Ready meals study',
+          section: 'Title',
+          objects: [
+            {
+              id: 'title',
+              kind: 'text',
+              text: 'Ready meals study',
               text_style: { font_family: 'Inter', font_size_pt: 22, bold: true },
             },
             {
@@ -886,6 +952,9 @@ describe('reshapeReportDocument', () => {
     const body = fitted.pages[0]!.objects.find(obj => obj.id === 'body')!;
     expect(body.hidden).toBe(true);
     expect(body.text).toBe('');
+    const title = fitted.pages[0]!.objects.find(obj => obj.id === 'title')!;
+    expect(title.hidden).toBe(false);
+    expect(title.text).toBe('Ready meals study');
   });
 
   it('pushes commentary under a tall title and strips Base footers above tables', () => {

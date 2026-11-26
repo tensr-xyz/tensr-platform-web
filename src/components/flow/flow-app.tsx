@@ -6758,7 +6758,8 @@ function ReportScreen({
                 const { live, outdated } = partitionLiveAndStale(findings, staleFindings);
                 const renderFinding = (
                   finding: ReportFinding,
-                  stale: (typeof staleTables)[0] | undefined
+                  stale: (typeof staleTables)[0] | undefined,
+                  key: string
                 ) => {
                   const inUse = versionLabel(datasets, datasetId || '', '');
                   const builtOn = stale
@@ -6767,7 +6768,7 @@ function ReportScreen({
                   const headline = stale?.label || finding.headline;
                   const support = stale ? outOfDateLine(builtOn, inUse) : finding.support;
                   return (
-                    <article key={finding.id} className="report-finding">
+                    <article key={key} className="report-finding">
                       <div className="report-finding-copy">
                         {finding.eyebrow ? <p className="flow-muted">{finding.eyebrow}</p> : null}
                         <div className="report-finding-title">
@@ -6807,7 +6808,7 @@ function ReportScreen({
                       {finding.bars.length ? (
                         <div className="report-bars">
                           {finding.bars.map((bar, barIndex) => (
-                            <div key={`${finding.id}-${barIndex}-${bar.label}`}>
+                            <div key={`${key}-${barIndex}-${bar.label}`}>
                               <div className="report-bar-label">
                                 <span>{bar.label}</span>
                                 <span>{shownPercent(bar.percent, finding.decimals)}</span>
@@ -6827,11 +6828,15 @@ function ReportScreen({
                 };
                 return (
                   <>
-                    {placePins(live, reportPins).map(entry => {
+                    {placePins(live, reportPins).map((entry, index) => {
                       if (entry.kind === 'pin') {
-                        return <OutputPin key={entry.item.id} pin={entry.item} />;
+                        return <OutputPin key={`pin-${entry.item.id}-${index}`} pin={entry.item} />;
                       }
-                      return renderFinding(entry.item, undefined);
+                      return renderFinding(
+                        entry.item,
+                        undefined,
+                        `finding-${entry.item.id}-${index}`
+                      );
                     })}
                     {outdated.length ? (
                       <details className="report-stale">
@@ -6840,11 +6845,11 @@ function ReportScreen({
                           {outdated.length === 1 ? 'table' : 'tables'}
                         </summary>
                         <div className="report-stale-list">
-                          {outdated.map(finding => {
+                          {outdated.map((finding, index) => {
                             const stale = staleTables.find(
                               table => table.id === finding.id || table.id === finding.tableId
                             );
-                            return renderFinding(finding, stale);
+                            return renderFinding(finding, stale, `stale-${finding.id}-${index}`);
                           })}
                         </div>
                       </details>

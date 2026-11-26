@@ -1409,7 +1409,7 @@ export function ReportEditor({
         <aside className="report-editor-pages" aria-label="Pages">
           {document.pages.map((item, index) => (
             <Button
-              key={item.id}
+              key={`${item.id}-${index}`}
               type="button"
               className="report-editor-thumb"
               data-active={item.id === page?.id}

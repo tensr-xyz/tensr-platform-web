@@ -739,10 +739,16 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
   const hasLiveGrid = page.objects.some(
     obj => (obj.kind === 'table' || obj.kind === 'chart') && !obj.hidden
   );
-  const isStudy =
-    String(page.title || '')
-      .trim()
-      .toLowerCase() === 'study';
+  const section = String(page.section || '')
+    .trim()
+    .toLowerCase();
+  const titleFolded = String(page.title || '')
+    .trim()
+    .toLowerCase();
+  // Opening context page (legacy "Study" or Title section) — never show a deck ask.
+  const isOpeningBrief =
+    titleFolded === 'study' || section === 'title' || section === 'study' || section === 'context';
+  let clearedDeckRequest = false;
   const objects = page.objects.map(obj => {
     const next = {
       ...obj,
@@ -751,8 +757,9 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
     };
     if (next.kind !== 'text' || next.hidden) return next;
     const plain = objectPlainTextForFit(next);
-    // Study page must never show the chat request that asked for the deck.
-    if (isStudy && looksLikeDeckRequestBrief(plain)) {
+    // Opening page must never show the chat request that asked for the deck.
+    if (isOpeningBrief && looksLikeDeckRequestBrief(plain)) {
+      clearedDeckRequest = true;
       next.text = '';
       next.runs = [];
       next.hidden = true;
@@ -770,6 +777,18 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
     }
     return next;
   });
+  if (clearedDeckRequest) {
+    // Drop a leftover bare "Study"/"Report" label when the brief was only the ask.
+    for (const obj of objects) {
+      if (obj.kind !== 'text' || obj.hidden) continue;
+      const plain = objectPlainTextForFit(obj).trim().toLowerCase();
+      if (!plain || plain === 'study' || plain === 'report') {
+        obj.text = '';
+        obj.runs = [];
+        obj.hidden = true;
+      }
+    }
+  }
   const layoutId = alignLayoutContentKinds(page, objects);
   // Two passes: expanding a title can push commentary, which then needs its own grow.
   for (let pass = 0; pass < 2; pass++) {
@@ -786,7 +805,39 @@ function fitPageObjects(page: ReportDocument['pages'][number]): ReportDocument['
       pushObjectsBelow(objects, obj, obj.frame.y + obj.frame.h + TEXT_STACK_GAP);
     }
   }
-  return { ...page, layoutId, objects };
+  const fitted = { ...page, layoutId, objects };
+  if (!isOpeningBrief) return fitted;
+  const hasVisibleText = objects.some(
+    obj => obj.kind === 'text' && !obj.hidden && objectPlainTextForFit(obj).trim()
+  );
+  const hasLiveContent = objects.some(
+    obj =>
+      !obj.hidden &&
+      (obj.kind === 'table' || obj.kind === 'chart') &&
+      String(obj.tableSpecId || '').trim()
+  );
+  // Empty opening brief (chat request cleared, no study brief) — drop from view.
+  if (!hasVisibleText && !hasLiveContent) {
+    return { ...fitted, hideFromExport: true, hideFromPublish: true };
+  }
+  return fitted;
+}
+
+function isHiddenEmptyOpeningPage(page: ReportPage): boolean {
+  const section = String(page.section || '')
+    .trim()
+    .toLowerCase();
+  const titleFolded = String(page.title || '')
+    .trim()
+    .toLowerCase();
+  const isOpening =
+    titleFolded === 'study' || section === 'title' || section === 'study' || section === 'context';
+  if (!isOpening) return false;
+  if (!page.hideFromExport || !page.hideFromPublish) return false;
+  const hasVisibleText = page.objects.some(
+    obj => obj.kind === 'text' && !obj.hidden && objectPlainTextForFit(obj).trim()
+  );
+  return !hasVisibleText;
 }
 
 /** Expand clipped text frames on one page (first paint); other pages stay as stored. */
@@ -797,7 +848,9 @@ export function fitPageTextFrames(
   const doc = normalizeReportDocument(document);
   return {
     ...doc,
-    pages: doc.pages.map(page => (page.id === pageId ? fitPageObjects(page) : page)),
+    pages: doc.pages
+      .map(page => (page.id === pageId ? fitPageObjects(page) : page))
+      .filter(page => !isHiddenEmptyOpeningPage(page)),
   };
 }
 
@@ -806,7 +859,7 @@ export function fitDocumentTextFrames(document: ReportDocument | unknown): Repor
   const doc = normalizeReportDocument(document);
   return {
     ...doc,
-    pages: doc.pages.map(fitPageObjects),
+    pages: doc.pages.map(fitPageObjects).filter(page => !isHiddenEmptyOpeningPage(page)),
   };
 }
 
@@ -1188,11 +1241,31 @@ function normalizeSavedPageTemplate(raw: unknown): SavedPageTemplate | null {
   };
 }
 
+/** Remint colliding page / object ids so React list keys stay unique. */
+function ensureUniquePageIds(pages: ReportPage[]): ReportPage[] {
+  const seenPages = new Set<string>();
+  return pages.map(page => {
+    let pageId = String(page.id || '').trim() || newId('page');
+    if (seenPages.has(pageId)) pageId = newId('page');
+    seenPages.add(pageId);
+    const seenObjects = new Set<string>();
+    const objects = page.objects.map(obj => {
+      let objectId = String(obj.id || '').trim() || newId('obj');
+      if (seenObjects.has(objectId)) objectId = newId('obj');
+      seenObjects.add(objectId);
+      return { ...obj, id: objectId };
+    });
+    return { ...page, id: pageId, objects };
+  });
+}
+
 export function normalizeReportDocument(raw: unknown): ReportDocument {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const pages = (Array.isArray(source.pages) ? source.pages : [])
-    .map(normalizePage)
-    .filter((page): page is ReportPage => Boolean(page));
+  const pages = ensureUniquePageIds(
+    (Array.isArray(source.pages) ? source.pages : [])
+      .map(normalizePage)
+      .filter((page): page is ReportPage => Boolean(page))
+  );
   const templatesRaw = source.page_templates ?? source.pageTemplates ?? [];
   const pageTemplates = (Array.isArray(templatesRaw) ? templatesRaw : [])
     .map(normalizeSavedPageTemplate)
