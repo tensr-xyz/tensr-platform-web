@@ -147,6 +147,42 @@ describe('the deck and refresh screens', () => {
     ).toBeTruthy();
   });
 
+  it('shows a real error with Retry and per-market Building status', async () => {
+    let rejectBuild: (err: Error) => void = () => undefined;
+    const onBuild = jest.fn(
+      (
+        _request: unknown,
+        opts?: { onProgress?: (progress: { message: string; marketValue?: string }) => void }
+      ) =>
+        new Promise<void>((_resolve, reject) => {
+          opts?.onProgress?.({
+            message: 'Building North · 1 of 2',
+            marketValue: 'North',
+          });
+          rejectBuild = reject;
+        })
+    );
+    render(
+      <OverviewDeck
+        audience="Weekday readers"
+        datasetId="ds-1"
+        dataLabel="audience_w2.sav"
+        onBuild={onBuild}
+        onClose={() => undefined}
+      />
+    );
+    expect(await screen.findByText('North')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Build 2 decks' }));
+    expect(await screen.findByText('Building…')).toBeTruthy();
+    expect(await screen.findByTestId('overview-deck-progress')).toBeTruthy();
+    rejectBuild(new Error('The overview timed out on a large file.'));
+    expect(await screen.findByTestId('overview-deck-error')).toBeTruthy();
+    expect(screen.getByText(/timed out on a large file/)).toBeTruthy();
+    expect(screen.getByTestId('overview-deck-retry')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('overview-deck-retry'));
+    await waitFor(() => expect(onBuild).toHaveBeenCalledTimes(2));
+  });
+
   it('shows New data and Refresh N decks on the market panel', () => {
     const onRefresh = jest.fn(async () => undefined);
     render(

@@ -13,10 +13,23 @@ export type OfficeDeckJobSnapshot = {
   message?: string;
   tables_done?: number;
   tables_total?: number;
+  markets_done?: number;
+  markets_total?: number;
+  market_value?: string;
+  market_label?: string;
   export_id?: string;
   filename?: string;
   error?: string;
   result?: Record<string, unknown>;
+};
+
+export type OverviewDeckProgress = {
+  message: string;
+  marketsDone?: number;
+  marketsTotal?: number;
+  marketValue?: string;
+  marketLabel?: string;
+  stage?: string;
 };
 
 export type ReportExportPage = {
@@ -198,6 +211,110 @@ export async function waitForOfficeDeckJob(
   return null;
 }
 
+async function resolveOfficeDeckExport(
+  datasetId: string,
+  stem: string,
+  created: {
+    export_id?: string;
+    filename?: string;
+    status?: string;
+    job_id?: string;
+    message?: string;
+    detail?: string;
+    markets_done?: number;
+    markets_total?: number;
+    market_value?: string;
+    market_label?: string;
+    n_copies?: number;
+    note?: string;
+    low_bases?: unknown;
+    slides_built?: unknown;
+    slides_status?: unknown;
+    result?: Record<string, unknown>;
+  },
+  opts?: {
+    onProgress?: (message: string) => void;
+    onOverviewProgress?: (progress: OverviewDeckProgress) => void;
+  }
+): Promise<{
+  exportId: string;
+  filename: string;
+  result: Record<string, unknown>;
+}> {
+  let exportId = String(created.export_id || '').trim();
+  let filename = created.filename || `${stem}.pptx`;
+  let result: Record<string, unknown> = { ...created };
+  const jobId = String(created.job_id || '').trim();
+
+  const emitProgress = (job?: OfficeDeckJobSnapshot | null, fallback = '') => {
+    const message = String(job?.message || fallback || 'Building the PowerPoint file');
+    opts?.onProgress?.(message);
+    opts?.onOverviewProgress?.({
+      message,
+      marketsDone: job?.markets_done,
+      marketsTotal: job?.markets_total,
+      marketValue: job?.market_value,
+      marketLabel: job?.market_label,
+      stage: job?.stage,
+    });
+  };
+
+  if (!exportId && (created.status === 'pending' || jobId)) {
+    if (!jobId) {
+      throw new Error(String(created.message || created.detail || 'The deck did not start.'));
+    }
+    emitProgress(created, String(created.message || 'Building the PowerPoint file'));
+    const job = await waitForOfficeDeckJob(datasetId, jobId, {
+      onProgress: message => {
+        opts?.onProgress?.(message);
+      },
+      // Poll loop below also emits market fields via a custom wait.
+    });
+    // Re-fetch once more so market fields from the final snapshot are available.
+    const live = job || (await fetchOfficeDeckJob(datasetId, jobId));
+    if (live) {
+      emitProgress(live, String(live.message || ''));
+    }
+    if (!live) {
+      throw new Error('The PowerPoint export timed out. Try again.');
+    }
+    if (String(live.status || '') === 'failed') {
+      throw new Error(String(live.error || live.message || 'Building the PowerPoint file failed.'));
+    }
+    const fromResult =
+      live.result && typeof live.result === 'object'
+        ? String((live.result as { export_id?: string }).export_id || '').trim()
+        : '';
+    exportId = String(live.export_id || fromResult || '').trim();
+    filename =
+      String(live.filename || (live.result as { filename?: string } | undefined)?.filename || '') ||
+      filename;
+    if (live.result && typeof live.result === 'object') {
+      result = { ...result, ...(live.result as Record<string, unknown>) };
+    }
+    result = {
+      ...result,
+      export_id: exportId,
+      filename,
+      job_id: jobId,
+      n_copies: (live.result as { n_copies?: number } | undefined)?.n_copies ?? result.n_copies,
+      note: (live.result as { note?: string } | undefined)?.note ?? result.note,
+      slides_status:
+        (live.result as { slides_status?: unknown } | undefined)?.slides_status ??
+        result.slides_status,
+      low_bases:
+        (live.result as { low_bases?: unknown } | undefined)?.low_bases ?? result.low_bases,
+    };
+  }
+
+  if (!exportId) {
+    throw new Error(
+      String(created.message || created.detail || 'The deck did not build. Try again.')
+    );
+  }
+  return { exportId, filename, result };
+}
+
 /**
  * POST /export/deck and, when the gateway returns a pending job, poll until the
  * file is ready (or failed with a reason).
@@ -220,38 +337,117 @@ export async function exportOfficeDeckAndDownload(
     body: JSON.stringify(body),
   });
 
+  const resolved = await resolveOfficeDeckExport(datasetId, stem, created, opts);
+  await downloadExport(`/exports/${resolved.exportId}`, resolved.filename);
+}
+
+/**
+ * POST /export/deck/overview. Queues on the 180s worker when the gateway would
+ * otherwise hit the 29s limit; polls until the zip/pptx is ready.
+ */
+export async function exportOverviewDeckAndDownload(
+  datasetId: string,
+  stem: string,
+  body: Record<string, unknown>,
+  opts?: {
+    onProgress?: (message: string) => void;
+    onOverviewProgress?: (progress: OverviewDeckProgress) => void;
+  }
+): Promise<Record<string, unknown>> {
+  const created = await flowJson<{
+    export_id?: string;
+    filename?: string;
+    status?: string;
+    job_id?: string;
+    message?: string;
+    detail?: string;
+    n_copies?: number;
+    note?: string;
+    low_bases?: unknown;
+    slides_built?: unknown;
+    slides_status?: unknown;
+    markets_done?: number;
+    markets_total?: number;
+    market_value?: string;
+    market_label?: string;
+  }>(`/datasets/${datasetId}/export/deck/overview`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  // Richer polling so market Status rows update while the batch runs.
   let exportId = String(created.export_id || '').trim();
   let filename = created.filename || `${stem}.pptx`;
+  let result: Record<string, unknown> = { ...created };
   const jobId = String(created.job_id || '').trim();
 
   if (!exportId && (created.status === 'pending' || jobId)) {
     if (!jobId) {
-      throw new Error(String(created.message || created.detail || 'The deck did not start.'));
+      throw new Error(
+        String(created.message || created.detail || 'The overview deck did not start.')
+      );
     }
-    opts?.onProgress?.(String(created.message || 'Building the PowerPoint file'));
-    const job = await waitForOfficeDeckJob(datasetId, jobId, {
-      onProgress: opts?.onProgress,
+    opts?.onOverviewProgress?.({
+      message: String(created.message || 'Building overview tables'),
+      marketsDone: created.markets_done,
+      marketsTotal: created.markets_total,
+      marketValue: created.market_value,
+      marketLabel: created.market_label,
     });
-    if (!job) {
-      throw new Error('The PowerPoint export timed out. Try again.');
+    opts?.onProgress?.(String(created.message || 'Building overview tables'));
+
+    const intervalMs = OFFICE_DECK_POLL_MS;
+    const attempts = OFFICE_DECK_POLL_LIMIT;
+    let last = '';
+    let live: OfficeDeckJobSnapshot | null = null;
+    for (let i = 0; i < attempts; i += 1) {
+      live = await fetchOfficeDeckJob(datasetId, jobId);
+      const status = String(live?.status || 'pending');
+      const line = String(live?.message || 'Building the PowerPoint file');
+      if (line && line !== last) {
+        opts?.onProgress?.(line);
+        last = line;
+      }
+      opts?.onOverviewProgress?.({
+        message: line,
+        marketsDone: live?.markets_done,
+        marketsTotal: live?.markets_total,
+        marketValue: live?.market_value,
+        marketLabel: live?.market_label,
+        stage: live?.stage,
+      });
+      if (live && status !== 'pending' && status !== 'running') break;
+      if (i + 1 >= attempts) break;
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
-    if (String(job.status || '') === 'failed') {
-      throw new Error(String(job.error || job.message || 'Building the PowerPoint file failed.'));
+    if (!live) {
+      throw new Error('The overview deck timed out. Try again.');
+    }
+    if (String(live.status || '') === 'failed') {
+      throw new Error(String(live.error || live.message || 'Building the overview deck failed.'));
     }
     const fromResult =
-      job.result && typeof job.result === 'object'
-        ? String((job.result as { export_id?: string }).export_id || '').trim()
+      live.result && typeof live.result === 'object'
+        ? String((live.result as { export_id?: string }).export_id || '').trim()
         : '';
-    exportId = String(job.export_id || fromResult || '').trim();
+    exportId = String(live.export_id || fromResult || '').trim();
     filename =
-      String(job.filename || (job.result as { filename?: string } | undefined)?.filename || '') ||
+      String(live.filename || (live.result as { filename?: string } | undefined)?.filename || '') ||
       filename;
+    if (live.result && typeof live.result === 'object') {
+      result = { ...result, ...(live.result as Record<string, unknown>) };
+    }
   }
 
   if (!exportId) {
     throw new Error(
-      String(created.message || created.detail || 'The deck did not build. Try again.')
+      String(created.message || created.detail || 'The overview deck did not build. Try again.')
     );
   }
   await downloadExport(`/exports/${exportId}`, filename);
+  return {
+    ...result,
+    export_id: exportId,
+    filename,
+  };
 }

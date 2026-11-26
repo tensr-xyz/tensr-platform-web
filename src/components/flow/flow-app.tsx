@@ -5985,7 +5985,10 @@ function ReportScreen({
     setDecksTick(value => value + 1);
   };
 
-  const deck = async (recipe?: OverviewBuildRequest) => {
+  const deck = async (
+    recipe?: OverviewBuildRequest,
+    opts?: { onProgress?: (progress: import('@/lib/office-deck-job').OverviewDeckProgress) => void }
+  ) => {
     setError('');
     setNote('Building the PowerPoint file');
 
@@ -5997,48 +6000,47 @@ function ReportScreen({
         hide_low: recipe.hideLow,
         low_base_threshold: recipe.lowBaseThreshold,
       };
-      const created = await flowJson<{
-        export_id?: string;
-        filename?: string;
-        n_copies?: number;
-        note?: string;
-        low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
-        slides_built?: string[];
-        slides_status?: {
-          id?: string;
-          title?: string;
-          unsupported?: boolean;
-          reason?: string | null;
-        }[];
-        detail?: string;
-      }>(`/datasets/${exportFileId}/export/deck/overview`, {
-        method: 'POST',
-        body: overviewDeckPayload({
-          audience: recipe.audience,
-          slides: recipe.slides,
-          options: overviewOptions,
-          templateName: templateName || undefined,
-          templateBase64: template || undefined,
-          perMarket: recipe.perMarket,
-        }),
-      });
-      if (!created.export_id) {
-        throw new Error(created.detail || 'The overview deck did not build.');
-      }
-      await downloadExport(
-        `/exports/${created.export_id}`,
-        created.filename ||
-          (created.n_copies && created.n_copies > 1
-            ? 'audience-overview-by-market.zip'
-            : 'deck.pptx')
+      const { exportOverviewDeckAndDownload } = await import('@/lib/office-deck-job');
+      const stem =
+        recipe.perMarket && recipe.perMarket.values.length > 1
+          ? 'audience-overview-by-market'
+          : 'audience-overview';
+      const created = await exportOverviewDeckAndDownload(
+        exportFileId,
+        stem,
+        JSON.parse(
+          overviewDeckPayload({
+            audience: recipe.audience,
+            slides: recipe.slides,
+            options: overviewOptions,
+            templateName: templateName || undefined,
+            templateBase64: template || undefined,
+            perMarket: recipe.perMarket,
+          })
+        ) as Record<string, unknown>,
+        {
+          onProgress: message => setNote(message),
+          onOverviewProgress: opts?.onProgress,
+        }
       );
-      if (created.low_bases?.length || created.slides_status?.length) {
+      const lowBases = Array.isArray(created.low_bases)
+        ? (created.low_bases as { title?: string; note?: string; base?: number; group?: string }[])
+        : [];
+      const slidesStatus = Array.isArray(created.slides_status)
+        ? (created.slides_status as {
+            id?: string;
+            title?: string;
+            unsupported?: boolean;
+            reason?: string | null;
+          }[])
+        : [];
+      if (lowBases.length || slidesStatus.length) {
         setOverviewSlides(current =>
           current.map(slide => {
-            const status = created.slides_status?.find(
+            const status = slidesStatus.find(
               item => String(item.id || '').toLowerCase() === String(slide.id || '').toLowerCase()
             );
-            const hit = created.low_bases?.find(note => {
+            const hit = lowBases.find(note => {
               const title = String(note.title || '').toLowerCase();
               return (
                 title.includes(slide.title.toLowerCase().slice(0, 10)) ||
@@ -6068,10 +6070,11 @@ function ReportScreen({
           })
         );
       }
+      const nCopies = Number(created.n_copies || 0);
       setNote(
-        created.note ||
-          (created.n_copies && created.n_copies > 1
-            ? `Downloaded ${created.n_copies} market decks and saved them as recipes.`
+        String(created.note || '') ||
+          (nCopies > 1
+            ? `Downloaded ${nCopies} market decks and saved them as recipes.`
             : 'Overview deck downloaded and saved as a recipe.')
       );
       setDecksTick(value => value + 1);
@@ -6416,8 +6419,8 @@ function ReportScreen({
               undefined
             }
             onReplaceTemplate={() => templateInput.current?.click()}
-            onBuild={async request => {
-              await deck(request);
+            onBuild={async (request, buildOpts) => {
+              await deck(request, buildOpts);
               setOverviewOpen(false);
             }}
             onClose={() => setOverviewOpen(false)}
