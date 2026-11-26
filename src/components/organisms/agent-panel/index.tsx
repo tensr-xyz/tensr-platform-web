@@ -140,7 +140,9 @@ import {
 } from '@/lib/run-agent-loop';
 import {
   AgentWorkingLabel,
+  BuildingTableCard,
   ChatThreadCloseButton,
+  isBuildingTableProgress,
   visibleThinkingLines,
 } from './agent-chat-chrome';
 import { starterPromptsForColumns } from '@/lib/agent-starter-prompts';
@@ -194,7 +196,9 @@ function ChatMessageBody({
     isStreaming: Boolean(isStreaming),
   });
   const hasThinking = liveThinking.length > 0;
-  const showChecklist = liveThinking.length >= 5;
+  const showBuildingCard =
+    Boolean(isStreaming) && !resultMarkdown?.trim() && isBuildingTableProgress(liveThinking);
+  const showChecklist = !showBuildingCard && liveThinking.length >= 5;
   const showPlan = Boolean(content?.trim());
   const showResult = Boolean(resultMarkdown?.trim()) && !reportCard;
   const streamingResult = isStreaming && showResult;
@@ -205,7 +209,9 @@ function ChatMessageBody({
         <div className="max-w-none break-words text-sm">
           {showPlan ? <AgentMarkdown>{content}</AgentMarkdown> : null}
 
-          {showChecklist ? (
+          {showBuildingCard ? (
+            <BuildingTableCard lines={liveThinking} isStreaming={Boolean(isStreaming)} />
+          ) : showChecklist ? (
             <ol
               className={cn(
                 'mt-2 space-y-1 rounded-md border border-border/60 bg-muted/30 p-2 text-xs',
@@ -261,7 +267,7 @@ function ChatMessageBody({
             </div>
           ) : null}
 
-          {isStreaming && !showResult ? (
+          {isStreaming && !showResult && !showBuildingCard ? (
             <AgentWorkingLabel className={cn((showPlan || hasThinking) && 'mt-1 block')} />
           ) : null}
 
