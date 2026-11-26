@@ -75,6 +75,7 @@ import { ReportLayoutPicker } from '@/components/flow/report-layout-picker';
 import { ReportThemePanel } from '@/components/flow/report-theme-panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/rest';
 import { Segmented } from '@/components/ui/segmented';
+import { chartFromBannerBook } from '@/lib/flow-result-charts';
 import { getPageLayout } from '@/lib/report-theme';
 
 const STYLE_PRESETS: { id: string; label: string; style: Partial<TextBoxStyle> }[] = [
@@ -185,6 +186,31 @@ function defaultCellKeys(table: ReportObject | null, defaults: DefaultLabels) {
   return { rowKey, colKey };
 }
 
+const YES_NO_POSITIVE = /^(yes|y|true|agree|aware|selected)$/i;
+const YES_NO_NEGATIVE = /^(no|n|false|disagree|not aware|unaware|not selected)$/i;
+
+/** Yes/No (and Selected/Not selected) pairs lead with the affirmative row. */
+export function preferAffirmativeRowFirst<T extends { label?: string; kind?: string }>(
+  rows: T[]
+): T[] {
+  const values = rows.filter(row => {
+    const kind = String(row.kind || 'value');
+    return kind === 'value' || kind === '';
+  });
+  if (values.length !== 2) return rows;
+  const [first, second] = values;
+  const a = String(first?.label || '').trim();
+  const b = String(second?.label || '').trim();
+  if (!YES_NO_NEGATIVE.test(a) || !YES_NO_POSITIVE.test(b)) return rows;
+  const firstAt = rows.indexOf(first!);
+  const secondAt = rows.indexOf(second!);
+  if (firstAt < 0 || secondAt < 0 || firstAt === secondAt) return rows;
+  const next = [...rows];
+  next[firstAt] = second!;
+  next[secondAt] = first!;
+  return next;
+}
+
 /** Compact percent grid from a saved banner book. Never invents placeholder rows. */
 export function previewGridFromBannerBook(
   book: Record<string, unknown> | null | undefined
@@ -204,14 +230,15 @@ export function previewGridFromBannerBook(
 
   const bookRows = Array.isArray(book.rows) ? book.rows : [];
   if (bookRows.length) {
-    for (const raw of bookRows.slice(0, 12)) {
-      if (!raw || typeof raw !== 'object') continue;
-      const row = raw as {
+    const ordered = preferAffirmativeRowFirst(
+      bookRows.filter(raw => raw && typeof raw === 'object') as Array<{
         label?: string;
         id?: string;
         kind?: string;
         cells?: Array<{ banner_id?: string; percent?: number | null }>;
-      };
+      }>
+    );
+    for (const row of ordered.slice(0, 12)) {
       if (String(row.kind || '') === 'header') continue;
       const cells = Array.isArray(row.cells) ? row.cells : [];
       const byBanner = new Map(
@@ -375,15 +402,102 @@ function AnalysisRunTablePreview({
   );
 }
 
-function ChartObjectPreview({ obj, pins }: { obj: ReportObject; pins: PinLike[] }) {
+/** Share bars for a slide chart: one series on Total, or categories of a multi-stub Yes chart. */
+export function shareBarsFromBannerBook(
+  book: Record<string, unknown> | null | undefined
+): Array<{ label: string; percent: number }> {
+  if (!book || typeof book !== 'object') return [];
+  const chart = chartFromBannerBook(book);
+  if (chart && chart.kind === 'bar_grouped') {
+    const categories = Array.isArray(chart.categories) ? chart.categories.map(String) : [];
+    const series = Array.isArray(chart.series) ? chart.series : [];
+    if (series.length === 1 && categories.length) {
+      const values = Array.isArray(series[0]?.values) ? series[0]!.values : [];
+      return preferAffirmativeRowFirst(
+        categories.map((label, index) => ({
+          label,
+          kind: 'value',
+          percent: Number(values[index]) || 0,
+        }))
+      ).map(item => ({ label: item.label, percent: item.percent }));
+    }
+    if (categories.length <= 1 && series.length) {
+      return preferAffirmativeRowFirst(
+        series.map(item => ({
+          label: String(item?.name || '').trim() || 'Series',
+          kind: 'value',
+          percent: Number(Array.isArray(item?.values) ? item.values[0] : 0) || 0,
+        }))
+      ).map(item => ({ label: item.label, percent: item.percent }));
+    }
+  }
+  const banners = (Array.isArray(book.banner_columns) ? book.banner_columns : []).filter(
+    col => col && typeof col === 'object'
+  ) as Array<{ id?: string }>;
+  const totalId =
+    banners.find(col => String(col.id || '') === 'total')?.id ||
+    (banners.length === 1 ? String(banners[0]?.id || '') : '');
+  if (!totalId) return [];
+  const rows = preferAffirmativeRowFirst(
+    (Array.isArray(book.rows) ? book.rows : []).filter(
+      row => row && typeof row === 'object'
+    ) as Array<{
+      label?: string;
+      kind?: string;
+      cells?: Array<{ banner_id?: string; percent?: number | null }>;
+    }>
+  );
+  const bars: Array<{ label: string; percent: number }> = [];
+  for (const row of rows) {
+    const kind = String(row.kind || 'value');
+    if (['header', 'base', 'mean', 'net', 'sd'].includes(kind)) continue;
+    const label = String(row.label || '').trim();
+    if (!label) continue;
+    const cell = (Array.isArray(row.cells) ? row.cells : []).find(
+      item => String(item.banner_id || '') === totalId
+    );
+    const percent = Number(cell?.percent);
+    if (!Number.isFinite(percent)) continue;
+    bars.push({ label, percent });
+  }
+  return bars.slice(0, 12);
+}
+
+function ChartObjectPreview({
+  obj,
+  pins,
+  datasetId,
+  pageId,
+}: {
+  obj: ReportObject;
+  pins: PinLike[];
+  datasetId: string | null;
+  pageId: string;
+}) {
   const pin =
     pins.find(
       item =>
         (obj.pinId && String(item.id || '') === obj.pinId) ||
         (obj.runId && String(item.runId || item.run_id || '') === obj.runId)
     ) || null;
-  const bars = (pin?.bars || []).filter(bar => String(bar?.label || '').trim());
+  const specId = String(obj.tableSpecId || '').trim();
+  const tableQuery = usePageTableBook(datasetId, pageId, specId);
+  const pinBars = (pin?.bars || []).filter(bar => String(bar?.label || '').trim());
+  const liveBars = useMemo(
+    () => (tableQuery.data ? shareBarsFromBannerBook(tableQuery.data) : []),
+    [tableQuery.data]
+  );
+  const bars = pinBars.length ? pinBars : liveBars;
   if (!bars.length) {
+    if (specId && datasetId && tableQuery.isPending) {
+      return (
+        <div className="report-editor-table-skeleton" aria-busy="true" aria-label="Loading chart">
+          <div className="report-editor-table-skeleton-bar" />
+          <div className="report-editor-table-skeleton-bar" />
+          <div className="report-editor-table-skeleton-bar" />
+        </div>
+      );
+    }
     return <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>;
   }
   return (
@@ -577,7 +691,7 @@ function CanvasObjectView({
       ) : obj.kind === 'table' ? (
         <TableObjectPreview obj={obj} datasetId={datasetId} pageId={pageId} />
       ) : obj.kind === 'chart' ? (
-        <ChartObjectPreview obj={obj} pins={pins} />
+        <ChartObjectPreview obj={obj} pins={pins} datasetId={datasetId} pageId={pageId} />
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}

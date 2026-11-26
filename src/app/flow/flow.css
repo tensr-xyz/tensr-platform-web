@@ -16765,7 +16765,8 @@ button.audience-op {
 }
 
 .report-editor-object[data-kind='text'] {
-  overflow: visible;
+  /* Fit expands the frame; clip so a short estimate never paints over the table title. */
+  overflow: hidden;
 }
 
 .report-editor-object[data-selected='true'] {
