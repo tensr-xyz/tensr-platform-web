@@ -400,6 +400,74 @@ describe('question kind', () => {
       )
     ).not.toBe('numeric');
   });
+
+  it('types unlabelled free-text open ends as open, not single, even with a sparse preview', () => {
+    const { questionKind } = jest.requireActual('./flow-columns');
+    expect(
+      questionKind(
+        {
+          name: 'sat_reason',
+          label: 'Why did you give that satisfaction score?',
+          type: 'string',
+          measure: 'nominal',
+          n_unique: 80,
+          n_rows: 200,
+        },
+        ['ok', 'ok', 'fine', 'ok']
+      )
+    ).toBe('open');
+    expect(
+      questionKind(
+        { name: 'gender', type: 'string', measure: 'nominal', n_unique: 2, n_rows: 200 },
+        ['a', 'b', 'a', 'b']
+      )
+    ).toBe('single');
+  });
+});
+
+describe('outline weights and multi stems', () => {
+  it('sets weight columns aside and does not list them as questions', () => {
+    const { questionnaireOutline: outlineFn, looksLikeWeightColumn } =
+      jest.requireActual('./flow-columns');
+    expect(looksLikeWeightColumn({ name: 'wgt', label: 'Design weight' })).toBe(true);
+    const outline = outlineFn(
+      [
+        { name: 'region', label: 'Region' },
+        { name: 'wgt', label: 'Design weight', type: 'numeric' },
+        { name: 'score', label: 'Score', type: 'numeric' },
+      ],
+      []
+    );
+    expect(outline.map((item: { label: string }) => item.label)).toEqual(['Region', 'Score']);
+  });
+
+  it('shows a proper multi-set stem with brands when the stored label is a fragment', () => {
+    const { questionnaireOutline: outlineFn } = jest.requireActual('./flow-columns');
+    const outline = outlineFn(
+      [
+        { name: 'a1', label: 'Have you heard of Brew & Co' },
+        { name: 'a2', label: 'Have you heard of Daily Grind' },
+        { name: 'a3', label: 'Have you heard of Bean There' },
+      ],
+      [
+        {
+          id: 'aware',
+          name: 'have you heard of',
+          label: 'have you heard of',
+          kind: 'multiple_response',
+          columns: ['a1', 'a2', 'a3'],
+          items: [
+            { column: 'a1', label: 'Brew & Co' },
+            { column: 'a2', label: 'Daily Grind' },
+            { column: 'a3', label: 'Bean There' },
+          ],
+        },
+      ]
+    );
+    expect(outline).toHaveLength(1);
+    expect(outline[0].kind).toBe('multi');
+    expect(outline[0].label).toBe('Have you heard of…? (Brew & Co, Daily Grind, Bean There)');
+  });
 });
 
 describe('id columns', () => {
@@ -521,7 +589,10 @@ describe('outline linked other-choice and full stems', () => {
       [],
       { kinds: { region: 'single' } }
     );
-    expect(outline.map(item => item.label)).toEqual([shared, 'Region']);
+    expect(outline.map(item => item.label)).toEqual([
+      'Read or used in the last 30 days (any platform)',
+      'Region',
+    ]);
     expect(outline[0].kind).toBe('multi');
     expect(outline[0].columns).toEqual(['read_alpha', 'read_beta', 'read_gamma']);
   });

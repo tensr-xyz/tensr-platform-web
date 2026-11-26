@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
 import {
+  looksLikeWeightColumn,
   questionKind,
   questionnaireOutline,
   type FlowColumn,
@@ -316,12 +317,16 @@ export function DetailsScreen({
       );
     }
     const activeWeight = meta.active_weight_column || '';
-    const weightColumn = (meta.columns || []).find(column => column.name === activeWeight);
+    const listed = (meta.columns || []) as FlowColumn[];
+    const weightColumn =
+      listed.find(column => column.name === activeWeight) ||
+      listed.find(column => looksLikeWeightColumn(column));
+    const weightName = activeWeight || String(weightColumn?.name || '');
     return {
-      columns: (meta.columns || []) as FlowColumn[],
+      columns: listed,
       variableSets: (Array.isArray(meta.variable_sets) ? meta.variable_sets : []) as OutlineSet[],
-      weightName: activeWeight,
-      weightLabel: String(weightColumn?.label || '').trim() || activeWeight,
+      weightName,
+      weightLabel: String(weightColumn?.label || '').trim() || weightName,
       kinds: nextKinds,
     };
   }, [datasetId, meta, preview]);
@@ -880,7 +885,9 @@ export function DetailsScreen({
                       >
                         {kind}
                       </span>
-                      {setOnly || !column ? (
+                      {kind === 'open' ? (
+                        <span className="flow-muted">Text</span>
+                      ) : setOnly || !column ? (
                         <span className="flow-muted">
                           {question.columns.length > 1 ? `${question.columns.length} items` : '—'}
                         </span>
