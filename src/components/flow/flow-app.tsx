@@ -33,6 +33,7 @@ import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import type { WaveColumn } from '@/lib/wave-match';
 import type { WaveMover } from '@/lib/wave-movers';
+import { waveRefreshCanBuild, waveRefreshSpecIds } from '@/lib/wave-refresh-build';
 import {
   liveOfTotalLabel,
   loadProjectTables,
@@ -5557,6 +5558,7 @@ function ReportScreen({
   const [waveDatasetId, setWaveDatasetId] = useState('');
   const [waveMovers, setWaveMovers] = useState<WaveMover[]>([]);
   const [waveChoosing, setWaveChoosing] = useState(false);
+  const fileStampsAttempted = useRef('');
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
   const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
   const [marketDecks, setMarketDecks] = useState<MarketDeckRow[]>([]);
@@ -5669,6 +5671,30 @@ function ReportScreen({
     void (async () => {
       if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
         throw new Error('Could not load saved tables');
+      }
+      // Overview GET never opens parquet; POST file-stamps writes legacy byte aliases
+      // so unchanged files stop looking Out of date (TEN-150 / TEN-274).
+      if (overview.stamps_pending) {
+        const stampIds = [
+          ...new Set(
+            overview.tables
+              .map(row => String(row.dataset_id || '').trim())
+              .filter(Boolean)
+              .concat(datasetId ? [datasetId] : [])
+          ),
+        ];
+        const stampKey = `${projectId}:${stampIds.slice().sort().join(',')}`;
+        if (stampIds.length && fileStampsAttempted.current !== stampKey) {
+          fileStampsAttempted.current = stampKey;
+          await flowJson('/datasets/file-stamps', {
+            method: 'POST',
+            body: JSON.stringify({ dataset_ids: stampIds }),
+            signal: AbortSignal.timeout(60_000),
+          }).catch(() => null);
+          if (!live) return;
+          await invalidateProjectOverview(queryClient, projectId);
+          return;
+        }
       }
       const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
       rememberReportRuns(projectId, runs);
@@ -5859,6 +5885,7 @@ function ReportScreen({
     overviewQuery.data,
     overviewQuery.dataUpdatedAt,
     overviewQuery.isError,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -5871,6 +5898,7 @@ function ReportScreen({
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
   const savedCount = savedTableTotal([specs, staleTables]);
+  const refreshSpecIds = waveRefreshSpecIds(selected, staleTables);
   const liveCount = specs.length;
   const tableCountLabel = liveOfTotalLabel(liveCount, savedTotal || savedCount);
 
@@ -6388,7 +6416,7 @@ function ReportScreen({
             fileName={waveFileName || undefined}
             deckLabel={
               marketDecks[0]?.name ||
-              (selected.length ? `Saved tables (${selected.length})` : undefined)
+              (refreshSpecIds.length ? `Saved tables (${refreshSpecIds.length})` : undefined)
             }
             audienceLabel={audienceNames[0] || undefined}
             movers={waveMovers}
@@ -6407,10 +6435,10 @@ function ReportScreen({
               setError('');
               try {
                 const uploaded = await uploadDatasetFile(file, token, 'workspace');
-                const datasetId = uploaded.dataset_id;
+                const nextDatasetId = uploaded.dataset_id;
                 const meta = await flowJson<{
                   columns?: { name?: string; label?: string | null }[];
-                }>(`/datasets/${datasetId}/metadata`);
+                }>(`/datasets/${nextDatasetId}/metadata`);
                 const columns: WaveColumn[] = (meta.columns || [])
                   .map(column => ({
                     name: String(column.name || '').trim(),
@@ -6419,8 +6447,24 @@ function ReportScreen({
                   .filter(column => column.name && !isInternalColumn(column.name));
                 setWaveNext(columns);
                 setWaveFileName(file.name);
-                setWaveDatasetId(datasetId);
+                setWaveDatasetId(nextDatasetId);
                 setWaveMovers([]);
+                // Pre-build movers from matched tables on both waves (Paper 8b sidebar).
+                if (exportFileId && nextDatasetId) {
+                  const preview = await flowJson<{
+                    movers?: WaveMover[];
+                    build_ready?: boolean;
+                  }>(`/datasets/${exportFileId}/export/deck/movers-preview`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      wave_dataset_id: nextDatasetId,
+                      spec_ids: refreshSpecIds.length ? refreshSpecIds : undefined,
+                    }),
+                  }).catch(() => null);
+                  if (preview && Array.isArray(preview.movers)) {
+                    setWaveMovers(preview.movers);
+                  }
+                }
               } catch (err) {
                 setError(
                   err instanceof Error ? err.message : 'Could not read that second-wave file.'
@@ -6480,8 +6524,8 @@ function ReportScreen({
               }
               const wanted = variables.filter(item => !droppedLabels.has(item.label));
               const deckId = marketDecks[0]?.id || '';
-              const specIds = selected.map(table => table.id).filter(Boolean);
-              if (!deckId && !specIds.length) {
+              const specIds = refreshSpecIds;
+              if (!waveRefreshCanBuild({ deckId, specIds })) {
                 throw new Error('Save a deck or tables before building a new wave version.');
               }
               const refreshed = await flowJson<{

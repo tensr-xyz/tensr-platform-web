@@ -16,6 +16,7 @@ export type DatasetColumnsPayload = {
 
 export type ProjectOverviewPayload = {
   ok?: boolean;
+  stamps_pending?: boolean;
   tables?: {
     spec_id?: string;
     label?: string;
