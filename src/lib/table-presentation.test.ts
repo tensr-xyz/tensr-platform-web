@@ -217,4 +217,49 @@ describe('table presentation engine', () => {
     };
     expect(gamma.cells.some(cell => cell.blanked_small_base && cell.percent == null)).toBe(true);
   });
+
+  it('adds rank and difference columns from rules', () => {
+    const presented = applyTablePresentation(syntheticBook(), {
+      rules: [
+        {
+          type: 'add_rank_column',
+          id: 'rank-1',
+          by: 'north',
+          direction: 'desc',
+          label: 'Rank',
+        },
+        {
+          type: 'add_difference_column',
+          id: 'diff-1',
+          leftColumnId: 'North',
+          rightColumnId: 'South',
+        },
+      ],
+    });
+    const banners = Object.fromEntries(
+      (presented.banner_columns || []).map(col => {
+        const record = col as { id?: string; label?: string; kind?: string };
+        return [String(record.id || ''), record];
+      })
+    );
+    expect(banners['rank-rank-1']?.label).toBe('Rank');
+    expect(banners['rank-rank-1']?.kind).toBe('rank');
+    expect(banners['diff-diff-1']?.label).toBe('North − South');
+
+    const cellValue = (rowId: string, columnId: string) => {
+      const row = presented.rows.find(item => item.id === rowId) as {
+        cells: Array<{ banner_id?: string; percent?: number | null }>;
+      };
+      return row.cells.find(cell => cell.banner_id === columnId)?.percent ?? null;
+    };
+
+    expect(cellValue('alpha', 'rank-rank-1')).toBe(1);
+    expect(cellValue('beta', 'rank-rank-1')).toBe(2);
+    expect(cellValue('net-agree', 'rank-rank-1')).toBeNull();
+    expect(cellValue('alpha', 'diff-diff-1')).toBe(30);
+    expect(cellValue('beta', 'diff-diff-1')).toBe(-20);
+    expect(tableRuleLabel({ id: 'r', type: 'add_rank_column', enabled: true, label: 'Rank' })).toBe(
+      'Add rank column (Rank)'
+    );
+  });
 });
