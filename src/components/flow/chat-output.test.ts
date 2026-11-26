@@ -1058,4 +1058,30 @@ describe('chat output panel', () => {
     expect(clientDeckReportHref('/flow/p/1')).toBe('/flow/p/1/report?pane=slides');
     expect(outputRunIds(results)[0]).toBe('job-deck');
   });
+
+  it('TEN-253: lead drops base/weight footer and table-note meta copy', () => {
+    const lead = resultLead(
+      'Overall NPS is -24.8. Highest is Scotland & Wales at -3.0. ' +
+        'Weight: Design weight; base = 800; effective base = 720 (90%); ' +
+        '95% confidence level. weighted by Design weight',
+      [
+        {
+          procedure: 'nps',
+          summary: {
+            line: 'Overall NPS is -24.8. Highest is Scotland & Wales at -3.0; lowest is London at -40.0.',
+          },
+        },
+      ]
+    );
+    expect(lead).toContain('Overall NPS is -24.8');
+    expect(lead).not.toMatch(/95%\s+confidence level/i);
+    expect(lead).not.toMatch(/weighted by Design weight/i);
+    expect(lead).not.toMatch(/Weight:\s*Design weight/i);
+
+    const frequency = withoutStrayEnding(
+      'Global Ledger leads at 31.3%. The table note gives the weight, the effective base, and the confidence level.'
+    );
+    expect(frequency).toContain('Global Ledger leads at 31.3%');
+    expect(frequency).not.toMatch(/table note/i);
+  });
 });

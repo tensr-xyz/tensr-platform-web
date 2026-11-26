@@ -3347,6 +3347,13 @@ export function TablesBuilder({
                               String(item.name || '') === stub ||
                               String(item.label || '') === stub ||
                               String(item.id || '') === stub
+                          )?.columns ||
+                          outlineQuestions.find(
+                            item =>
+                              item.stubValue === stub ||
+                              item.key === stub ||
+                              item.label === stub ||
+                              item.columns[0] === stub
                           )?.columns
                         }
                         fileName={

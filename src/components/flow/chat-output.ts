@@ -216,7 +216,7 @@ function first(body: Record<string, unknown>, keys: string[]): string {
 }
 
 const BASE_SENTENCE =
-  /^(the weighted base for this table is|weighted base\b|unweighted base\b|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$|[a-z0-9 _/-]+:\s*(un)?weighted\.?$)/i;
+  /^(the weighted base for this table is|weighted base\b|unweighted base\b|minimum base|no column is under that base|a column is under that base|base:|base =|weight:\s*|effective base\b|95%\s+confidence level|the table note\b|unweighted, n =|base \d|(un)?weighted\.?$|[a-z0-9 _/-]+:\s*(un)?weighted\.?$)/i;
 const FILE_LINE = /^(excel workbook|spss syntax|r syntax):/i;
 
 function proseLines(answer: string): string[] {
@@ -812,6 +812,11 @@ export function withoutStrayEnding(text: string): string {
     if (/^[-*•]\s*$/.test(trimmed)) return false;
     // A trailing "weighted by column_code" line under the reply (TEN-41).
     if (/^weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?$/i.test(trimmed)) return false;
+    // Footer / table-note copy belongs under the card, not in the lead (TEN-253).
+    if (/^weight:\s*/i.test(trimmed) && /base\s*=/i.test(trimmed)) return false;
+    if (/^95%\s+confidence level\.?$/i.test(trimmed)) return false;
+    if (/^the table note\b/i.test(trimmed)) return false;
+    if (/^weighted by .+\.?$/i.test(trimmed) && !/%/.test(trimmed)) return false;
     return true;
   });
   return (
@@ -819,6 +824,15 @@ export function withoutStrayEnding(text: string): string {
       .join('\n')
       .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
       .replace(/\s+Weight:\s*[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+      // Trailing footer pasted onto the lead: "…95% confidence level. weighted by Design weight"
+      .replace(
+        /(?:\s*[.;])?\s*Weight:\s*[^.;]+(?:;\s*base\s*=\s*[^.;]+)*(?:;\s*effective base\s*=\s*[^.;]+)?(?:;\s*)?95%\s+confidence level\.?/gi,
+        ''
+      )
+      .replace(/(?:\s*[.;])?\s*95%\s+confidence level\.?/gi, '')
+      .replace(/(?:\s*[.;])?\s*weighted by [^.\n%]+\.?$/gi, '')
+      .replace(/(?:\s*[.;])?\s*The table note\b[^.\n]*\.?/gi, '')
+      .replace(/\s*Cautions:?\s*[-*•]?\s*$/gi, '')
       .replace(/\s*[\(\[]\s*[\)\]]/g, '')
       .replace(/(\d+\.\d{2,})%/g, (_all, raw: string) => {
         const number = Number(raw);

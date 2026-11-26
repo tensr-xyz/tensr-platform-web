@@ -95,11 +95,15 @@ export function VariablePreviewTrigger({
     ]).then(([values, memberPages, deps]) => {
       if (cancelled) return;
       let page = values;
+      const primaryAnswered = page
+        ? Math.max(0, Number(page.n || 0) - Number(page.missing || 0))
+        : 0;
       // A set name is not a file column — use member pages so answered is not 0.
-      if ((!page || !page.n) && memberPages.some(Boolean)) {
+      if (primaryAnswered === 0 && memberPages.some(Boolean)) {
         const pages = memberPages.filter(Boolean) as ValuePage[];
         const n = Math.max(...pages.map(item => Number(item.n || 0)), 0);
-        const missing = Math.min(...pages.map(item => Number(item.missing || 0)), n);
+        // Multi-select dichotomies are answered for every respondent; missing is rare.
+        const missing = Math.min(...pages.map(item => Math.max(0, Number(item.missing || 0))), n);
         const counts: Record<string, number> = {};
         const labels: Record<string, string> = {};
         pages.forEach((item, index) => {
