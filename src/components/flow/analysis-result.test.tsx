@@ -6,6 +6,12 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+jest.mock('@/lib/analysis-runs', () => ({
+  fetchAnalysisRun: jest.fn(async () => null),
+  R_CHECK_POLL_MS: 2000,
+  rCheckPhase: () => 'checking',
+}));
+
 describe('theme table columns', () => {
   it('gives the count, the share, and the quote their own columns', () => {
     expect(quoteColumnFit('Count')).toBe('count');
@@ -64,5 +70,25 @@ describe('theme table columns', () => {
     expect(block).toMatch(/table-layout:\s*auto/);
     expect(block).not.toMatch(/table-layout:\s*fixed/);
     expect(css).toMatch(/\.analysis-table \{[\s\S]*?overflow-x:\s*auto/);
+    expect(css).toMatch(/\.analysis-table \{[\s\S]*?scrollbar-gutter:\s*stable/);
+  });
+
+  it('keeps a pending R check out of the footnote once the reply has landed (TEN-245)', () => {
+    render(
+      <AnalysisResult
+        tables={[
+          {
+            title: 'Reach',
+            columns: ['Title', '%', '000s', 'Index'],
+            rows: [['Title A', '53%', '2,570', '230']],
+          },
+        ]}
+        footnote="Universe 105,700k"
+        rCheck="pending"
+        runId="run-1"
+      />
+    );
+    expect(screen.getByText(/Universe 105,700k/)).toBeTruthy();
+    expect(screen.queryByText(/R check running/)).toBeNull();
   });
 });

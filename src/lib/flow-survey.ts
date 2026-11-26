@@ -265,6 +265,31 @@ export function formatGroupedNumber(value: number, places = 0): string {
   });
 }
 
+/**
+ * Projected thousands in a dedicated (000s) column — Paper 14b / TEN-245.
+ * Whole numbers with thousands separators: 24,498.
+ */
+export function formatProjectedThousands(thousands: number): string {
+  if (!Number.isFinite(thousands)) return '';
+  return formatGroupedNumber(thousands, 0);
+}
+
+/**
+ * Compact projected thousands with a unit — Paper 5d/6n/14b footnotes.
+ * ≥100 → whole + k (1,014k); smaller → one decimal (47.5k).
+ */
+export function formatProjectedK(thousands: number): string {
+  if (!Number.isFinite(thousands)) return '0k';
+  const places = Math.abs(thousands) >= 100 ? 0 : 1;
+  const shown = formatGroupedNumber(thousands, places).replace(/\.0$/, '');
+  return `${shown}k`;
+}
+
+/** Universe / population footnote label — Paper 14b: "105,700k". */
+export function formatUniverseThousands(thousands: number): string {
+  return formatProjectedK(thousands);
+}
+
 /** Column %, projected thousands, and index in one cell when those stats are toggled on. */
 export function mediaCellText(
   cell: BannerCell | undefined,
@@ -284,8 +309,7 @@ export function mediaCellText(
     const includeProjected = options?.includeProjected === true;
     const projected = cell.projected_thousands;
     if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
-      const count = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
-      const labelled = `${count}k`;
+      const labelled = formatProjectedK(projected);
       shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
     }
     const includeIndex = options?.includeIndex === true;
@@ -313,8 +337,7 @@ export function mediaCellLines(
   const includeProjected = options?.includeProjected === true;
   const projected = cell.projected_thousands;
   if (includeProjected && typeof projected === 'number' && Number.isFinite(projected)) {
-    const rounded = formatGroupedNumber(projected, projected >= 100 ? 0 : 1).replace(/\.0$/, '');
-    parts.push(`${rounded}k`);
+    parts.push(formatProjectedK(projected));
   }
   const includeIndex = options?.includeIndex === true;
   const index = cell.index;

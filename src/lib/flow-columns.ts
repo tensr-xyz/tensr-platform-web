@@ -242,7 +242,7 @@ export function labelAxisParts(label: string): [string, string] | null {
     .trim()
     .replace(/\s+/g, ' ');
   if (!text) return null;
-  for (const sep of [' - ', ': ', ' – ', ' — ', ':'] as const) {
+  for (const sep of [' - ', ' ~ ', ': ', ' – ', ' — ', ':'] as const) {
     if (!text.includes(sep)) continue;
     const [left, right] = text.split(sep, 2).map(part => part.trim());
     if (left && right) return [left, right];
@@ -319,6 +319,8 @@ export type OutlineQuestion = {
   stubValue?: string;
   /** First column used for measure override when the unit is a single question. */
   measureColumn?: string;
+  /** Extra search text (set item labels) so stub/banner search hits brands inside a set. */
+  keywords?: string;
 };
 
 export type OutlineSetWithStructure = OutlineSet & { structure?: string };
@@ -429,16 +431,28 @@ function inferredLabelSets(columns: FlowColumn[]): OutlineSetWithStructure[] {
     });
   }
 
+  const byName = new Map(columns.map(column => [column.name, column]));
   const sets: OutlineSetWithStructure[] = [];
   for (const bucket of buckets.values()) {
     const members = [...new Set(bucket.members)];
     if (members.length < 2) continue;
+    const memberLabels = members.map(name => {
+      const column = byName.get(name);
+      return String(column?.label || column?.name || name);
+    });
+    const orientation = axisOrientation(memberLabels);
+    const items = members.map((name, index) => {
+      const label = memberLabels[index];
+      const oriented = orientedStemItem(label, orientation);
+      return { column: name, label: oriented ? oriented[1] : label };
+    });
     sets.push({
       id: `label:${bucket.stem}`,
       name: bucket.stem,
       label: bucket.stem,
       kind: 'multiple_response',
       columns: members,
+      items,
     });
   }
   return sets;
@@ -574,12 +588,20 @@ export function questionnaireOutline(
           : sentenceCaseStem(String(found.set.label || found.set.name || fallback)) ||
             String(fallback);
       const setName = String(found.set.name || found.set.label || found.members[0]);
+      const itemKeywords = (found.set.items || [])
+        .map(item => String(item.label || '').trim())
+        .filter(Boolean);
+      const memberKeywords = found.members
+        .map(name => String(byName.get(name)?.label || '').trim())
+        .filter(Boolean);
+      const keywords = [...itemKeywords, ...memberKeywords].join(' ');
       units.push({
         key: String(found.set.id || found.set.name || found.members[0]),
         label: setLabel,
         kind: setKind,
         columns: found.members,
         stubValue: setName,
+        ...(keywords ? { keywords } : {}),
       });
       continue;
     }
@@ -604,7 +626,7 @@ export function tableStubPickerOptions(
   columns: FlowColumn[],
   sets: OutlineSetWithStructure[] = [],
   weights: string[] = []
-): { value: string; label: string }[] {
+): { value: string; label: string; keywords?: string }[] {
   const weightName = weights.find(name => Boolean(name)) || '';
   const outline = questionnaireOutline(columns, sets, { weightName });
   return outline
@@ -612,6 +634,7 @@ export function tableStubPickerOptions(
     .map(item => ({
       value: String(item.stubValue || item.columns[0] || item.key),
       label: item.label,
+      ...(item.keywords ? { keywords: item.keywords } : {}),
     }))
     .filter(item => item.value);
 }

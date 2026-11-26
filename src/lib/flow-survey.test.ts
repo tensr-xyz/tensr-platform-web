@@ -7,6 +7,9 @@ import {
   codedStub,
   concatenateLetters,
   efficiencyPercent,
+  formatProjectedK,
+  formatProjectedThousands,
+  formatUniverseThousands,
   lettersFor,
   mediaCellLines,
   mediaCellText,
@@ -172,6 +175,14 @@ describe('flow survey grid', () => {
     ).toBe('ACe');
   });
 
+  it('formats projected thousands as whole 000s or compact k (TEN-245 / Paper 14b)', () => {
+    expect(formatProjectedThousands(24497.6)).toBe('24,498');
+    expect(formatProjectedThousands(19673.7)).toBe('19,674');
+    expect(formatProjectedK(24497.6)).toBe('24,498k');
+    expect(formatProjectedK(47.5)).toBe('47.5k');
+    expect(formatUniverseThousands(105700.0)).toBe('105,700k');
+  });
+
   it('shows projected thousands and index beside the column percent only when toggled on', () => {
     expect(
       mediaCellText({
@@ -193,7 +204,7 @@ describe('flow survey grid', () => {
         1,
         { includeProjected: true, includeIndex: true }
       )
-    ).toBe('39.4% · 102.6k · idx 131');
+    ).toBe('39.4% · 103k · idx 131');
     expect(
       mediaCellText(
         {

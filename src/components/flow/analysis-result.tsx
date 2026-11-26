@@ -183,9 +183,11 @@ export function AnalysisResult({
     (shownCheck === 'mismatch' || shownCheck === 'not_verified' ? 'The check did not match.' : '');
   // "unknown" means R did not stamp this table. Do not put "Check not run" on the
   // footnote while a Checks fold may list explanatory notes (TEN-249).
+  // Pending stays off the footnote once the reply has landed (TEN-245) — poll still
+  // upgrades to "Checked in R" / mismatch when the verification finishes.
   const checkLabel =
     shownCheck === 'pending'
-      ? 'R check running'
+      ? ''
       : shownCheck === 'mismatch' || shownCheck === 'not_verified'
         ? 'R mismatch'
         : shownCheck === 'unknown'

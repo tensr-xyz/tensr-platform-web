@@ -1,6 +1,18 @@
-import { recentChatSessions, sortSessionsByRecency } from './chat-sessions';
+import { keepFirstSessionTitle, recentChatSessions, sortSessionsByRecency } from './chat-sessions';
 
 describe('chat session rails', () => {
+  it('keeps the first question when a follow-up lands', () => {
+    expect(
+      keepFirstSessionTitle('Awareness of 3 brands × gender', 'Skip both, just make the chart.')
+    ).toBe('Awareness of 3 brands × gender');
+    expect(keepFirstSessionTitle(undefined, 'Awareness of 3 brands × gender')).toBe(
+      'Awareness of 3 brands × gender'
+    );
+    expect(keepFirstSessionTitle('Untitled chat', 'Awareness of 3 brands × gender')).toBe(
+      'Awareness of 3 brands × gender'
+    );
+  });
+
   it('orders Chat and Responses from the same recency list', () => {
     const sessions = [
       { session_id: 'old-uuid-zzzz', title: 'Sunday chat', updated_at: '2026-11-09T12:00:00Z' },

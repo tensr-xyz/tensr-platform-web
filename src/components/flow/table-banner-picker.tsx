@@ -19,7 +19,7 @@ import {
   tableBannerKey,
 } from '@/components/flow/table-banner-refs';
 
-type QuestionOption = { value: string; label: string };
+type QuestionOption = { value: string; label: string; keywords?: string };
 
 /** Paper 5d: banner "+" lists saved audiences first, then questions. */
 export function BannerAddPicker({
@@ -109,7 +109,7 @@ export function BannerAddPicker({
               {availableQuestions.map(item => (
                 <CommandItem
                   key={item.value}
-                  value={`${item.label} ${item.value}`}
+                  value={`${item.label} ${item.keywords || ''} ${item.value}`}
                   className="tables-banner-picker-row"
                   onSelect={() => {
                     onPick({ kind: 'column', column: item.value });

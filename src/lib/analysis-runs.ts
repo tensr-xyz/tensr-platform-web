@@ -527,18 +527,46 @@ export function attachStoredRuns(results: unknown, runs: StoredAnalysisRun[]): u
     const id = String(record.run_id || nested?.run_id || '');
     const stored = byId.get(id);
     if (!stored) return item;
-    const envelope = analysisEnvelopeFromStoredRun(
-      stored,
-      nested && typeof nested === 'object' ? nested : null
-    );
-    const finished = String(stored.status || '').toLowerCase() === 'complete';
+    const status = String(stored.status || '').toLowerCase();
     const priorSummary =
       record.summary && typeof record.summary === 'object'
         ? (record.summary as Record<string, unknown>)
         : {};
+    // TEN-269: surface the worker failure with the real reason for Retry.
+    if (status === 'failed') {
+      const book =
+        stored.result && typeof stored.result === 'object'
+          ? (stored.result as Record<string, unknown>)
+          : {};
+      const detail = String(book.error || book.message || 'The analysis did not finish.').trim();
+      return {
+        ...record,
+        ok: false,
+        error: detail,
+        analysis_type: stored.op || record.analysis_type,
+        procedure: stored.op || record.procedure,
+        summary: { ...priorSummary, pending: false, line: detail, error: detail },
+        result: {
+          ok: false,
+          pending: false,
+          status: 'failed',
+          run_id: stored.id,
+          error: detail,
+          answer_markdown: detail,
+          analysis_type: stored.op || record.analysis_type,
+          procedure: stored.op || record.procedure,
+        },
+      };
+    }
+    const envelope = analysisEnvelopeFromStoredRun(
+      stored,
+      nested && typeof nested === 'object' ? nested : null
+    );
+    const finished = status === 'complete';
     const rebuilt = finished ? summaryFromStoredRun(stored, priorSummary) : priorSummary;
     return {
       ...record,
+      ok: true,
       analysis_type: stored.op || record.analysis_type,
       procedure: stored.op || record.procedure,
       ...(Object.keys(rebuilt).length ? { summary: rebuilt } : {}),
@@ -578,15 +606,21 @@ function summaryFromStoredRun(
     (typeof prior.title === 'string' ? prior.title : '');
   const line =
     answer.trim() ||
+    (typeof book.lead === 'string' && book.lead.trim()) ||
     (typeof prior.line === 'string' && !/pending|building the table|banner_table/i.test(prior.line)
       ? prior.line
       : '');
+  const themes = Array.isArray(book.themes) ? book.themes : prior.themes;
   return {
     ...prior,
     pending: false,
     ...(line ? { line } : { line: '' }),
     ...(title ? { title } : {}),
     ...(letter ? { letter_test: letter } : {}),
+    ...(Array.isArray(themes) && themes.length ? { themes } : {}),
+    ...(typeof book.audience_label === 'string' ? { audience_label: book.audience_label } : {}),
+    ...(typeof book.audience_n === 'number' ? { audience_n: book.audience_n } : {}),
+    ...(typeof book.weight_phrase === 'string' ? { weight_phrase: book.weight_phrase } : {}),
   };
 }
 
@@ -598,6 +632,8 @@ export function analysisEnvelopeFromStoredRun(
   return {
     ...previous,
     ok: true,
+    pending: false,
+    status: 'complete',
     analysis_type: stored.op || previous.analysis_type,
     request_body: stored.body || previous.request_body,
     result: stored.result,

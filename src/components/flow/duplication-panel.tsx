@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { formatGroupedNumber } from '@/lib/flow-survey';
+import { formatGroupedNumber, formatProjectedK } from '@/lib/flow-survey';
 
 export type DuplicationFigure = {
   percent?: number;
@@ -45,13 +45,8 @@ export type DuplicationPanelData = {
   audience_label?: string;
 };
 
-/** Projected thousands the way Paper 6n shows them (289k, 1,221k). */
-export function formatProjectedK(thousands: number): string {
-  if (!Number.isFinite(thousands)) return '0k';
-  const places = Math.abs(thousands) >= 100 ? 0 : 1;
-  const shown = formatGroupedNumber(thousands, places).replace(/\.0$/, '');
-  return `${shown}k`;
-}
+/** Re-export — Paper 6n / TEN-245 shared formatter. */
+export { formatProjectedK } from '@/lib/flow-survey';
 
 function cellStack(figure: DuplicationFigure | undefined) {
   if (!figure || figure.diagonal) {

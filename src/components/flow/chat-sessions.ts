@@ -6,6 +6,18 @@ export type ChatSessionRow = {
   updated_at?: string;
 };
 
+const UNTITLED_CHAT = 'Untitled chat';
+
+/**
+ * Chat list title stays the first question. A follow-up must not rename the session.
+ */
+export function keepFirstSessionTitle(existing: string | undefined, next: string): string {
+  const prior = (existing || '').trim();
+  if (prior && prior !== UNTITLED_CHAT) return prior;
+  const trimmed = (next || '').trim();
+  return trimmed || prior || UNTITLED_CHAT;
+}
+
 /** Newest `updated_at` first. Missing stamps sink to the end. */
 export function sortSessionsByRecency<T extends { updated_at?: string }>(sessions: T[]): T[] {
   return [...sessions].sort((left, right) =>

@@ -5,11 +5,7 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { AgentLoopResponse, RunAgentLoopParams } from '@/lib/run-agent-loop';
-import {
-  CONTINUING_TURN_ANSWER,
-  readableTurnAnswer,
-  visibleTurnAnswer,
-} from '@/components/flow/chat-output';
+import { CONTINUING_TURN_ANSWER, readableTurnAnswer } from '@/components/flow/chat-output';
 import { isColdStartStatus } from '@/lib/cold-start-fetch';
 
 /** Match API `_RESUME_HOP_LIMIT` — banners often need more than three polls (TEN-192). */
@@ -199,9 +195,20 @@ function processSseLine(
 }
 
 function withVisibleAnswer(result: AgentLoopResponse): AgentLoopResponse {
-  const answer = visibleTurnAnswer(result.status, result.answer_markdown || '');
-  if (answer === (result.answer_markdown || '')) return result;
-  return { ...result, answer_markdown: answer };
+  // TEN-242: salvage a lead from finished tool_results when the model call failed.
+  const answer = readableTurnAnswer(
+    result.status,
+    result.answer_markdown || '',
+    result.tool_results
+  );
+  const status =
+    result.status === 'llm_unavailable' &&
+    answer &&
+    !/model call failed|this turn stopped/i.test(answer)
+      ? 'ok'
+      : result.status;
+  if (answer === (result.answer_markdown || '') && status === result.status) return result;
+  return { ...result, status, answer_markdown: answer };
 }
 
 async function readSavedTurn(handlers: AgentLoopStreamHandlers): Promise<AgentLoopResponse | null> {

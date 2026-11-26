@@ -413,7 +413,7 @@ describe('result tables', () => {
 
   it('adds the base, the weight, the effective n, and a small-base caution', () => {
     const note =
-      'Weight: Sample weight; base = 2 (of 3, 1 missing); effective base = 1.8 (90%); 95% confidence level. East n = 2: treat this base with caution.';
+      'Weight: Sample weight; base = 2 (of 3, 1 missing); effective base = 2 (90%); 95% confidence level. East n = 2: treat this base with caution.';
     const view = resultViewFromToolResults({
       summary: {
         table: [
@@ -428,7 +428,7 @@ describe('result tables', () => {
     });
     expect(view.baseDetail).toBe(note);
     expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('base = 2 (of 3, 1 missing)');
-    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective base = 1.8 (90%)');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective base = 2 (90%)');
     expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('95% confidence level');
     expect(resultFootnote(view, 'Base 2', 'NPS')).toContain(
       'East n = 2: treat this base with caution.'
@@ -943,6 +943,28 @@ describe('result tables', () => {
     expect(view.script).toContain('nrow(df)');
   });
 
+  it('formats universe thousands compactly in the footnote (TEN-245)', () => {
+    const view = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Reach',
+        weight: { column: 'pop_weight', universe_thousands: 105700.0 },
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'value',
+            label: 'Title A',
+            cells: [{ banner_id: 'total', percent: 23.0, projected_thousands: 24497.6 }],
+          },
+        ],
+      },
+    });
+    expect(view.universeThousands).toBe(105700);
+    expect(resultFootnote(view, '', 'Crosstab')).toContain('Universe 105,700k');
+    expect(resultFootnote(view, '', 'Crosstab')).not.toContain('thousand');
+    expect(view.tables[0].rows[0]).toContain('24,498');
+  });
+
   it('reads the banner screen grid and builds a table from a stored book', () => {
     const fromScreen = resultViewFromToolResults({
       procedure: 'banner_table',
@@ -973,6 +995,8 @@ describe('result tables', () => {
     });
     expect(fromBook.tables[0].rows[0][0]).toBe('Global Ledger');
     expect(fromBook.tables[0].columns).toContain('People (000s)');
+    // TEN-245: dedicated 000s column is a whole number with separators.
+    expect(fromBook.tables[0].rows[0]).toEqual(['Global Ledger', '41.2%', '13']);
 
     const fromMultiStub = resultViewFromToolResults({
       op: 'banner_table',
@@ -2077,5 +2101,138 @@ describe('funnelHeadline', () => {
     expect(view.tables[0].columns).toEqual(['Label', 'Count', '% of respondents']);
     expect(view.tables[0].columns).not.toContain('Valid %');
     expect(view.baseDetail || '').toMatch(/base = 3,000 \(3,900,000 weighted\)/);
+  });
+
+  it('TEN-192: prefers the audience column base over the full-file weight block', () => {
+    const cases = [
+      {
+        audience_label: 'High-asset travellers',
+        audience_n: 223,
+        audience_w: 47000,
+        file_n: 25000,
+        file_w: 47_000_000,
+      },
+      {
+        audience_label: 'Senior buyers',
+        audience_n: 180,
+        audience_w: 12000,
+        file_n: 8000,
+        file_w: 2_000_000,
+      },
+      {
+        audience_label: 'North region',
+        audience_n: 412,
+        audience_w: 88000,
+        file_n: 5000,
+        file_w: 1_500_000,
+      },
+    ];
+    for (const sample of cases) {
+      const view = resultViewFromToolResults({
+        audience_label: sample.audience_label,
+        audience_filter: { column: 'aud', op: '=', value: '1' },
+        answered_n: sample.file_n,
+        weight: {
+          column: 'proj_weight',
+          label: 'Projection weight (people)',
+          unweighted_n: sample.file_n,
+          weighted_n: sample.file_w,
+          universe_thousands: sample.file_w / 1000,
+        },
+        banner_columns: [
+          {
+            id: 'total',
+            label: 'Total',
+            bases: { column: { unweighted_n: sample.file_n, weighted_n: sample.file_w } },
+          },
+          {
+            id: 'audience',
+            label: sample.audience_label,
+            bases: { column: { unweighted_n: sample.audience_n, weighted_n: sample.audience_w } },
+          },
+        ],
+        rows: [
+          {
+            id: 'r1',
+            label: 'Alpha Daily ~ Past 30 days reach',
+            kind: 'value',
+            cells: [
+              { banner_id: 'total', percent: 13.4, projected_thousands: 100, index: 100 },
+              {
+                banner_id: 'audience',
+                percent: 68.2,
+                projected_thousands: 32,
+                index: 509,
+              },
+            ],
+          },
+        ],
+      });
+      expect(view.baseDetail || '').toContain(
+        `base = ${sample.audience_n.toLocaleString('en-GB')}`
+      );
+      expect(view.baseDetail || '').not.toContain(
+        `base = ${sample.file_n.toLocaleString('en-GB')} (${sample.file_w.toLocaleString('en-GB')} weighted)`
+      );
+      expect(view.tables[0]?.rows[0]?.[0]).toBe('Alpha Daily');
+      expect(view.tables[0]?.columns.some(column => /index/i.test(column))).toBe(true);
+    }
+  });
+
+  it('TEN-242: audience footnote does not restate its own filter', () => {
+    const cases = [
+      {
+        audience_label: 'UK high earners',
+        audience_description: 'Country of residence = United Kingdom and income band high',
+        filter_text: 'Country of residence = United Kingdom',
+      },
+      {
+        audience_label: 'City readers',
+        audience_description: 'Region is Metro',
+        filter_text: 'Region = Metro',
+      },
+      {
+        audience_label: 'Weekend travellers',
+        audience_description: 'Travelled abroad in the last 12 months',
+        filter_text: 'Travelled abroad in the last 12 months = Yes',
+      },
+    ];
+    for (const sample of cases) {
+      const view = resultViewFromToolResults({
+        audience_label: sample.audience_label,
+        audience_description: sample.audience_description,
+        audience_columns: ['segment'],
+        audience_filter: { column: 'segment', op: '=', value: '1' },
+        filter_text: sample.filter_text,
+        row_filters: [{ column: 'segment', op: '=', value: '1' }],
+      });
+      const foot = resultFootnote(view, '', 'Crosstab');
+      expect(foot).toContain(`Audience: ${sample.audience_label}`);
+      expect(foot).toContain(sample.audience_description);
+      expect(foot).not.toContain('Filter:');
+    }
+  });
+
+  it('TEN-242: effective base is a whole count', () => {
+    const cases = [
+      { ess: 15272.7, n: 16800, expect: '15,273' },
+      { ess: 88.4, n: 100, expect: '88' },
+      { ess: 1.8, n: 2, expect: '2' },
+    ];
+    for (const sample of cases) {
+      const view = resultViewFromToolResults({
+        weight: {
+          column: 'w',
+          label: 'Sample weight',
+          unweighted_n: sample.n,
+          weighted_n: sample.n,
+          kish_ess: sample.ess,
+        },
+        answered_n: sample.n,
+        respondent_n: sample.n,
+      });
+      expect(view.baseDetail || '').toContain(`effective base = ${sample.expect}`);
+      expect(view.baseDetail || '').not.toMatch(/effective base = \d[\d,]*\.\d/);
+    }
   });
 });

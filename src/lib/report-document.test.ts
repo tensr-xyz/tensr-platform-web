@@ -46,6 +46,7 @@ import {
   listPageLinks,
   objectAsStyleTemplate,
   pageAsTemplate,
+  pageFromPin,
   pageHref,
   pagesForExport,
   parseReportReshapeRequest,
@@ -195,6 +196,27 @@ describe('report document page model', () => {
     const again = refreshed.pages.find(item => item.id === pageId);
     expect(again?.layoutId).toBe('title_and_content');
     expect(again?.objects.map(obj => obj.kind)).toEqual(['text', 'chart']);
+  });
+
+  it('TEN-267: pin chart pages put base bars in the footer, not on the chart', () => {
+    const page = pageFromPin({
+      id: 'pin-reach',
+      runId: 'run-reach',
+      headline: 'Reach of NYT and WSJ',
+      support: 'NYT leads.',
+      bars: [
+        { label: 'The New York Times', percent: 53.3 },
+        { label: 'The Wall Street Journal', percent: 49.7 },
+        { label: 'Weighted base', percent: 4822587 },
+        { label: 'Unweighted base', percent: 218 },
+      ],
+      deck: true,
+    });
+    expect(page?.layoutId).toBe('title_and_content');
+    expect(page?.objects.map(obj => obj.kind)).toEqual(['text', 'chart', 'text']);
+    expect(page?.objects[2]?.text).toContain('Weighted base 4,822,587');
+    expect(page?.objects[2]?.text).toContain('Unweighted base 218');
+    expect(page?.objects[2]?.textStyle.color).toBe('#6A6B66');
   });
 
   it('reorders, duplicates, groups, sorts, and moves objects', () => {

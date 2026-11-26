@@ -2963,10 +2963,33 @@ select.flow-input {
   opacity: 0.55;
 }
 
+.chat-analysis-failed {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 36rem;
+  padding: 18px 20px;
+  border: 1px solid var(--color-line, #e7e6e1);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.chat-analysis-failed p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-ink, #1b1c1a);
+}
+
 .analysis-table {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* TEN-245: always leave a scrollbar track so wide chat banners show a scroll hint. */
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .analysis-table h3 {
@@ -17049,6 +17072,13 @@ button.audience-op {
   height: 100%;
   border-radius: 999px;
   background: var(--color-accent);
+}
+
+.report-editor-chart-footer {
+  margin: 6px 0 0;
+  color: var(--color-muted, #6a6b66);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .report-editor-live-value {

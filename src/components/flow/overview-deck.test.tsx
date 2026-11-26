@@ -8,6 +8,7 @@ import {
   overviewDeckPayload,
   overviewMarketBatchPayload,
   refreshDecksBatchPayload,
+  supportedOverviewSlideCount,
   withOverviewSlideSupport,
 } from './overview-deck';
 
@@ -60,6 +61,28 @@ describe('the deck and refresh screens', () => {
     const ready = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Weekday readers');
     expect(ready.find(slide => slide.id === 'profile')?.unsupported).toBeFalsy();
     expect(ready.find(slide => slide.id === 'size')?.unsupported).toBeFalsy();
+  });
+
+  it('keeps size and profile when one copy per market (market is the audience)', () => {
+    const slides = withOverviewSlideSupport(OVERVIEW_SLIDES, 'Total sample', {
+      perMarket: true,
+    });
+    expect(slides.find(slide => slide.id === 'size')?.unsupported).toBeFalsy();
+    expect(slides.find(slide => slide.id === 'profile')?.unsupported).toBeFalsy();
+    expect(supportedOverviewSlideCount(slides)).toBe(OVERVIEW_SLIDES.length);
+  });
+
+  it('Deliverables preview overflow is within the current set only', () => {
+    const decks = Array.from({ length: 12 }, (_, index) => ({
+      id: `d${index}`,
+      name: `Market ${index}`,
+      family_id: 'fam-current',
+      group_label: `Market ${index}`,
+      group_column_label: 'Market',
+    }));
+    render(<MarketDecksPanel decks={decks} onRefresh={async () => undefined} />);
+    expect(screen.getByText('+ 9 more')).toBeInTheDocument();
+    expect(screen.queryByText(/\+ 21 more/)).not.toBeInTheDocument();
   });
 
   it('lists Audience size and Reach comparison in the default slide set', () => {

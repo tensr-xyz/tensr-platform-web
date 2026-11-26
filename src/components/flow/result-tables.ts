@@ -3,7 +3,11 @@ import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 import type { DuplicationPanelData } from '@/components/flow/duplication-panel';
 import type { StandoutPanelData } from '@/components/flow/standout-stats-panel';
-import { bannerHeading } from '@/lib/flow-survey';
+import {
+  bannerHeading,
+  formatProjectedThousands,
+  formatUniverseThousands,
+} from '@/lib/flow-survey';
 
 export type ResultView = {
   tables: RunTable[];
@@ -1194,7 +1198,9 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
       matrix.push([label, ...blank]);
       continue;
     }
+    // Strip shared question stems (colon or tilde) so chat rows show the brand/item.
     if (label.includes(': ')) label = label.split(': ').slice(-1)[0].trim() || label;
+    if (label.includes(' ~ ')) label = label.split(' ~ ')[0].trim() || label;
     const cells = Array.isArray(row.cells)
       ? row.cells.filter(
           (item): item is Record<string, unknown> =>
@@ -1214,10 +1220,7 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
         const projected = item.projected_thousands;
         line.push(
           typeof projected === 'number' && Number.isFinite(projected)
-            ? projected.toLocaleString('en-GB', {
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1,
-              })
+            ? formatProjectedThousands(projected)
             : '—'
         );
       }
@@ -1240,7 +1243,54 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
   };
 }
 
+function audienceColumnBase(
+  record: Record<string, unknown>
+): { unweighted: number; weighted: number | null } | null {
+  const audienceLabel = cell(record.audience_label).toLowerCase();
+  if (!audienceLabel) return null;
+  const columns = Array.isArray(record.banner_columns) ? record.banner_columns : [];
+  for (const item of columns) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const column = item as {
+      id?: unknown;
+      label?: unknown;
+      bases?: { column?: { unweighted_n?: unknown; weighted_n?: unknown } };
+    };
+    const id = cell(column.id).toLowerCase();
+    const label = cell(column.label).toLowerCase();
+    if (id === 'total' || label === 'total') continue;
+    const matches =
+      label === audienceLabel ||
+      label.includes(audienceLabel) ||
+      audienceLabel.includes(label) ||
+      id === 'audience';
+    if (!matches) continue;
+    const base = column.bases?.column;
+    const unweighted = wholeNumber(base?.unweighted_n);
+    if (unweighted == null) continue;
+    return { unweighted, weighted: wholeNumber(base?.weighted_n) };
+  }
+  // Fall back to answered_n when the book already restricted rows to the audience.
+  const answered = typeof record.answered_n === 'number' ? wholeNumber(record.answered_n) : null;
+  if (answered != null && answered > 0) {
+    return { unweighted: answered, weighted: null };
+  }
+  return null;
+}
+
 function rememberTableBase(record: Record<string, unknown>, sample: SampleBits): void {
+  // Prefer the audience column base when a named audience is on the book — never
+  // the full-file weight block that would report the universe as the table base.
+  if (!sample.sawTotalColumn && bannerRecord(record)) {
+    const audienceBase = audienceColumnBase(record);
+    if (audienceBase) {
+      sample.tableUnweighted = audienceBase.unweighted;
+      sample.tableWeighted = audienceBase.weighted;
+      sample.sawTableBase = true;
+      sample.sawTotalColumn = true;
+      return;
+    }
+  }
   const weight = record.weight;
   if (
     !sample.sawTotalColumn &&
@@ -1472,9 +1522,10 @@ function sampleLine(sample: SampleBits): string {
       ? sample.n
       : sample.total;
   // Kish ESS only when the engine sent one. Do not invent "100%" for unweighted runs.
+  // Whole effective n — never leave a trailing decimal like 15272.7 (TEN-242).
   if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
-    const shown = formatBaseCount(sample.ess);
+    const shown = Math.round(sample.ess).toLocaleString('en-GB');
     parts.push(`effective base = ${shown} (${percent}%)`);
   }
   parts.push('95% confidence level');
@@ -1701,19 +1752,34 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       record.result && typeof record.result === 'object'
         ? (record.result as Record<string, unknown>)
         : null;
-    const source = nested || record;
-    const analysisType = cell(source.analysis_type) || procedure || kind;
+    // Client poll wraps the engine book as result.result (TEN-269).
+    const book =
+      nested?.result && typeof nested.result === 'object'
+        ? (nested.result as Record<string, unknown>)
+        : null;
+    const summary =
+      record.summary && typeof record.summary === 'object'
+        ? (record.summary as Record<string, unknown>)
+        : {};
+    const source = book || nested || record;
+    const analysisType =
+      cell(source.analysis_type) || cell(nested?.analysis_type) || procedure || kind;
     if (analysisType !== 'standout_stats') return;
-    const themes = source.themes;
+    const themes = source.themes || summary.themes;
     if (!Array.isArray(themes) || !themes.length) return;
     view.standout = {
       themes: themes as StandoutPanelData['themes'],
-      lead: cell(source.lead) || undefined,
-      audience_label: cell(source.audience_label) || undefined,
+      lead: cell(source.lead) || cell(summary.line) || undefined,
+      audience_label: cell(source.audience_label) || cell(summary.audience_label) || undefined,
       audience_definition: cell(source.audience_definition) || undefined,
-      audience_n: typeof source.audience_n === 'number' ? source.audience_n : undefined,
+      audience_n:
+        typeof source.audience_n === 'number'
+          ? source.audience_n
+          : typeof summary.audience_n === 'number'
+            ? summary.audience_n
+            : undefined,
       comparison_label: cell(source.comparison_label) || undefined,
-      weight_phrase: cell(source.weight_phrase) || undefined,
+      weight_phrase: cell(source.weight_phrase) || cell(summary.weight_phrase) || undefined,
       n_stats: typeof source.n_stats === 'number' ? source.n_stats : undefined,
       n_above_average:
         typeof source.n_above_average === 'number' ? source.n_above_average : undefined,
@@ -2226,13 +2292,47 @@ function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLa
   return cleaned.replace(/Weight:\s*[^;]+/i, named);
 }
 
+function filterRestatesAudience(filter: string, audience: string, definition: string): boolean {
+  const filt = filter.trim().toLowerCase();
+  if (!filt || !audience.trim()) return false;
+  const desc = definition.trim().toLowerCase();
+  if (desc && (filt.includes(desc) || desc.includes(filt))) return true;
+  if (desc) {
+    const bits = (text: string) =>
+      new Set(
+        text
+          .split(/[=,;]| and | is /i)
+          .map(part => part.trim())
+          .filter(part => part.length > 2)
+      );
+    const filtBits = bits(filt);
+    const descBits = bits(desc);
+    // Shared value/label tokens (e.g. Metro, United Kingdom) mean the same subset.
+    const shared = [...filtBits].filter(bit => descBits.has(bit));
+    if (shared.length >= 1 && [...filtBits].every(bit => descBits.has(bit) || bit.length <= 2)) {
+      return true;
+    }
+    if (shared.some(bit => bit.length > 4)) return true;
+  }
+  return audience
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .some(token => token.length > 2 && filt.includes(token));
+}
+
 export function resultFootnote(
   view: ResultView,
   base: string,
   test: string,
   columns: ColumnLabels[] = []
 ): string {
-  const filter = labelFilter(view.filter, columns);
+  const rawFilter = labelFilter(view.filter, columns);
+  // Audience already names the subset — do not restate its filter clauses (TEN-242).
+  const filter =
+    view.audience && filterRestatesAudience(rawFilter, view.audience, view.audienceDefinition)
+      ? ''
+      : rawFilter;
   const detail = detailWithWeightLabel(view.baseDetail || '', view.weight || '', columns);
   const namedWeight = view.weight ? weightNote(view.weight, columns) : 'Unweighted';
   const weight =
@@ -2243,7 +2343,7 @@ export function resultFootnote(
         : namedWeight;
   const universe =
     typeof view.universeThousands === 'number'
-      ? `Universe ${view.universeThousands.toFixed(1)} thousand`
+      ? `Universe ${formatUniverseThousands(view.universeThousands)}`
       : '';
   const parts = [
     detail ? '' : base.trim() || view.base,

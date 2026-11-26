@@ -8,6 +8,8 @@ import {
   isDeferredResultProse,
   isProcedurePlaceholder,
   hasSummaryTable,
+  analysisFailureMessage,
+  isAnalysisPending,
   outputCardReady,
   outputKind,
   restoreListBreaks,
@@ -344,6 +346,34 @@ describe('chat output panel', () => {
 
   it('TEN-242: salvages model-failed / empty replies and opens the card from a finished table', () => {
     const finding = 'Reach is 21.3% for Title Alpha.';
+    const cases = [
+      {
+        status: 'llm_unavailable' as const,
+        answer: 'The model call failed, so this turn stopped.',
+        line: 'Brand North is 41.2%.',
+        expect: '41.2',
+      },
+      {
+        status: 'ok' as const,
+        answer: EMPTY_TURN_ANSWER,
+        line: 'Service East is 28.5%.',
+        expect: '28.5',
+      },
+      {
+        status: 'llm_unavailable' as const,
+        answer: 'The model call failed, so this turn stopped. upstream timeout',
+        line: 'Plan West is 55.0%.',
+        expect: '55.0',
+      },
+    ];
+    for (const sample of cases) {
+      const kept = readableTurnAnswer(sample.status, sample.answer, [
+        { procedure: 'banner_table', summary: { line: sample.line } },
+      ]);
+      expect(kept).toContain(sample.expect);
+      expect(kept.toLowerCase()).not.toContain('model call failed');
+      expect(kept.toLowerCase()).not.toContain('did not finish');
+    }
     expect(
       readableTurnAnswer('llm_unavailable', 'The model call failed, so this turn stopped.', [
         { procedure: 'banner_table', summary: { line: finding } },
@@ -810,6 +840,42 @@ describe('chat output panel', () => {
         true
       )
     ).toBe(false);
+  });
+
+  it('TEN-269: pending standout run id does not open an empty Output card', () => {
+    const pending = [
+      {
+        ok: true,
+        procedure: 'standout_stats',
+        run_id: 'pending-standout-1',
+        summary: { line: '', pending: true },
+        result: { ok: true, pending: true, status: 'pending', run_id: 'pending-standout-1' },
+      },
+    ];
+    expect(isAnalysisPending(pending)).toBe(true);
+    expect(outputCardReady({ status: 'ok', tool_results: pending }, false)).toBe(false);
+    expect(analysisFailureMessage(pending)).toBe('');
+  });
+
+  it('TEN-269: failed standout surfaces the real reason for Retry', () => {
+    const failed = [
+      {
+        ok: false,
+        procedure: 'standout_stats',
+        run_id: 'failed-standout-1',
+        error: 'The worker timed out while scanning the file.',
+        summary: { line: 'The worker timed out while scanning the file.', pending: false },
+        result: {
+          ok: false,
+          pending: false,
+          status: 'failed',
+          error: 'The worker timed out while scanning the file.',
+        },
+      },
+    ];
+    expect(isAnalysisPending(failed)).toBe(false);
+    expect(analysisFailureMessage(failed)).toMatch(/timed out/i);
+    expect(outputCardReady({ status: 'ok', tool_results: failed }, false)).toBe(false);
   });
 
   it('keeps a finding and drops a card that is only the base line', () => {

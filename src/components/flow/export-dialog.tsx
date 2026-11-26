@@ -308,16 +308,65 @@ export function tableSpecIdsFromReportPages(
   return ids;
 }
 
+/** Unique non-empty spec ids, preserving first-seen order. */
+export function uniqueSpecIds(ids: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of ids) {
+    const id = String(raw || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Every saved table id for a banner book.
+ * Dataset list first; project list when the dataset route fails or returns none.
+ * Does not depend on which tables Overview managed to open on screen.
+ */
+export async function everySavedTableSpecIds(
+  datasetId: string,
+  projectId?: string
+): Promise<string[]> {
+  if (!datasetId) return [];
+  try {
+    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+      `/datasets/${datasetId}/tables`
+    );
+    const ids = uniqueSpecIds((page.specs || []).map(spec => spec.spec_id || spec.id));
+    if (ids.length) return ids;
+  } catch {
+    /* Try the project list when the dataset tables route fails. */
+  }
+  if (!projectId) return [];
+  try {
+    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+      `/api/projects/${projectId}/tables`
+    );
+    return uniqueSpecIds((page.specs || []).map(spec => spec.spec_id || spec.id));
+  } catch {
+    return [];
+  }
+}
+
 /** Banner book Excel: prefer Report page tables (selected pages), else every saved table. */
 export async function bannerBookFromTables(
   datasetId: string,
   stem: string,
-  opts?: { pageIds?: string[]; specIds?: string[]; projectId?: string }
+  opts?: {
+    pageIds?: string[];
+    specIds?: string[];
+    projectId?: string;
+    /** Skip Report pages and take every saved table (Overview "Every saved table"). */
+    everySaved?: boolean;
+  }
 ) {
   if (!datasetId) throw new Error('Open a file first.');
-  let specIds = (opts?.specIds || []).map(id => String(id || '').trim()).filter(Boolean);
+  let specIds = uniqueSpecIds(opts?.specIds || []);
   const pageIds = (opts?.pageIds || []).map(id => String(id || '').trim()).filter(Boolean);
-  if (!specIds.length) {
+  if (!specIds.length && !opts?.everySaved) {
     let reportDocument: Record<string, unknown> | null = null;
     try {
       const stored = await flowJson<{
@@ -338,16 +387,7 @@ export async function bannerBookFromTables(
     }
   }
   if (!specIds.length) {
-    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    );
-    specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
-  }
-  if (!specIds.length && opts?.projectId) {
-    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
-      `/api/projects/${opts.projectId}/tables`
-    );
-    specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+    specIds = await everySavedTableSpecIds(datasetId, opts?.projectId);
   }
   if (!specIds.length) {
     throw new Error(
