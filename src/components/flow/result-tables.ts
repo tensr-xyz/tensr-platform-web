@@ -1522,9 +1522,10 @@ function sampleLine(sample: SampleBits): string {
       ? sample.n
       : sample.total;
   // Kish ESS only when the engine sent one. Do not invent "100%" for unweighted runs.
+  // Whole effective n — never leave a trailing decimal like 15272.7 (TEN-242).
   if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
-    const shown = formatBaseCount(sample.ess);
+    const shown = Math.round(sample.ess).toLocaleString('en-GB');
     parts.push(`effective base = ${shown} (${percent}%)`);
   }
   parts.push('95% confidence level');
@@ -2291,13 +2292,47 @@ function detailWithWeightLabel(detail: string, weight: string, columns: ColumnLa
   return cleaned.replace(/Weight:\s*[^;]+/i, named);
 }
 
+function filterRestatesAudience(filter: string, audience: string, definition: string): boolean {
+  const filt = filter.trim().toLowerCase();
+  if (!filt || !audience.trim()) return false;
+  const desc = definition.trim().toLowerCase();
+  if (desc && (filt.includes(desc) || desc.includes(filt))) return true;
+  if (desc) {
+    const bits = (text: string) =>
+      new Set(
+        text
+          .split(/[=,;]| and | is /i)
+          .map(part => part.trim())
+          .filter(part => part.length > 2)
+      );
+    const filtBits = bits(filt);
+    const descBits = bits(desc);
+    // Shared value/label tokens (e.g. Metro, United Kingdom) mean the same subset.
+    const shared = [...filtBits].filter(bit => descBits.has(bit));
+    if (shared.length >= 1 && [...filtBits].every(bit => descBits.has(bit) || bit.length <= 2)) {
+      return true;
+    }
+    if (shared.some(bit => bit.length > 4)) return true;
+  }
+  return audience
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .some(token => token.length > 2 && filt.includes(token));
+}
+
 export function resultFootnote(
   view: ResultView,
   base: string,
   test: string,
   columns: ColumnLabels[] = []
 ): string {
-  const filter = labelFilter(view.filter, columns);
+  const rawFilter = labelFilter(view.filter, columns);
+  // Audience already names the subset — do not restate its filter clauses (TEN-242).
+  const filter =
+    view.audience && filterRestatesAudience(rawFilter, view.audience, view.audienceDefinition)
+      ? ''
+      : rawFilter;
   const detail = detailWithWeightLabel(view.baseDetail || '', view.weight || '', columns);
   const namedWeight = view.weight ? weightNote(view.weight, columns) : 'Unweighted';
   const weight =

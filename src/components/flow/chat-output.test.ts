@@ -346,6 +346,34 @@ describe('chat output panel', () => {
 
   it('TEN-242: salvages model-failed / empty replies and opens the card from a finished table', () => {
     const finding = 'Reach is 21.3% for Title Alpha.';
+    const cases = [
+      {
+        status: 'llm_unavailable' as const,
+        answer: 'The model call failed, so this turn stopped.',
+        line: 'Brand North is 41.2%.',
+        expect: '41.2',
+      },
+      {
+        status: 'ok' as const,
+        answer: EMPTY_TURN_ANSWER,
+        line: 'Service East is 28.5%.',
+        expect: '28.5',
+      },
+      {
+        status: 'llm_unavailable' as const,
+        answer: 'The model call failed, so this turn stopped. upstream timeout',
+        line: 'Plan West is 55.0%.',
+        expect: '55.0',
+      },
+    ];
+    for (const sample of cases) {
+      const kept = readableTurnAnswer(sample.status, sample.answer, [
+        { procedure: 'banner_table', summary: { line: sample.line } },
+      ]);
+      expect(kept).toContain(sample.expect);
+      expect(kept.toLowerCase()).not.toContain('model call failed');
+      expect(kept.toLowerCase()).not.toContain('did not finish');
+    }
     expect(
       readableTurnAnswer('llm_unavailable', 'The model call failed, so this turn stopped.', [
         { procedure: 'banner_table', summary: { line: finding } },

@@ -667,6 +667,7 @@ export function useAgentThread({
           }
         }
 
+        let previewResults: AgentLoopResponse['tool_results'] | undefined;
         const result = await runAgentLoop({
           message: text,
           mode: nextMode,
@@ -675,7 +676,8 @@ export function useAgentThread({
           attachments: turnFiles,
           agentVersion: 'v2',
           sessionId: sessionRef.current,
-          signal: AbortSignal.timeout(120_000),
+          // Wide banners often exceed two minutes; keep the stream open (TEN-242).
+          signal: AbortSignal.timeout(300_000),
           recover,
           onProgress: progress => {
             if (progress.step === 'retry' && progress.message) {
@@ -726,6 +728,7 @@ export function useAgentThread({
             if (turnToken !== turnTokenRef.current) return;
             const previewText = preview.text || draft;
             const tables = hasSummaryTable(preview.tool_results);
+            if (preview.tool_results?.length) previewResults = preview.tool_results;
             if ((!previewText || isProcedurePlaceholder(previewText)) && !tables) return;
             if (previewText && !isProcedurePlaceholder(previewText)) {
               draft = previewText;
@@ -756,17 +759,30 @@ export function useAgentThread({
         const kept = readableTurnAnswer(
           result.status,
           keptModelAnswer(draft, result.answer_markdown || ''),
-          result.tool_results
+          result.tool_results?.length ? result.tool_results : previewResults
         );
         const suggestions =
           result.status === 'awaiting_approval'
             ? []
             : nextStepsForResult(result, columnLabels, reportPinsRef.current.length > 0);
+        const shownTurn =
+          result.status === 'awaiting_approval'
+            ? null
+            : result.tool_results?.length
+              ? result
+              : previewResults?.length
+                ? {
+                    ...result,
+                    status: result.status === 'llm_unavailable' ? ('ok' as const) : result.status,
+                    tool_results: previewResults,
+                    answer_markdown: kept,
+                  }
+                : result;
         shown(() => {
           setAnswer(kept);
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
-          setTurn(result.status === 'awaiting_approval' ? null : result);
+          setTurn(shownTurn);
           if (keptSteps.length) setSteps(keptSteps);
           setNextSteps(suggestions);
           setDownloads(entries);
@@ -774,12 +790,12 @@ export function useAgentThread({
           setStatus(null);
         });
         if (result.status !== 'awaiting_approval' && aliveRef.current) {
-          onFinishedRef.current?.(result);
-          if (reportPagesFromResult(result) > 0) onReportUpdatedRef.current?.();
-          if (notifyFinishedTurn(result, startedAt)) {
+          onFinishedRef.current?.(shownTurn || result);
+          if (reportPagesFromResult(shownTurn || result) > 0) onReportUpdatedRef.current?.();
+          if (notifyFinishedTurn(shownTurn || result, startedAt)) {
             shown(() => setAwayNote(true));
           }
-          startDeckWatch(result, turnToken);
+          startDeckWatch(shownTurn || result, turnToken);
         }
         publish({
           running: false,
@@ -792,11 +808,32 @@ export function useAgentThread({
         return true;
       } catch (err) {
         const message = formatApiErrorMessage(err);
-        // Clear the live panel so a failed follow-up does not keep an old deck preview.
+        // TEN-242: when a table already landed in preview, keep it and salvage a lead.
+        const preview = toolResultsRef.current;
+        const salvaged = preview?.length
+          ? readableTurnAnswer('ok', draft || streamedRef.current || '', preview)
+          : '';
+        if (salvaged && !/model call failed|this turn stopped|did not finish/i.test(salvaged)) {
+          shown(() => {
+            setAnswer(salvaged);
+            setStatus(null);
+            setPlan(null);
+            if (preview?.length) {
+              setTurn({
+                status: 'ok',
+                mode: nextMode,
+                answer_markdown: salvaged,
+                tool_results: preview,
+              });
+            }
+          });
+          publish({ running: false, status: null, answer: salvaged });
+          return true;
+        }
         shown(() => {
           setStatus(message);
-          setTurn(null);
           setPlan(null);
+          if (!preview?.length) setTurn(null);
         });
         publish({ running: false, status: message });
         return true;
@@ -891,7 +928,7 @@ export function useAgentThread({
       approvedToolCalls: calls,
       approvedBatch:
         batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(300_000),
       onProgress: progress => {
         if (turnToken !== turnTokenRef.current) return;
         if (progress.step === 'retry' && progress.message) {
@@ -1247,8 +1284,10 @@ export function useAgentThread({
     const next = readableTurnAnswer(turn?.status || 'ok', answer, toolResults);
     if (!next || next === answer) return;
     const blank = !String(answer || '').trim();
+    const failedModel = /model call failed|this turn stopped/i.test(answer || '');
     if (
       !blank &&
+      !failedModel &&
       !isDeferredResultProse(answer) &&
       answer !== EMPTY_TURN_ANSWER &&
       answer !== CONTINUING_TURN_ANSWER &&
@@ -1260,7 +1299,8 @@ export function useAgentThread({
     if (
       isDeferredResultProse(next) ||
       next === EMPTY_TURN_ANSWER ||
-      next === CONTINUING_TURN_ANSWER
+      next === CONTINUING_TURN_ANSWER ||
+      /model call failed|this turn stopped/i.test(next)
     ) {
       return;
     }
