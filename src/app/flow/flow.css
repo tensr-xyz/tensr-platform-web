@@ -3823,7 +3823,8 @@ select.flow-input {
   gap: 8px;
 }
 
-button.chat-result-top {
+button.chat-result-top,
+a.chat-result-top {
   width: 100%;
   margin: 0;
   padding: 0;
@@ -3832,6 +3833,7 @@ button.chat-result-top {
   color: inherit;
   font: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
