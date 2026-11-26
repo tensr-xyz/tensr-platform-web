@@ -302,6 +302,58 @@ describe('picker columns', () => {
     expect(sourceTextColumnFor(columns[0], columns)).toBe('sat_reason');
     expect(sourceTextColumnFor({ name: 'open_end_codes' }, columns)).toBe('open_end');
   });
+
+  it('gives single and multi theme columns distinct outline titles', () => {
+    const { questionnaireOutline: outlineFn, outlineCodedThemeLabel } =
+      jest.requireActual('./flow-columns');
+    const stem = 'Why did you give that satisfaction score?';
+    const shared = `${stem} themes`;
+    expect(
+      outlineCodedThemeLabel({
+        name: 'sat_reason_themes',
+        label: shared,
+        coded_multi: true,
+        source_text_column: 'sat_reason',
+      })
+    ).toBe(`${stem} themes (all mentioned)`);
+    expect(
+      outlineCodedThemeLabel({
+        name: 'sat_reason_first_theme',
+        label: shared,
+        source_text_column: 'sat_reason',
+      })
+    ).toBe(`${stem} themes (main theme)`);
+    const outline = outlineFn(
+      [
+        { name: 'sat_reason', label: stem, type: 'string' },
+        {
+          name: 'sat_reason_themes',
+          label: shared,
+          coded_multi: true,
+          multi_response: true,
+          source_text_column: 'sat_reason',
+        },
+        {
+          name: 'sat_reason_first_theme',
+          label: shared,
+          source_text_column: 'sat_reason',
+        },
+      ],
+      [],
+      {
+        kinds: {
+          sat_reason: 'open',
+          sat_reason_themes: 'multi',
+          sat_reason_first_theme: 'single',
+        },
+      }
+    );
+    expect(outline.map((item: { label: string }) => item.label)).toEqual([
+      stem,
+      `${stem} themes (all mentioned)`,
+      `${stem} themes (main theme)`,
+    ]);
+  });
 });
 
 describe('question kind', () => {
