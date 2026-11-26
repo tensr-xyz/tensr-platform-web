@@ -104,6 +104,7 @@ export function TableBars({
             <label className="table-chart-highlight">
               <span>Highlight</span>
               <ChoiceSelect
+                className="flow-input"
                 aria-label="Highlighted answer"
                 value={activeHighlight || ''}
                 onValueChange={setHighlight}
