@@ -75,7 +75,7 @@ function categoryShares(table: Record<string, unknown>): Array<{ label: string; 
 }
 
 function positiveShare(shares: Array<{ label: string; percent: number }>): number | null {
-  if (shares.length !== 2) return null;
+  if (!shares.length) return null;
   const byFold = new Map(shares.map(item => [item.label.toLowerCase(), item.percent]));
   let positive: number | undefined;
   let negative: number | undefined;
@@ -83,7 +83,9 @@ function positiveShare(shares: Array<{ label: string; percent: number }>): numbe
     if (POSITIVE.has(label)) positive = percent;
     if (NEGATIVE.has(label)) negative = percent;
   }
-  return positive != null && negative != null ? positive : null;
+  if (shares.length === 1 && positive != null) return positive;
+  if (shares.length === 2 && positive != null && negative != null) return positive;
+  return null;
 }
 
 /** Build a bar chart from frequency tables when the report did not attach one. */
@@ -173,9 +175,26 @@ function valueDisplayLabel(
   return text;
 }
 
+function stubPositiveShare(
+  rows: BannerRow[],
+  bannerId: string,
+  stub: string,
+  meta: Record<string, unknown> | null
+): number | null {
+  const shares: Array<{ label: string; percent: number }> = [];
+  for (const row of rows) {
+    const code = String(row.label || '').trim();
+    const percent = bannerCellPercent(row, bannerId);
+    if (percent == null) continue;
+    shares.push({ label: valueDisplayLabel(stub, code, meta), percent });
+  }
+  return positiveShare(shares);
+}
+
 /**
  * Labelled bar chart from a banner / reach book when the report has none.
  * Several yes/no stubs on Total → one bar per question (% yes).
+ * With demographic hosts (e.g. gender) → grouped bars: stubs on X, one series per host.
  */
 export function chartFromBannerBook(
   book: unknown,
@@ -214,22 +233,52 @@ export function chartFromBannerBook(
   const totalId =
     bannerColumns.find(column => column.id === 'total')?.id ||
     (bannerColumns.length === 1 ? bannerColumns[0]!.id : '');
+  const hosts = bannerColumns.filter(column => column.id !== 'total');
   const meta =
     asRecord(record.column_metadata) ||
     asRecord(asRecord(record.provenance)?.column_metadata) ||
     null;
 
+  if (stubOrder.length >= 2 && hosts.length) {
+    const hostSeries: Array<{ name: string; values: number[] }> = [];
+    for (const column of hosts.slice(0, 24)) {
+      const bannerId = String(column.id || '').trim();
+      if (!bannerId) continue;
+      const values: number[] = [];
+      for (const stub of stubOrder) {
+        const yes = stubPositiveShare(byStub.get(stub) || [], bannerId, stub, meta);
+        if (yes == null) {
+          values.length = 0;
+          break;
+        }
+        values.push(yes);
+      }
+      if (!values.length) {
+        hostSeries.length = 0;
+        break;
+      }
+      const name =
+        String(column.label || column.column_label || column.id || '').trim() || bannerId;
+      hostSeries.push({ name, values });
+    }
+    if (hostSeries.length) {
+      const title = String(record.title || '').trim() || 'Percent yes';
+      return {
+        kind: 'bar_grouped',
+        title,
+        x_label: 'Question',
+        y_label: 'Percent',
+        categories: stubOrder.map(stub => stubDisplayLabel(stub, meta)),
+        series: hostSeries,
+        weighting,
+      };
+    }
+  }
+
   if (stubOrder.length >= 2 && totalId) {
     const multi: Array<{ label: string; percent: number }> = [];
     for (const stub of stubOrder) {
-      const shares: Array<{ label: string; percent: number }> = [];
-      for (const row of byStub.get(stub) || []) {
-        const code = String(row.label || '').trim();
-        const percent = bannerCellPercent(row, totalId);
-        if (percent == null) continue;
-        shares.push({ label: valueDisplayLabel(stub, code, meta), percent });
-      }
-      const yes = positiveShare(shares);
+      const yes = stubPositiveShare(byStub.get(stub) || [], totalId, stub, meta);
       if (yes == null) {
         multi.length = 0;
         break;
