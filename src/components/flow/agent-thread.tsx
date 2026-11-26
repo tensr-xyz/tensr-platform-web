@@ -28,6 +28,7 @@ import {
   publishLiveChatRun,
   subscribeLiveChatRun,
 } from '@/components/flow/chat-live-run';
+import { answerIsNotInData, stripNotInDataLead } from '@/components/flow/asker-answer';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import {
@@ -1409,7 +1410,7 @@ export function AgentThreadColumn({
     asker &&
     Boolean(thread.answer) &&
     (!thread.plan || thread.approving) &&
-    thread.answer.trim().toLowerCase().startsWith('not in this data');
+    answerIsNotInData(thread.answer);
   const reportPins = useProjectPins(
     thread.projectId || '',
     thread.datasetId ? [thread.datasetId] : []
@@ -1607,8 +1608,7 @@ export function AgentThreadColumn({
           notInData ? (
             <div className="asker-not-in-data" role="status">
               <p>
-                <strong>Not in this data.</strong>{' '}
-                {thread.answer.replace(/^not in this data\.?\s*/i, '')}
+                <strong>Not in this data.</strong> {stripNotInDataLead(thread.answer)}
               </p>
             </div>
           ) : thread.structuredTables.length ||
