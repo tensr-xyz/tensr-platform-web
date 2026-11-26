@@ -1,7 +1,10 @@
 import {
+  cleanPersonLabel,
   dependentColumns,
   openEndColumns,
   questionnaireOutline,
+  stripStructuralItemQualifiers,
+  stripSurveyCodeBrackets,
   tableStubPickerOptions,
 } from './flow-columns';
 
@@ -789,5 +792,41 @@ describe('outline linked other-choice and full stems', () => {
     const stubs = tableStubPickerOptions(columns, []);
     expect(stubs).toHaveLength(1);
     expect(stubs[0].keywords).toMatch(/Capital Wire \(Digital, Markets, Businessweek\)/);
+  });
+});
+
+describe('TEN-41 person-facing labels', () => {
+  it('strips survey codes from picker outline labels', () => {
+    expect(stripSurveyCodeBrackets('Job title (S4)')).toBe('Job title');
+    expect(stripSurveyCodeBrackets('Personal interests (I1)')).toBe('Personal interests');
+    expect(stripSurveyCodeBrackets('Own a luxury watch (L4)')).toBe('Own a luxury watch');
+    expect(stripSurveyCodeBrackets('Total (A)')).toBe('Total (A)');
+    expect(cleanPersonLabel('Outlook on finances (A5)')).toBe('Outlook on finances');
+
+    const outline = questionnaireOutline(
+      [
+        { name: 's4', label: 'Job title (S4)' },
+        { name: 'i1_golf', label: 'Golf ~ Personal interests (I1)' },
+        { name: 'l4', label: 'Own a luxury watch (L4)' },
+      ],
+      []
+    );
+    const labels = outline.map(item => item.label);
+    expect(labels).toContain('Job title');
+    expect(labels.some(label => label.includes('(S4)'))).toBe(false);
+    expect(labels.some(label => /\([A-Z]\d/.test(label))).toBe(false);
+  });
+
+  it('strips structural Brand / Total Reach tags from item wording', () => {
+    expect(stripStructuralItemQualifiers('Metro Ledger (Brand) (Total Reach)')).toBe(
+      'Metro Ledger'
+    );
+    expect(stripStructuralItemQualifiers('Western Guardian (UK) (Total Reach)')).toBe(
+      'Western Guardian (UK)'
+    );
+    expect(
+      stripStructuralItemQualifiers('Capital Wire (Digital, Markets, Businessweek) (Total Reach)')
+    ).toBe('Capital Wire (Digital, Markets, Businessweek)');
+    expect(cleanPersonLabel('Harbor Gazette (Brand) (Total Reach)')).toBe('Harbor Gazette');
   });
 });

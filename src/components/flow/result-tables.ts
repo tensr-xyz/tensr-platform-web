@@ -1541,17 +1541,23 @@ function realWeightToken(value: unknown): string {
   return text;
 }
 
-/** Drop a trailing "[column_name]" from a weight label a person reads. */
+/** Drop '[column_name]' / '(S4)' codes from a label people read. */
 function stripCodeBrackets(label: string, code = ''): string {
   const text = label.trim();
-  const match = /^(.*)\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]?\s*$/.exec(text);
-  if (!match) return text;
-  const left = match[1].trim();
-  const right = match[2].trim();
-  if (!left) return text;
-  if (code && right.toLowerCase() === code.toLowerCase()) return left;
-  if (right.includes('_') || right.toLowerCase() === 'label') return left;
-  return text;
+  if (!text) return text;
+  const looksLikeSurveyCode = (token: string) => {
+    if (!token || token.includes(' ')) return false;
+    if (token.includes('_') || token.toLowerCase() === 'label') return true;
+    return /^[A-Za-z][A-Za-z._]*\d[\w.]*$/.test(token);
+  };
+  const cleaned = text.replace(/\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]/g, (match, right: string) => {
+    const token = String(right || '').trim();
+    if (code && token.toLowerCase() === code.toLowerCase()) return '';
+    if (looksLikeSurveyCode(token)) return '';
+    return match;
+  });
+  const shown = cleaned.replace(/\s+/g, ' ').trim();
+  return shown || text;
 }
 
 function weightName(record: Record<string, unknown>): string {
