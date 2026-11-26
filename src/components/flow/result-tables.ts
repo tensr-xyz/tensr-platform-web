@@ -1293,7 +1293,9 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
   const looks =
     (weight && typeof weight === 'object' && !Array.isArray(weight)) ||
     record.n_observations != null ||
+    record.n_cases != null ||
     record.n_total != null ||
+    record.n_input != null ||
     record.n_missing != null ||
     record.n_excluded_missing != null ||
     record.model_fit != null ||
@@ -1311,12 +1313,22 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       column?: unknown;
       kish_ess?: unknown;
       unweighted_n?: unknown;
+      ran_unweighted?: unknown;
+      weight_aware?: unknown;
     };
-    const column = realWeightToken(block.column);
-    const label = stripCodeBrackets(cell(block.label), column);
-    if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
-      sample.weight = label;
-    } else if (column) sample.weight = column;
+    if (block.ran_unweighted === true || block.weight_aware === false) {
+      sample.weight = 'Unweighted';
+    } else {
+      const column = realWeightToken(block.column);
+      const label = stripCodeBrackets(cell(block.label), column);
+      if (
+        label &&
+        label.toLowerCase() !== column.toLowerCase() &&
+        label.toLowerCase() !== 'weight'
+      ) {
+        sample.weight = label;
+      } else if (column) sample.weight = column;
+    }
     if (!sample.sawEss) {
       const ess = Number(block.kish_ess);
       if (Number.isFinite(ess)) {
@@ -1347,7 +1359,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     }
   }
   if (!sample.sawN) {
-    const count = wholeNumber(record.n ?? record.n_observations ?? record.n_used);
+    const count = wholeNumber(record.n ?? record.n_observations ?? record.n_used ?? record.n_cases);
     const fitted =
       record.model_fit && typeof record.model_fit === 'object'
         ? wholeNumber((record.model_fit as { n?: unknown }).n)
@@ -1359,7 +1371,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     }
   }
   if (!sample.sawTotal) {
-    const total = wholeNumber(record.n_total ?? record.n_rows);
+    const total = wholeNumber(record.n_total ?? record.n_rows ?? record.n_input);
     if (total != null) {
       sample.total = total;
       sample.sawTotal = true;
@@ -1469,7 +1481,16 @@ function stripCodeBrackets(label: string, code = ''): string {
 
 function weightName(record: Record<string, unknown>): string {
   if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
-    const weight = record.weight as { column?: unknown; label?: unknown };
+    const weight = record.weight as {
+      column?: unknown;
+      label?: unknown;
+      ran_unweighted?: unknown;
+      weight_aware?: unknown;
+    };
+    // Forced unweighted runs (cluster / PCA on a weighted file) must not inherit the ledger.
+    if (weight.ran_unweighted === true || weight.weight_aware === false) {
+      return 'Unweighted';
+    }
     const column = realWeightToken(weight.column);
     const label = stripCodeBrackets(cell(weight.label).trim(), column);
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {

@@ -566,6 +566,32 @@ describe('result tables', () => {
     expect(grouped.rows.some(row => row.includes('74.0'))).toBe(false);
   });
 
+  it('keeps an unweighted cluster footer when the project has a design weight', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        test: 'cluster_analysis',
+        n_cases: 500,
+        n_input: 500,
+        resolved_weight: 'none',
+        weight: {
+          column: null,
+          weight_aware: false,
+          ran_unweighted: true,
+          note: 'Cluster Analysis ran unweighted; weighted Cluster Analysis is not available yet.',
+        },
+        cluster_sizes: { '0': 141, '1': 206, '2': 153 },
+      },
+    });
+    expect(view.weight).toBe('Unweighted');
+    expect(view.baseDetail).toMatch(/^Weight: Unweighted;/);
+    expect(view.baseDetail).not.toContain('Design weight');
+    expect(
+      resultFootnote(view, '', 'Cluster Analysis', [
+        { name: 'design_weight', label: 'Design weight' },
+      ])
+    ).toMatch(/Weight: Unweighted/);
+  });
+
   it('says the footnote weight is the one named in the study brief', () => {
     const view = resultViewFromToolResults({
       summary: { weight_source: 'study_brief' },

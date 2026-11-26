@@ -94,7 +94,16 @@ export type AnalysisReportChart =
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number; row_index?: number; label?: string; weight?: number }[];
+      points: {
+        x: number;
+        y: number;
+        row_index?: number;
+        /** Sparse map labels (correspondence / MDS). Prefer `group` for clusters. */
+        label?: string;
+        /** Colour + legend category (cluster / segment). */
+        group?: string;
+        weight?: number;
+      }[];
       point_size?: 'weight';
       /** Value labels for coded/ordinal axes (codes → question labels). */
       x_tick_labels?: Record<string, string>;
