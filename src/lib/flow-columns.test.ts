@@ -305,10 +305,15 @@ describe('picker columns', () => {
   });
 
   it('gives single and multi theme columns distinct outline titles', () => {
-    const { questionnaireOutline: outlineFn, outlineCodedThemeLabel } =
-      jest.requireActual('./flow-columns');
+    const {
+      questionnaireOutline: outlineFn,
+      outlineCodedThemeLabel,
+      tableStubPickerOptions,
+      isCodedMultiThemeColumn,
+    } = jest.requireActual('./flow-columns');
     const stem = 'Why did you give that satisfaction score?';
     const shared = `${stem} themes`;
+    const bothAllMentioned = `${stem} themes (all mentioned)`;
     expect(
       outlineCodedThemeLabel({
         name: 'sat_reason_themes',
@@ -324,19 +329,62 @@ describe('picker columns', () => {
         source_text_column: 'sat_reason',
       })
     ).toBe(`${stem} themes (main theme)`);
+    // Column type (kind) wins over a shared ``_themes`` name and a wrong stored label.
+    expect(
+      isCodedMultiThemeColumn(
+        {
+          name: 'feedback_themes',
+          label: bothAllMentioned,
+          source_text_column: 'feedback',
+        },
+        'single'
+      )
+    ).toBe(false);
+    expect(
+      outlineCodedThemeLabel(
+        {
+          name: 'feedback_themes',
+          label: 'What stood out? themes (all mentioned)',
+          source_text_column: 'feedback',
+        },
+        'single'
+      )
+    ).toBe('What stood out? themes (main theme)');
+    expect(
+      outlineCodedThemeLabel(
+        {
+          name: 'nps_comment_codes',
+          label: 'Any other comments? themes (all mentioned)',
+          coded_multi: true,
+          source_text_column: 'nps_comment',
+        },
+        'multi'
+      )
+    ).toBe('Any other comments? themes (all mentioned)');
+    expect(
+      outlineCodedThemeLabel(
+        {
+          name: 'brand_like_themes',
+          label: 'What do you like about the brand? themes',
+          source_text_column: 'brand_like',
+        },
+        'single'
+      )
+    ).toBe('What do you like about the brand? themes (main theme)');
     const outline = outlineFn(
       [
         { name: 'sat_reason', label: stem, type: 'string' },
         {
           name: 'sat_reason_themes',
-          label: shared,
+          label: bothAllMentioned,
           coded_multi: true,
           multi_response: true,
           source_text_column: 'sat_reason',
         },
         {
-          name: 'sat_reason_first_theme',
-          label: shared,
+          // Same ``_themes`` suffix and identical stored label; kind alone separates them.
+          name: 'sat_reason_themes_main',
+          label: bothAllMentioned,
           source_text_column: 'sat_reason',
         },
       ],
@@ -345,12 +393,38 @@ describe('picker columns', () => {
         kinds: {
           sat_reason: 'open',
           sat_reason_themes: 'multi',
-          sat_reason_first_theme: 'single',
+          sat_reason_themes_main: 'single',
         },
       }
     );
     expect(outline.map((item: { label: string }) => item.label)).toEqual([
       stem,
+      `${stem} themes (all mentioned)`,
+      `${stem} themes (main theme)`,
+    ]);
+    const themeLabels = { Price: 'Price', Taste: 'Taste', Service: 'Service' };
+    const stubs = tableStubPickerOptions(
+      [
+        {
+          name: 'sat_reason_themes',
+          label: bothAllMentioned,
+          coded_multi: true,
+          multi_response: true,
+          source_text_column: 'sat_reason',
+          value_labels: themeLabels,
+        },
+        {
+          name: 'sat_reason_themes_main',
+          label: bothAllMentioned,
+          source_text_column: 'sat_reason',
+          value_labels: themeLabels,
+        },
+      ],
+      [],
+      []
+    );
+    // Without explicit kinds, multi flags vs labelled single still separate the titles.
+    expect(stubs.map(item => item.label)).toEqual([
       `${stem} themes (all mentioned)`,
       `${stem} themes (main theme)`,
     ]);
