@@ -191,6 +191,7 @@ const EDIT_PROCEDURES = new Set([
   'rename_labels',
   'set_labels',
   'merge_small_categories',
+  'set_dont_know_missing',
   'set_nets',
   'set_routing',
   'confirm_loop',
