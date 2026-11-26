@@ -1,5 +1,7 @@
 /** Banner picks on the Tables screen: a question, or a saved audience as a column. */
 
+import { formatProjectedK } from '@/lib/flow-survey';
+
 export type TableBannerRef =
   | { kind: 'column'; column: string }
   | {
@@ -21,10 +23,7 @@ export function audienceBannerSizeLabel(audience: {
   const parts: string[] = [];
   const people = audience.projected_people;
   if (typeof people === 'number' && Number.isFinite(people) && people > 0) {
-    const thousands = people / 1000;
-    const rounded =
-      thousands >= 100 ? Math.round(thousands) : Number(thousands.toFixed(thousands >= 10 ? 0 : 1));
-    parts.push(`${rounded.toLocaleString('en-GB')}k`);
+    parts.push(formatProjectedK(people / 1000));
   }
   const n = audience.n;
   if (typeof n === 'number' && Number.isFinite(n)) {

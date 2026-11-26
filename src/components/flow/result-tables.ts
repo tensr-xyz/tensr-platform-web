@@ -3,7 +3,11 @@ import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 import type { DuplicationPanelData } from '@/components/flow/duplication-panel';
 import type { StandoutPanelData } from '@/components/flow/standout-stats-panel';
-import { bannerHeading } from '@/lib/flow-survey';
+import {
+  bannerHeading,
+  formatProjectedThousands,
+  formatUniverseThousands,
+} from '@/lib/flow-survey';
 
 export type ResultView = {
   tables: RunTable[];
@@ -1214,10 +1218,7 @@ function bannerBookTable(record: Record<string, unknown>): RunTable | null {
         const projected = item.projected_thousands;
         line.push(
           typeof projected === 'number' && Number.isFinite(projected)
-            ? projected.toLocaleString('en-GB', {
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1,
-              })
+            ? formatProjectedThousands(projected)
             : '—'
         );
       }
@@ -2243,7 +2244,7 @@ export function resultFootnote(
         : namedWeight;
   const universe =
     typeof view.universeThousands === 'number'
-      ? `Universe ${view.universeThousands.toFixed(1)} thousand`
+      ? `Universe ${formatUniverseThousands(view.universeThousands)}`
       : '';
   const parts = [
     detail ? '' : base.trim() || view.base,

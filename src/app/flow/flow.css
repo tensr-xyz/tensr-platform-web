@@ -2967,6 +2967,10 @@ select.flow-input {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* TEN-245: always leave a scrollbar track so wide chat banners show a scroll hint. */
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .analysis-table h3 {

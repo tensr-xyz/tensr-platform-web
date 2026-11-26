@@ -943,6 +943,28 @@ describe('result tables', () => {
     expect(view.script).toContain('nrow(df)');
   });
 
+  it('formats universe thousands compactly in the footnote (TEN-245)', () => {
+    const view = resultViewFromToolResults({
+      op: 'banner_table',
+      result: {
+        title: 'Reach',
+        weight: { column: 'pop_weight', universe_thousands: 105700.0 },
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            kind: 'value',
+            label: 'Title A',
+            cells: [{ banner_id: 'total', percent: 23.0, projected_thousands: 24497.6 }],
+          },
+        ],
+      },
+    });
+    expect(view.universeThousands).toBe(105700);
+    expect(resultFootnote(view, '', 'Crosstab')).toContain('Universe 105,700k');
+    expect(resultFootnote(view, '', 'Crosstab')).not.toContain('thousand');
+    expect(view.tables[0].rows[0]).toContain('24,498');
+  });
+
   it('reads the banner screen grid and builds a table from a stored book', () => {
     const fromScreen = resultViewFromToolResults({
       procedure: 'banner_table',
@@ -973,6 +995,8 @@ describe('result tables', () => {
     });
     expect(fromBook.tables[0].rows[0][0]).toBe('Global Ledger');
     expect(fromBook.tables[0].columns).toContain('People (000s)');
+    // TEN-245: dedicated 000s column is a whole number with separators.
+    expect(fromBook.tables[0].rows[0]).toEqual(['Global Ledger', '41.2%', '13']);
 
     const fromMultiStub = resultViewFromToolResults({
       op: 'banner_table',

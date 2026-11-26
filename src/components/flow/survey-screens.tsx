@@ -76,6 +76,7 @@ import {
   codedStub,
   lettersFor,
   formatGroupedNumber,
+  formatProjectedThousands,
   extraCellStatLines,
   mediaCellLines,
   mediaCellText,
@@ -187,7 +188,8 @@ export function displayedCount(
   if (weighted) {
     const projected = cell.projected_thousands;
     if (typeof projected === 'number' && Number.isFinite(projected)) {
-      const shown = formatGroupedNumber(projected, 1).replace(/\.0$/, '');
+      // Dedicated counts / 000s column: whole thousands with separators (TEN-245).
+      const shown = formatProjectedThousands(projected);
       const unweighted = cell.unweighted_n;
       if (unweighted != null && !Number.isNaN(Number(unweighted))) {
         return `${shown} (${formatGroupedNumber(Number(unweighted))})`;
