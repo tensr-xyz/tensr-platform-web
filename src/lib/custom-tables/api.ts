@@ -61,12 +61,14 @@ export function listSavedTables(datasetId: string, token?: string | null) {
   );
 }
 
-export function getSavedTable(datasetId: string, specId: string, token?: string | null) {
-  return authedJson<Record<string, unknown>>(
+export async function getSavedTable(datasetId: string, specId: string, token?: string | null) {
+  const body = await authedJson<Record<string, unknown>>(
     `/datasets/${datasetId}/tables/${specId}`,
     { method: 'GET' },
     token
   );
+  const { resolveTablePayload } = await import('@/lib/tables-async');
+  return resolveTablePayload(body);
 }
 
 export function downloadTableExport(

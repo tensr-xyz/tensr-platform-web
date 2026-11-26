@@ -5819,6 +5819,9 @@ function ReportScreen({
           if (cached) return Promise.resolve(cached);
           return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`, {
             signal: AbortSignal.timeout(30_000),
+          }).then(async body => {
+            const { resolveTablePayload } = await import('@/lib/tables-async');
+            return resolveTablePayload(body);
           });
         },
         { concurrency: 4 }
