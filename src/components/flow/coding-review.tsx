@@ -226,6 +226,8 @@ export function CodingReview({
         if (!page.truncated || !(page.rows || []).length) break;
       }
       const overrides = buildOverrides(cells, edits);
+      // Reviewed answers stay locked so a later AI re-run keeps them.
+      const lockedKeys = Object.keys(edits);
       let jobId: string | null = null;
       for (;;) {
         const applied: Record<string, unknown> = await flowJson(
@@ -236,6 +238,7 @@ export function CodingReview({
               text_column: textColumn,
               codes: codesForApply(codes),
               overrides,
+              locked_keys: lockedKeys,
               use_model: false,
               job_id: jobId,
             }),
