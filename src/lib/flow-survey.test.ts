@@ -233,6 +233,17 @@ describe('flow survey grid', () => {
     ).toContain('Paired McNemar test at 95%');
   });
 
+  it('still names Paired McNemar when no lettered cell survived and display is none', () => {
+    expect(
+      bannerFootnote({
+        paired_within_items: true,
+        letter_test: 'Paired McNemar test at 95%.',
+        significance_display: 'none',
+        letters: [],
+      })
+    ).toContain('Paired McNemar test at 95%');
+  });
+
   it('stacks reach cell lines like Paper 5d (percent, projected+index, n) when toggled', () => {
     expect(
       mediaCellLines(

@@ -451,14 +451,14 @@ export function bannerFootnote(
   const sigLine = significanceFootnoteLine(book, settings);
   if (sigLine) parts.push(sigLine);
   else {
+    const named = String(book.letter_test || '').trim();
+    const paired = Boolean(book.paired_within_items) || named.toLowerCase().startsWith('paired');
     const letters = book.letters as unknown[] | undefined;
-    if (String(book.significance_display || '') !== 'none' && letters?.length) {
-      const named = String(book.letter_test || '').trim();
-      if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
-        parts.push(named || 'Paired McNemar test at 95%');
-      } else {
-        parts.push(named || 'Column proportions test at 95%');
-      }
+    // Paired McNemar must stay named even when no lettered cell survived.
+    if (paired) {
+      parts.push(named || 'Paired McNemar test at 95%');
+    } else if (String(book.significance_display || '') !== 'none' && letters?.length) {
+      parts.push(named || 'Column proportions test at 95%');
     }
   }
   return parts.join(' · ');
