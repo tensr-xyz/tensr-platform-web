@@ -81,7 +81,7 @@ import {
   type StoredChatTurn,
 } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
-import { clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
+import { clientDeckFinishedSummary, clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -1308,6 +1308,7 @@ export function useAgentThread({
   }, [toolResults, answer, turn?.status, runBusy]);
   const kind = outputKind(toolResults);
   const clientDeck = isClientDeckResult(toolResults);
+  const clientDeckSummary = clientDeck ? clientDeckFinishedSummary(toolResults) : null;
   const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseClause(toolResults, answer);
@@ -1398,6 +1399,7 @@ export function useAgentThread({
     toolResults,
     kind,
     clientDeck,
+    clientDeckSummary,
     title,
     takeaway,
     baseNote,
@@ -1422,11 +1424,29 @@ export function useAgentThread({
 
 export type AgentThreadState = ReturnType<typeof useAgentThread>;
 
-function planCopy(answer: string): string {
+function planCopy(answer: string, pending?: AgentLoopResponse['pending_approvals']): string {
   let text = answer.trim();
   const waiting = 'Waiting for approval:';
   if (text.startsWith(waiting)) text = text.slice(waiting.length).trim();
   if (text === 'Plan' || text.startsWith('Plan\n')) text = text.slice(4).trim();
+  if (!text.trim()) {
+    // Rebuild from the signed batch when answer_markdown was only the Plan header.
+    const batch =
+      pending && !Array.isArray(pending) && Array.isArray(pending.batch) ? pending.batch : null;
+    if (batch?.length) {
+      const lines = batch
+        .map((step, index) => {
+          if (!step || typeof step !== 'object') return '';
+          const row = step as { plain?: unknown; procedure?: unknown; params?: unknown };
+          const plain = String(row.plain || '').trim();
+          if (plain) return `${index + 1}. ${plain}`;
+          const procedure = String(row.procedure || 'step').replace(/_/g, ' ');
+          return `${index + 1}. ${procedure}`;
+        })
+        .filter(Boolean);
+      text = lines.join('\n');
+    }
+  }
   return guardUserText(text);
 }
 
@@ -1642,7 +1662,9 @@ export function AgentThreadColumn({
         {thread.plan ? (
           <div className="chat-plan">
             <strong>{thread.approving ? 'Approved · Plan' : 'Waiting for approval · Plan'}</strong>
-            <FlowMarkdown>{planCopy(thread.plan.answer_markdown || '')}</FlowMarkdown>
+            <FlowMarkdown>
+              {planCopy(thread.plan.answer_markdown || '', thread.plan.pending_approvals)}
+            </FlowMarkdown>
             {thread.approving ? null : (
               <div className="flow-row">
                 <Button className="flow-btn primary" type="button" onClick={thread.approve}>
@@ -1832,7 +1854,11 @@ export function AgentThreadColumn({
                 </span>
                 <div>
                   <strong>{thread.title}</strong>
-                  <div className="flow-muted">{thread.kind} · Output</div>
+                  <div className="flow-muted">
+                    {thread.clientDeckSummary?.slideCount
+                      ? `Done · ${thread.clientDeckSummary.slideCount} slides`
+                      : `${thread.kind} · Output`}
+                  </div>
                 </div>
               </Link>
             ) : (
@@ -1863,6 +1889,13 @@ export function AgentThreadColumn({
                 {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
               </Button>
             )}
+            {thread.clientDeck && thread.clientDeckSummary?.preview?.length ? (
+              <ul className="chat-deck-preview" aria-label="Executive summary preview">
+                {thread.clientDeckSummary.preview.map(bullet => (
+                  <li key={bullet}>{bullet}</li>
+                ))}
+              </ul>
+            ) : null}
             <div className="chat-result-actions">
               {asker ? (
                 <>
@@ -1926,11 +1959,28 @@ export function AgentThreadColumn({
                   <Link className="flow-btn primary" href={clientDeckReportHref(projectHref)}>
                     Open in Report
                   </Link>
-                  {thread.downloads[0] ? (
+                  {thread.downloads[0] || thread.clientDeckSummary?.canDownload ? (
                     <Button
                       className="flow-btn"
                       type="button"
-                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                      onClick={() => {
+                        if (thread.downloads[0]) {
+                          void openSignedDownload(thread.downloads[0]);
+                          return;
+                        }
+                        if (!thread.datasetId) return;
+                        thread.setStatus('Downloading PowerPoint…');
+                        void import('@/lib/client-deck-job')
+                          .then(({ exportClientDeckAgain }) =>
+                            exportClientDeckAgain(thread.datasetId!, thread.turn?.tool_results, {
+                              onProgress: message => thread.setStatus(message),
+                            })
+                          )
+                          .then(() => thread.setStatus('PowerPoint downloaded.'))
+                          .catch(() =>
+                            thread.setStatus('That PowerPoint could not be downloaded.')
+                          );
+                      }}
                     >
                       Download .pptx
                     </Button>

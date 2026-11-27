@@ -1,3 +1,4 @@
+import { shouldAcceptColumnValuesPage } from '@/lib/file-wide-column-shares';
 import { rowsFromFileCounts } from './code-frame-rail';
 
 describe('code-frame rail file-wide counts', () => {
@@ -15,5 +16,11 @@ describe('code-frame rail file-wide counts', () => {
   it('merges duplicate labels from code and label keys', () => {
     const { codes } = rowsFromFileCounts({ Price: 10, price: 5 }, { price: 'Price' });
     expect(codes).toEqual([{ id: 'Price', label: 'Price', count: 15 }]);
+  });
+
+  it('accepts empty-code whole-file pages so base N is still file-wide', () => {
+    expect(shouldAcceptColumnValuesPage({ n: 800, counts: {} })).toBe(true);
+    expect(shouldAcceptColumnValuesPage({ n: 12, counts: { Taste: 4 } })).toBe(true);
+    expect(shouldAcceptColumnValuesPage({ n: 50 })).toBe(false);
   });
 });

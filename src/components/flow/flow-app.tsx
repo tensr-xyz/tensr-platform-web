@@ -284,7 +284,18 @@ import {
   type ColumnDependencies,
   type RemovedCase,
 } from '@/components/flow/variable-lineage';
-import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
+import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
+import {
+  fileWideBaseN,
+  fileWideMissingCount,
+  isFileWideColumnPage,
+  missingRowsCaption,
+  percentOfBase,
+  rowsFromFileWideCounts,
+  shouldAcceptColumnValuesPage,
+  variableShareCaption,
+  type FileWideColumnPage,
+} from '@/lib/file-wide-column-shares';
 import {
   appendNewWeightOption,
   datasetRowId,
@@ -3815,18 +3826,8 @@ function ResponsesScreen({
     label: string;
   } | null>(null);
   const [dataChecksOpen, setDataChecksOpen] = useState(false);
-  const [columnCounts, setColumnCounts] = useState<
-    Record<
-      string,
-      {
-        counts?: Record<string, number>;
-        value_labels?: Record<string, string>;
-        missing?: number;
-        n: number;
-        fallback?: boolean;
-      }
-    >
-  >({});
+  const [columnCounts, setColumnCounts] = useState<Record<string, FileWideColumnPage>>({});
+  const fileWideLoadedKeys = useRef(new Set<string>());
   const [columnDeps, setColumnDeps] = useState<ColumnDependencies | null>(null);
   const [removedCases, setRemovedCases] = useState<RemovedCase[]>([]);
   const [restoringCases, setRestoringCases] = useState(false);
@@ -4170,13 +4171,15 @@ function ResponsesScreen({
   const variableName = columnMeta(activeName)?.name || activeName;
   const fileKey = `${datasetId}:${variableName}`;
   const fetched = columnCounts[fileKey];
-  const countsSettled = Boolean(fetched);
-  const filePage = fetched && !fetched.fallback ? fetched : undefined;
-  const counts = filePage ? fileCounts(filePage) : valueCounts(activeValues);
-  const countTotal = (filePage ? filePage.n : activeValues.length) || 1;
-  const missingCount = filePage
-    ? filePage.missing || 0
-    : activeValues.filter(value => value === '').length;
+  const filePage = isFileWideColumnPage(fetched) ? fetched : undefined;
+  // Settled only when whole-file counts arrived — never when preview was the fallback.
+  const countsSettled = Boolean(filePage);
+  const counts = filePage ? rowsFromFileWideCounts(filePage) : valueCounts(activeValues);
+  const countTotal = fileWideBaseN(filePage, activeValues.length);
+  const missingCount = fileWideMissingCount(
+    filePage,
+    activeValues.filter(value => value === '').length
+  );
   const projectDatasets = datasets.filter(row => !project || row.project_id === project.id);
   const uidIndex = names.indexOf('_row_uid');
   const idIndex = names.findIndex(name =>
@@ -4188,30 +4191,55 @@ function ResponsesScreen({
     evidenceColumn ? name === evidenceColumn : index === activeIndex;
 
   useEffect(() => {
-    if (!datasetId || sheetPhase !== 'ready' || !variableName || columnCounts[fileKey]) return;
+    // New file → allow every column to fetch whole-file counts again.
+    fileWideLoadedKeys.current.clear();
+    setColumnCounts({});
+  }, [datasetId]);
+
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready' || !variableName) return;
+    // One successful whole-file load per column; never stick on preview after a soft fail.
+    if (fileWideLoadedKeys.current.has(fileKey)) return;
     let cancelled = false;
-    void flowJson<{
-      counts?: Record<string, number>;
-      value_labels?: Record<string, string>;
-      missing?: number;
-      n?: number;
-    }>(`/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/values`)
-      .then(page => {
-        if (cancelled) return;
-        setColumnCounts(current => ({
-          ...current,
-          [fileKey]: page.counts ? { ...page, n: page.n || 0 } : { n: 0, fallback: true },
-        }));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setColumnCounts(current => ({ ...current, [fileKey]: { n: 0, fallback: true } }));
-        }
-      });
+    let attempt = 0;
+    const timers: number[] = [];
+    const load = () => {
+      attempt += 1;
+      void flowJson<{
+        counts?: Record<string, number>;
+        value_labels?: Record<string, string>;
+        missing?: number;
+        n?: number;
+      }>(`/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/values`)
+        .then(page => {
+          if (cancelled) return;
+          if (shouldAcceptColumnValuesPage(page)) {
+            fileWideLoadedKeys.current.add(fileKey);
+            setColumnCounts(current => ({
+              ...current,
+              [fileKey]: { ...page, n: Number(page.n) || 0 },
+            }));
+            return;
+          }
+          if (attempt < 3) {
+            timers.push(window.setTimeout(load, 300 * attempt));
+            return;
+          }
+          // Leave unsettled so the rail keeps loading copy instead of "% of loaded rows".
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (attempt < 3) {
+            timers.push(window.setTimeout(load, 300 * attempt));
+          }
+        });
+    };
+    load();
     return () => {
       cancelled = true;
+      for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
+  }, [datasetId, sheetPhase, variableName, fileKey]);
 
   useEffect(() => {
     if (!datasetId || sheetPhase !== 'ready' || !variableName) {
@@ -5242,11 +5270,7 @@ function ResponsesScreen({
                 <div className="variable-head">
                   <span className="flow-muted">Click codes to filter</span>
                   <span className="flow-muted">
-                    {filePage
-                      ? `% of all ${filePage.n.toLocaleString('en-GB')} rows`
-                      : countsSettled
-                        ? '% of loaded rows'
-                        : '% of all rows'}
+                    {variableShareCaption(filePage, countsSettled)}
                   </span>
                 </div>
                 {!countsSettled
@@ -5272,9 +5296,9 @@ function ResponsesScreen({
                           ? ` ${columnMeta(activeName)?.value_labels?.[item.label]}`
                           : ''}
                       </span>
-                      <span>{Math.round((item.count / countTotal) * 100)}%</span>
+                      <span>{percentOfBase(item.count, countTotal)}%</span>
                       <span className="value-track">
-                        <i style={{ width: `${Math.round((item.count / countTotal) * 100)}%` }} />
+                        <i style={{ width: `${percentOfBase(item.count, countTotal)}%` }} />
                       </span>
                     </span>
                   </Button>
@@ -5282,11 +5306,7 @@ function ResponsesScreen({
                 {countsSettled ? (
                   <div className="variable-missing" data-none={missingCount === 0 || undefined}>
                     <span>Missing</span>
-                    <span>
-                      {missingCount
-                        ? `${Math.round((missingCount / countTotal) * 100)}% · ${missingCount} rows`
-                        : 'None'}
-                    </span>
+                    <span>{missingRowsCaption(missingCount, countTotal)}</span>
                   </div>
                 ) : null}
                 {project ? (

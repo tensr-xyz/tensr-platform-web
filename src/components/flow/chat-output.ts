@@ -921,6 +921,17 @@ function summaryLine(
     const summary = item?.summary || nestedSummary;
     if (typeof summary?.line === 'string') push(summary.line);
     if (typeof summary?.statistic === 'string') push(summary.statistic);
+    // Finished client decks stamp Done · N slides on answer_markdown; salvage it
+    // when the model reply failed and summary.line was still mid-build.
+    if (
+      nested &&
+      (nested.procedure === 'build_client_deck' ||
+        (item as { name?: string; procedure?: string }).name === 'build_client_deck' ||
+        (item as { procedure?: string }).procedure === 'build_client_deck') &&
+      typeof nested.answer_markdown === 'string'
+    ) {
+      push(String(nested.answer_markdown));
+    }
     // Report answer is the same contract when the summary line was stripped.
     for (const layer of [item?.result, nested]) {
       if (!layer || typeof layer !== 'object') continue;

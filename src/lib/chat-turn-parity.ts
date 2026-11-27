@@ -86,10 +86,13 @@ export function numberedNextStepsFromTurn(opts: {
   const edits = chatTurnChangesFromToolResults(toolResults);
   const analysisTypes = analysisTypesFromToolResults(toolResults);
   const candidates: Array<{ label: string; prompt: string }> = [];
+  const thisTurnBuiltReport = turnBuiltReportPages(toolResults);
+  // Deck reshape chips only when this turn built a report, or the project already
+  // has one and this turn did not edit data (Paper 9e: after a recode, offer
+  // change/base chips — never stale board-deck prompts).
   const reportReady =
-    Boolean(opts.hasReportPins) ||
-    Boolean(opts.hasReportDocument) ||
-    turnBuiltReportPages(toolResults);
+    thisTurnBuiltReport ||
+    ((Boolean(opts.hasReportPins) || Boolean(opts.hasReportDocument)) && edits.length === 0);
 
   if (reportReady) {
     candidates.push({
@@ -192,6 +195,7 @@ const EDIT_PROCEDURES = new Set([
   'set_labels',
   'merge_small_categories',
   'set_dont_know_missing',
+  'hide_questions',
   'set_nets',
   'set_routing',
   'confirm_loop',

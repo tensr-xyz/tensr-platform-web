@@ -66,7 +66,9 @@ import {
 import {
   HOUSE_STYLE_OPTIONS,
   TABLE_RULE_CATALOG,
+  applyTablePresentation,
   tableRuleLabel,
+  tableRuleSkipReason,
   tableStylePresetLabel,
   type TableRule,
   type TableStylePreset,
@@ -216,6 +218,23 @@ export function preferAffirmativeRowFirst<T extends { label?: string; kind?: str
   return next;
 }
 
+/** Format one cell for the page preview. Rank/difference are not percents. */
+export function formatPreviewCell(value: unknown, columnKind: string | null | undefined): string {
+  if (value == null || value === '') return '—';
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const kind = String(columnKind || '')
+    .trim()
+    .toLowerCase();
+  if (kind === 'rank') return String(Math.round(n));
+  if (kind === 'difference') {
+    const rounded = Math.round(n * 10) / 10;
+    if (rounded > 0) return `+${rounded}`;
+    return String(rounded);
+  }
+  return `${Math.round(n * 10) / 10}%`;
+}
+
 /** Compact percent grid from a saved banner book. Never invents placeholder rows. */
 export function previewGridFromBannerBook(
   book: Record<string, unknown> | null | undefined
@@ -223,15 +242,20 @@ export function previewGridFromBannerBook(
   if (!book || typeof book !== 'object') return [];
   const banners = (Array.isArray(book.banner_columns) ? book.banner_columns : []).filter(
     col => col && typeof col === 'object'
-  ) as Array<{ id?: string; label?: string }>;
+  ) as Array<{ id?: string; label?: string; kind?: string }>;
   const header = ['', ...banners.map(col => String(col.label || col.id || '').trim() || 'Column')];
   const rowsOut: string[][] = [header];
-
-  const formatPct = (value: unknown): string => {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '—';
-    return `${Math.round(n * 10) / 10}%`;
-  };
+  const kindById = new Map(
+    banners.map(
+      col =>
+        [
+          String(col.id || ''),
+          String(col.kind || '')
+            .trim()
+            .toLowerCase(),
+        ] as const
+    )
+  );
 
   const bookRows = Array.isArray(book.rows) ? book.rows : [];
   if (bookRows.length) {
@@ -240,14 +264,18 @@ export function previewGridFromBannerBook(
         label?: string;
         id?: string;
         kind?: string;
-        cells?: Array<{ banner_id?: string; percent?: number | null }>;
+        cells?: Array<{ banner_id?: string; percent?: number | null; kind?: string }>;
       }>
     );
     for (const row of ordered.slice(0, 12)) {
       if (String(row.kind || '') === 'header') continue;
       const cells = Array.isArray(row.cells) ? row.cells : [];
       const byBanner = new Map(
-        cells.map(cell => [String(cell.banner_id || ''), formatPct(cell.percent)] as const)
+        cells.map(cell => {
+          const bannerId = String(cell.banner_id || '');
+          const kind = String(cell.kind || kindById.get(bannerId) || '');
+          return [bannerId, formatPreviewCell(cell.percent, kind)] as const;
+        })
       );
       rowsOut.push([
         String(row.label || row.id || '').trim() || 'Row',
@@ -264,6 +292,7 @@ export function previewGridFromBannerBook(
     stub_label?: string;
     banner_id?: string;
     percent?: number | null;
+    kind?: string;
   }>;
   if (!cells.length || !banners.length) return [];
   const stubOrder: string[] = [];
@@ -285,11 +314,28 @@ export function previewGridFromBannerBook(
             String(cell.stub_row_id || cell.stub_label || '') === stubId &&
             String(cell.banner_id || '') === String(col.id || '')
         );
-        return hit ? formatPct(hit.percent) : '—';
+        if (!hit) return '—';
+        const kind = String(hit.kind || kindById.get(String(col.id || '')) || '');
+        return formatPreviewCell(hit.percent, kind);
       }),
     ]);
   }
   return rowsOut.length > 1 ? rowsOut : [];
+}
+
+/** Apply object rules/edits then build the page preview grid. */
+export function previewGridForTableObject(
+  book: Record<string, unknown> | null | undefined,
+  obj: Pick<ReportObject, 'tableStyle' | 'tableRules' | 'tableEdits'>
+): string[][] {
+  if (!book || typeof book !== 'object') return [];
+  return previewGridFromBannerBook(
+    applyTablePresentation(book, {
+      style: obj.tableStyle,
+      rules: obj.tableRules,
+      edits: obj.tableEdits,
+    })
+  );
 }
 
 function RunTableGrid({
@@ -640,8 +686,8 @@ function TableObjectPreview({
   const tableQuery = usePageTableBook(datasetId, pageId, specId);
   const rows = useMemo(() => {
     if (!tableQuery.data) return [] as string[][];
-    return previewGridFromBannerBook(tableQuery.data);
-  }, [tableQuery.data]);
+    return previewGridForTableObject(tableQuery.data, obj);
+  }, [tableQuery.data, obj.tableRules, obj.tableEdits, obj.tableStyle]);
   const questionTitle = useMemo(
     () => (tableQuery.data ? tablePreviewTitle(tableQuery.data) : ''),
     [tableQuery.data]
@@ -996,6 +1042,11 @@ export function ReportEditor({
   };
 
   const selectedTable = selected?.kind === 'table' ? selected : null;
+  const selectedTableBook = usePageTableBook(
+    datasetId,
+    page?.id || '',
+    String(selectedTable?.tableSpecId || '').trim()
+  );
   const selectedLive = selected?.kind === 'text' ? objectBinding(selected) : null;
   const pageTables = useMemo(
     () => (page?.objects || []).filter(obj => obj.kind === 'table'),
@@ -1691,30 +1742,42 @@ export function ReportEditor({
                 {selectedTable.tableRules.length === 0 ? (
                   <p className="flow-muted">No rules yet. Add one to re-apply on every refresh.</p>
                 ) : (
-                  selectedTable.tableRules.map(rule => (
-                    <div
-                      key={rule.id}
-                      className="report-editor-rule-row"
-                      data-enabled={rule.enabled}
-                    >
-                      <Button
-                        type="button"
-                        className="report-editor-rule-label"
-                        onClick={() => toggleRule(rule.id)}
-                        title={rule.enabled ? 'Turn rule off' : 'Turn rule on'}
+                  selectedTable.tableRules.map(rule => {
+                    const skipReason = tableRuleSkipReason(
+                      selectedTableBook.data as Record<string, unknown> | undefined,
+                      rule
+                    );
+                    return (
+                      <div
+                        key={rule.id}
+                        className="report-editor-rule-block"
+                        data-enabled={rule.enabled}
+                        data-skipped={Boolean(skipReason)}
                       >
-                        {tableRuleLabel(rule)}
-                      </Button>
-                      <Button
-                        type="button"
-                        className="report-editor-rule-remove"
-                        onClick={() => removeRule(rule.id)}
-                        aria-label={`Remove ${tableRuleLabel(rule)}`}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))
+                        <div className="report-editor-rule-row">
+                          <Button
+                            type="button"
+                            className="report-editor-rule-label"
+                            onClick={() => toggleRule(rule.id)}
+                            title={rule.enabled ? 'Turn rule off' : 'Turn rule on'}
+                          >
+                            {tableRuleLabel(rule)}
+                          </Button>
+                          <Button
+                            type="button"
+                            className="report-editor-rule-remove"
+                            onClick={() => removeRule(rule.id)}
+                            aria-label={`Remove ${tableRuleLabel(rule)}`}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        {skipReason ? (
+                          <p className="report-editor-rule-skip flow-muted">{skipReason}</p>
+                        ) : null}
+                      </div>
+                    );
+                  })
                 )}
                 {addingRule ? (
                   <div className="report-editor-rule-catalog" role="listbox" aria-label="Add rule">

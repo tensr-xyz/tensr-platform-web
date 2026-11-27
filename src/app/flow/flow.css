@@ -3846,6 +3846,21 @@ select.flow-input {
   gap: 8px;
 }
 
+.chat-deck-preview {
+  margin: 0;
+  padding: 0 0 0 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.chat-deck-preview li::marker {
+  color: var(--color-muted);
+}
+
 button.chat-result-top,
 a.chat-result-top {
   width: 100%;
@@ -16795,15 +16810,28 @@ button.audience-op {
   background: var(--color-well);
 }
 
+.report-editor-rule-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .report-editor-rule-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.report-editor-rule-row[data-enabled='false'] .report-editor-rule-label {
+.report-editor-rule-block[data-enabled='false'] .report-editor-rule-label {
   color: var(--color-muted);
   text-decoration: line-through;
+}
+
+.report-editor-rule-skip {
+  margin: 0;
+  padding-left: 0;
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .report-editor-rule-label {
