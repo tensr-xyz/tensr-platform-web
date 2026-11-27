@@ -857,6 +857,33 @@ describe('chat output panel', () => {
     expect(analysisFailureMessage(pending)).toBe('');
   });
 
+  it('TEN-269: finished themes clear pending so the Building card can drop', () => {
+    const landed = [
+      {
+        ok: true,
+        procedure: 'standout_stats',
+        run_id: 'standout-done-1',
+        summary: {
+          pending: true,
+          themes: [{ theme: 'Media', stats: [{ audience_percent: 40, index: 200 }] }],
+        },
+        result: {
+          ok: true,
+          pending: true,
+          status: 'pending',
+          run_id: 'standout-done-1',
+          result: {
+            analysis_type: 'standout_stats',
+            themes: [{ theme: 'Work', stats: [{ audience_percent: 28, index: 280 }] }],
+            lead: '28% are in the C-suite, 2.8x the average',
+          },
+        },
+      },
+    ];
+    expect(isAnalysisPending(landed)).toBe(false);
+    expect(outputCardReady({ status: 'ok', tool_results: landed }, false)).toBe(true);
+  });
+
   it('TEN-269: failed standout surfaces the real reason for Retry', () => {
     const failed = [
       {

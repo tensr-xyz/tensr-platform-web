@@ -1658,7 +1658,13 @@ export function AgentThreadColumn({
         {(() => {
           const pendingScan = isAnalysisPending(thread.toolResults);
           const failure = analysisFailureMessage(thread.toolResults);
-          if (pendingScan && !thread.resultView.standout && !thread.plan) {
+          // Paper 14b: Building card only while the scan is still open. Once the
+          // standout card or a finished lead is on screen, drop the progress block.
+          const answerLanded = Boolean(
+            thread.resultView.standout ||
+            (thread.lead && /x the average|× the average/i.test(thread.lead))
+          );
+          if (pendingScan && !answerLanded && !thread.plan) {
             const lines = thread.steps.length
               ? thread.steps
               : ['Building standout stats', 'Scanning questions across the file'];
