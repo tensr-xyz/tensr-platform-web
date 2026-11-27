@@ -15,6 +15,7 @@ import {
   type CodeframeImportParsed,
   type CodeframeTheme,
 } from '@/lib/codeframe-import';
+import { shouldAcceptColumnValuesPage } from '@/lib/file-wide-column-shares';
 
 type CodeRow = { id: string; label: string; count: number };
 
@@ -120,6 +121,7 @@ export function CodeFrameRail({
 }) {
   const [{ codes, blank }, setFrame] = useState(() => rowsFrom(values));
   const [baseN, setBaseN] = useState(values.length || 0);
+  const [fileWideReady, setFileWideReady] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState(codes[0]?.id || '');
   const [rename, setRename] = useState('');
@@ -135,6 +137,8 @@ export function CodeFrameRail({
   const fileRef = useRef<HTMLInputElement>(null);
   const signature = `${column}\n${values.join('\n')}`;
   useEffect(() => {
+    // Preview page changes must not clobber whole-file % after they have loaded.
+    if (fileWideReady) return;
     const next = rowsFrom(values);
     setFrame(next);
     setBaseN(values.length || 0);
@@ -145,11 +149,12 @@ export function CodeFrameRail({
     setError('');
     setImportPreview(null);
     setImportMode('replace');
-  }, [signature]);
+  }, [signature, fileWideReady, values]);
   // File-wide counts and base (Paper 4d · "% of 2,259"), not the preview window.
   useEffect(() => {
     if (!datasetId || !column) return;
     let live = true;
+    setFileWideReady(false);
     void flowJson<{
       counts?: Record<string, number>;
       value_labels?: Record<string, string>;
@@ -157,20 +162,24 @@ export function CodeFrameRail({
       n?: number;
     }>(`/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values`)
       .then(page => {
-        if (!live || !page.counts) return;
-        const next = rowsFromFileCounts(page.counts, page.value_labels || {}, page.missing || 0);
-        if (!next.codes.length) return;
+        if (!live || !shouldAcceptColumnValuesPage(page)) return;
+        const next = rowsFromFileCounts(
+          page.counts || {},
+          page.value_labels || {},
+          page.missing || 0
+        );
         setFrame(next);
-        setBaseN(Number(page.n) || values.length || 0);
+        setBaseN(Number(page.n) || 0);
+        setFileWideReady(true);
         setOpenId(current => current || next.codes[0]?.id || '');
       })
       .catch(() => {
-        /* Keep the preview-window tallies. */
+        /* Keep the preview-window tallies until a later retry. */
       });
     return () => {
       live = false;
     };
-  }, [datasetId, column, signature, values.length]);
+  }, [datasetId, column]);
   const total = baseN || values.length || 1;
   const textColumn = String(textColumnProp || '').trim() || textColumnFromCodeColumn(column);
   const headTitle = `${title || textColumn} · ${codes.length} theme${
