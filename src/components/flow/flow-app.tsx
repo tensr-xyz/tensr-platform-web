@@ -6162,19 +6162,15 @@ function ReportScreen({
     setError('');
     setNote('');
     await deck();
-    if (selected.length) await bannerBook();
+    await bannerBook();
     await topline();
-    setNote(
-      selected.length
-        ? 'Deck, banner book, and topline downloaded.'
-        : 'Deck and topline downloaded.'
-    );
+    setNote('Deck, banner book, and topline downloaded.');
   };
 
   const bannerBook = async () => {
-    // Checked rows win; otherwise every saved table by id (dataset/project list),
-    // not only the subset Overview managed to open — export rebuilds each sheet.
-    const checkedIds = selected.map(row => row.id).filter(Boolean);
+    // Card copy is "Every saved table": always the full saved list by id, never
+    // the Overview open/picked subset (ready rows only) and never the wave
+    // dialog's last audience name as the file stem.
     const exportDatasetId =
       selected[0]?.datasetId || specs[0]?.datasetId || staleTables[0]?.datasetId || datasetId;
     if (!exportDatasetId) {
@@ -6182,14 +6178,14 @@ function ReportScreen({
       return;
     }
     setError('');
-    const stem =
-      (audienceNames[0] || 'banner-book').replace(/[^\w.-]+/g, '-').slice(0, 40) || 'banner-book';
-    const { bannerBookFromTables } = await import('@/components/flow/export-dialog');
-    await bannerBookFromTables(exportDatasetId, stem, {
+    const { bannerBookFromTables, overviewBannerBookArgs } =
+      await import('@/components/flow/export-dialog');
+    const request = overviewBannerBookArgs({
+      datasetId: exportDatasetId,
       projectId,
-      specIds: checkedIds.length ? checkedIds : undefined,
-      everySaved: checkedIds.length === 0,
+      projectName: project?.name,
     });
+    await bannerBookFromTables(request.datasetId, request.stem, request.opts);
     setNote('Banner book downloaded.');
   };
 

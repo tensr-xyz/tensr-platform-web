@@ -1,7 +1,9 @@
 import {
+  bannerBookFileStem,
   bannerBookFromTables,
   deckBatchPayload,
   everySavedTableSpecIds,
+  overviewBannerBookArgs,
   pipelineExportPayload,
   reportExportFormatMeta,
   tableSpecIdsFromReportDocument,
@@ -131,6 +133,47 @@ describe('tableSpecIdsFromReportPages', () => {
 describe('uniqueSpecIds', () => {
   it('dedupes and drops blanks while keeping order', () => {
     expect(uniqueSpecIds(['a', '', 'b', 'a', null, 'c'])).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('bannerBookFileStem', () => {
+  it('uses the project or book label and never keeps an audience phrase as-is', () => {
+    expect(bannerBookFileStem('IGI demo')).toBe('IGI-demo');
+    expect(bannerBookFileStem('UK HNW · big travellers')).toBe('UK-HNW-big-travellers');
+    expect(bannerBookFileStem('')).toBe('banner-book');
+    expect(bannerBookFileStem(null)).toBe('banner-book');
+    expect(bannerBookFileStem('   ')).toBe('banner-book');
+  });
+});
+
+describe('overviewBannerBookArgs', () => {
+  it('always requests every saved table and stems from the project name', () => {
+    expect(
+      overviewBannerBookArgs({
+        datasetId: 'ds-1',
+        projectId: 'proj-1',
+        projectName: 'Media tracker Q3',
+      })
+    ).toEqual({
+      datasetId: 'ds-1',
+      stem: 'Media-tracker-Q3',
+      opts: { projectId: 'proj-1', everySaved: true },
+    });
+    expect(
+      overviewBannerBookArgs({
+        datasetId: 'ds-2',
+        projectName: 'UK HNW · big travellers',
+      })
+    ).toEqual({
+      datasetId: 'ds-2',
+      stem: 'UK-HNW-big-travellers',
+      opts: { everySaved: true },
+    });
+    expect(overviewBannerBookArgs({ datasetId: 'ds-3' })).toEqual({
+      datasetId: 'ds-3',
+      stem: 'banner-book',
+      opts: { everySaved: true },
+    });
   });
 });
 
