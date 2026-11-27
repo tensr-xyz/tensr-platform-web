@@ -192,6 +192,7 @@ const EDIT_PROCEDURES = new Set([
   'set_labels',
   'merge_small_categories',
   'set_dont_know_missing',
+  'hide_questions',
   'set_nets',
   'set_routing',
   'confirm_loop',
