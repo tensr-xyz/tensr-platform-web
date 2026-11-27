@@ -2103,6 +2103,72 @@ describe('funnelHeadline', () => {
     expect(view.baseDetail || '').toMatch(/base = 3,000 \(3,900,000 weighted\)/);
   });
 
+  it('TEN-253: summary-locked multi-select cards keep % of respondents', () => {
+    // The summary grid locks the card; it must not fall back to Valid %.
+    const samples = [
+      {
+        title: 'Brand awareness',
+        rows: [
+          { value: 'North Bank', frequency: '320', percent: '40.0' },
+          { value: 'River House', frequency: '240', percent: '30.0' },
+        ],
+        unweighted: 800,
+        weighted: 800,
+        weightLabel: 'Design weight',
+      },
+      {
+        title: 'Devices used yesterday',
+        rows: [
+          { value: 'Phone', frequency: '500', percent: '62.5' },
+          { value: 'Tablet', frequency: '200', percent: '25.0' },
+          { value: 'Laptop', frequency: '350', percent: '43.8' },
+        ],
+        unweighted: 800,
+        weighted: 960,
+        weightLabel: 'Raked weight',
+      },
+      {
+        title: 'Topics kept informed about',
+        rows: [
+          { value: 'Health', frequency: '40', percent: '50.0' },
+          { value: 'Sport', frequency: '24', percent: '30.0' },
+        ],
+        unweighted: 80,
+        weighted: 80,
+        weightLabel: 'Sample weight',
+      },
+    ];
+    for (const sample of samples) {
+      const view = resultViewFromToolResults({
+        procedure: 'frequencies',
+        summary: {
+          table: [
+            {
+              title: sample.title,
+              multiple_response: true,
+              mr_base: 'percent_of_respondents',
+              rows: sample.rows,
+            },
+          ],
+          line: 'Frequency table.',
+        },
+        bases: [{ column: sample.title, unweighted: sample.unweighted, weighted: sample.weighted }],
+        weight: {
+          column: 'w',
+          label: sample.weightLabel,
+          unweighted_n: sample.unweighted,
+          weighted_n: sample.weighted,
+        },
+      });
+      expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', '% of respondents']);
+      expect(view.tables[0].columns).not.toContain('Valid %');
+      expect(view.baseDetail || '').toContain(
+        `base = ${sample.unweighted.toLocaleString('en-GB')} (${sample.weighted.toLocaleString('en-GB')} weighted)`
+      );
+      expect(view.baseDetail || '').toContain(`Weight: ${sample.weightLabel}`);
+    }
+  });
+
   it('TEN-192: prefers the audience column base over the full-file weight block', () => {
     const cases = [
       {

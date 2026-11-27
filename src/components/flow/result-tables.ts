@@ -409,11 +409,19 @@ function asTable(value: unknown): RunTable | null {
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
 function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
   if (!Array.isArray(table) || !table.length) return [];
+  type SummaryBlock = {
+    title?: unknown;
+    rows: unknown[];
+    multiple_response?: unknown;
+    mr_base?: unknown;
+    note?: unknown;
+    notes?: unknown;
+  };
   const titled = table.every(
     item => item && typeof item === 'object' && Array.isArray((item as { rows?: unknown }).rows)
   );
-  const blocks = titled
-    ? (table as { title?: unknown; rows: unknown[] }[])
+  const blocks: SummaryBlock[] = titled
+    ? (table as SummaryBlock[])
     : [{ title: fallbackTitle, rows: table }];
   const built: RunTable[] = [];
   for (const block of blocks) {
@@ -422,6 +430,13 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
         Boolean(row) && typeof row === 'object' && !Array.isArray(row)
     );
     const means = records.some(row => row.mean != null || row.sd != null || row.std != null);
+    const noteText = cell(block.note);
+    const notesText = Array.isArray(block.notes) ? block.notes.map(cell).join(' ') : '';
+    const explanatory = `${noteText} ${notesText}`;
+    const multipleResponse =
+      Boolean(block.multiple_response) ||
+      block.mr_base === 'percent_of_respondents' ||
+      /percent of respondents who selected|people may select more than one/i.test(explanatory);
     const body: string[][] = [];
     for (const record of records) {
       const label = cell(record.label ?? record.value ?? record.variable);
@@ -455,8 +470,10 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
       ),
       columns: means
         ? ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n']
-        : // Frequency summary quotes valid percent of who answered, not % of all.
-          ['Answer', 'Frequency', 'Valid %'],
+        : // Multi-select shares are of respondents; single-select keeps Valid %.
+          multipleResponse
+          ? ['Answer', 'Frequency', '% of respondents']
+          : ['Answer', 'Frequency', 'Valid %'],
       rows: body,
     });
   }
@@ -1525,8 +1542,12 @@ function sampleLine(sample: SampleBits): string {
   if (sample.sawTableBase) {
     const weighted = sample.tableWeighted;
     const unweightedText = formatBaseCount(sample.tableUnweighted);
+    // When a weight ran, always show the weighted base — even if it equals n
+    // (design weights that average to 1 still need "(N weighted)").
+    const showWeighted =
+      weighted != null && (weighted !== sample.tableUnweighted || weight !== 'Weight: Unweighted');
     parts.push(
-      weighted != null && weighted !== sample.tableUnweighted
+      showWeighted
         ? `base = ${unweightedText} (${formatBaseCount(weighted)} weighted)`
         : `base = ${unweightedText}`
     );
