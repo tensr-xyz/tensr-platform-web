@@ -2179,6 +2179,79 @@ describe('funnelHeadline', () => {
     }
   });
 
+  it('TEN-190: paired audience footer recovers leaf base from cells when column.bases is missing', () => {
+    const cases = [
+      {
+        audience_label: 'Sector buyers',
+        audience_n: 218,
+        audience_w: 4100,
+        file_n: 10100,
+        file_w: 105_700_000,
+        bannerId: 'logic:Sector buyers',
+      },
+      {
+        audience_label: 'Institutional investors',
+        audience_n: 160,
+        audience_w: 2800,
+        file_n: 8000,
+        file_w: 12_000_000,
+        bannerId: 'audience',
+      },
+      {
+        audience_label: 'Weekend travellers',
+        audience_n: 305,
+        audience_w: 9200,
+        file_n: 15000,
+        file_w: 40_000_000,
+        bannerId: 'logic:Weekend travellers',
+      },
+    ];
+    for (const sample of cases) {
+      const view = resultViewFromToolResults({
+        paired_within_items: true,
+        letter_test: 'Paired McNemar test at 95%.',
+        audience_label: sample.audience_label,
+        audience_filter: { column: 'aud', op: '=', value: '1' },
+        answered_n: sample.file_n,
+        weight: {
+          column: 'proj_weight',
+          label: 'Projection weight (people)',
+          weight_aware: true,
+          unweighted_n: sample.file_n,
+          weighted_n: sample.file_w,
+        },
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          {
+            id: sample.bannerId,
+            label: sample.audience_label,
+            filter: { column: 'aud', op: '=', value: '1' },
+          },
+        ],
+        cells: [
+          {
+            stub_row_id: 'a',
+            banner_id: 'total',
+            bases: { column: { unweighted_n: sample.file_n, weighted_n: sample.file_w } },
+          },
+          {
+            stub_row_id: 'a',
+            banner_id: sample.bannerId,
+            bases: {
+              column: { unweighted_n: sample.audience_n, weighted_n: sample.audience_w },
+            },
+          },
+        ],
+      });
+      expect(view.baseDetail || '').toContain(
+        `base = ${sample.audience_n.toLocaleString('en-GB')}`
+      );
+      expect(view.baseDetail || '').not.toMatch(
+        new RegExp(`base = ${sample.file_n.toLocaleString('en-GB')}\\b`)
+      );
+    }
+  });
+
   it('TEN-242: audience footnote does not restate its own filter', () => {
     const cases = [
       {

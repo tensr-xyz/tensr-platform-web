@@ -77,7 +77,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/rest';
 import { Segmented } from '@/components/ui/segmented';
 import { chartFromBannerBook } from '@/lib/flow-result-charts';
 import { getPageLayout } from '@/lib/report-theme';
-import { isBaseChartLabel } from '@/components/flow/run-document';
+import {
+  clientBaseFooterFromTable,
+  isBaseChartLabel,
+  slideTableFromRunTable,
+} from '@/components/flow/run-document';
 
 const STYLE_PRESETS: { id: string; label: string; style: Partial<TextBoxStyle> }[] = [
   { id: 'headline', label: 'Headline', style: { fontFamily: 'Inter', fontSizePt: 22, bold: true } },
@@ -339,10 +343,12 @@ function RunTableGrid({
 /**
  * Page-table grid from analysis-run tables: axes show variable labels, never
  * bare indexes. Expands a legacy Columns key when the matrix was numbered.
+ * Crosstab slides drop base rows and idx tails; Total+audience keeps both headers.
  */
 export function labelledPageTableFromRunTables(
-  tables: Array<{ title?: string; columns?: string[]; rows?: string[][] }> | null | undefined
-): { title: string; rows: string[][] } | null {
+  tables: Array<{ title?: string; columns?: string[]; rows?: string[][] }> | null | undefined,
+  options?: { audienceLabel?: string }
+): { title: string; rows: string[][]; baseFooter?: string } | null {
   if (!Array.isArray(tables) || !tables.length) return null;
   const keyMap = new Map<string, string>();
   for (const table of tables) {
@@ -365,15 +371,34 @@ export function labelledPageTableFromRunTables(
     const trimmed = text.trim();
     return keyMap.get(trimmed) || text;
   };
-  const columns = (primary.columns || []).map(resolve);
-  const body = (primary.rows || []).map(row => {
-    if (!Array.isArray(row) || !row.length) return [] as string[];
-    return [resolve(row[0]), ...row.slice(1).map(cell => (cell == null ? '' : String(cell)))];
-  });
-  if (!columns.length && !body.length) return null;
-  return {
+  const resolved = {
     title: String(primary.title || '').trim(),
-    rows: columns.length ? [columns, ...body] : body,
+    columns: (primary.columns || []).map(resolve),
+    rows: (primary.rows || []).map(row => {
+      if (!Array.isArray(row) || !row.length) return [] as string[];
+      return [resolve(row[0]), ...row.slice(1).map(cell => (cell == null ? '' : String(cell)))];
+    }),
+  };
+  const hasBaseRows = resolved.rows.some(row => isBaseChartLabel((row[0] || '').trim()));
+  const shareHeaders = resolved.columns.filter(
+    (column, index) => index > 0 && !/\bindex\b|idx\b/i.test(column)
+  );
+  if (hasBaseRows || shareHeaders.length > 1 || options?.audienceLabel) {
+    const slide = slideTableFromRunTable(resolved, { audienceLabel: options?.audienceLabel });
+    if (slide) {
+      return {
+        title: slide.title,
+        rows: [slide.columns, ...slide.rows],
+        baseFooter: clientBaseFooterFromTable(resolved, {
+          audienceLabel: options?.audienceLabel,
+        }),
+      };
+    }
+  }
+  if (!resolved.columns.length && !resolved.rows.length) return null;
+  return {
+    title: resolved.title,
+    rows: resolved.columns.length ? [resolved.columns, ...resolved.rows] : resolved.rows,
   };
 }
 
@@ -382,14 +407,17 @@ function AnalysisRunTablePreview({
   style,
   banded,
   minimal,
+  pinFooter,
 }: {
   runId: string;
   style: ReportObject['tableStyle'];
   banded: boolean;
   minimal: boolean;
+  pinFooter?: string;
 }) {
   const [rows, setRows] = useState<string[][] | null>(null);
   const [title, setTitle] = useState('');
+  const [footer, setFooter] = useState('');
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
     let live = true;
@@ -409,13 +437,19 @@ function AnalysisRunTablePreview({
             result: run.result,
             created_at: run.created_at,
           });
-          const labelled = labelledPageTableFromRunTables(document.tables);
+          const audienceMatch = document.summary.match(
+            /(?:among|for|audience[:\s]+)\s*([^.(]{3,80}?)(?:\.|,|$)/i
+          );
+          const labelled = labelledPageTableFromRunTables(document.tables, {
+            audienceLabel: audienceMatch?.[1]?.trim() || '',
+          });
           if (!labelled?.rows.length) {
             setPhase('error');
             return;
           }
           setTitle(labelled.title || document.title || '');
           setRows(labelled.rows);
+          setFooter(labelled.baseFooter || '');
           setPhase('ready');
         });
       })
@@ -436,10 +470,12 @@ function AnalysisRunTablePreview({
   if (phase === 'error' || !rows?.length) {
     return <p className="report-editor-table-empty">Could not load this table.</p>;
   }
+  const caption = (pinFooter || footer || '').trim();
   return (
     <div className="report-editor-table-preview" data-preset={style.preset} data-phase="ready">
       {title ? <p className="report-editor-table-title">{title}</p> : null}
       <RunTableGrid rows={rows} style={style} banded={banded} minimal={minimal} />
+      {caption ? <p className="report-editor-chart-footer">{caption}</p> : null}
     </div>
   );
 }
@@ -578,16 +614,29 @@ function TableObjectPreview({
   obj,
   datasetId,
   pageId,
+  pins,
 }: {
   obj: ReportObject;
   datasetId: string | null;
   pageId: string;
+  pins?: PinLike[];
 }) {
   const style = obj.tableStyle;
   const banded = style.preset === 'banded';
   const minimal = style.preset === 'compact';
   const specId = String(obj.tableSpecId || '').trim();
   const runId = String(obj.runId || '').trim();
+  const pin =
+    (pins || []).find(
+      item =>
+        (obj.pinId && String(item.id || '') === obj.pinId) ||
+        (obj.runId && String(item.runId || item.run_id || '') === obj.runId)
+    ) || null;
+  const pinFooter = String(
+    (pin as { baseFooter?: string; base_footer?: string } | null)?.baseFooter ||
+      (pin as { baseFooter?: string; base_footer?: string } | null)?.base_footer ||
+      ''
+  ).trim();
   const tableQuery = usePageTableBook(datasetId, pageId, specId);
   const rows = useMemo(() => {
     if (!tableQuery.data) return [] as string[][];
@@ -604,7 +653,13 @@ function TableObjectPreview({
   // Analysis-run tables (Add to report) have a run id but no saved table spec.
   if (!specId && runId) {
     return (
-      <AnalysisRunTablePreview runId={runId} style={style} banded={banded} minimal={minimal} />
+      <AnalysisRunTablePreview
+        runId={runId}
+        style={style}
+        banded={banded}
+        minimal={minimal}
+        pinFooter={pinFooter}
+      />
     );
   }
   const phase: 'idle' | 'loading' | 'ready' | 'error' =
@@ -740,7 +795,7 @@ function CanvasObjectView({
           )}
         </span>
       ) : obj.kind === 'table' ? (
-        <TableObjectPreview obj={obj} datasetId={datasetId} pageId={pageId} />
+        <TableObjectPreview obj={obj} datasetId={datasetId} pageId={pageId} pins={pins} />
       ) : obj.kind === 'chart' ? (
         <ChartObjectPreview obj={obj} pins={pins} datasetId={datasetId} pageId={pageId} />
       ) : (

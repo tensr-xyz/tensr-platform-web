@@ -49,6 +49,18 @@ describe('agent chat chrome', () => {
     expect(visibleThinkingLines(lines, { hasResult: true, isStreaming: false })).toEqual([]);
   });
 
+  it('TEN-269: building card is for in-flight scans only (Paper 14b)', () => {
+    expect(isBuildingTableProgress(['Building the table', '42s still working'])).toBe(true);
+    expect(isBuildingTableProgress(['Building standout stats', 'Scanning questions'])).toBe(true);
+    // Finished reply lines are not building progress.
+    expect(
+      isBuildingTableProgress([
+        'Half of investors read the title, 2.7x the average',
+        '28% are in the C-suite, 2.8x the average',
+      ])
+    ).toBe(false);
+  });
+
   it('hides Working/schema progress after a chat-only answer finishes', () => {
     const lines = ['Working…', 'Reading dataset schema…', 'Computing the requested summary…'];
     expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual([

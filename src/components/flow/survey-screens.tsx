@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { resolveTablePayload } from '@/lib/tables-async';
 import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
 import { AgentThread } from '@/components/flow/agent-thread';
@@ -2315,7 +2316,9 @@ export function TablesBuilder({
         setOpening(true);
         const opened = await flowJson<Record<string, unknown>>(
           `/datasets/${datasetId}/tables/${firstId}`
-        ).catch(() => null);
+        )
+          .then(body => resolveTablePayload(body))
+          .catch(() => null);
         if (!live) return;
         if (opened) remember(opened);
         setOpening(false);
@@ -2580,7 +2583,9 @@ export function TablesBuilder({
     const saved = await flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify(request),
-    }).catch(() => null);
+    })
+      .then(body => resolveTablePayload(body))
+      .catch(() => null);
     setOpening(false);
     if (!saved) {
       setError('The agent built the table, but it could not be saved. Try Save.');
@@ -2659,7 +2664,9 @@ export function TablesBuilder({
         const fileId = String(listed?.dataset_id || datasetId);
         const existing = await flowJson<Record<string, unknown>>(
           `/datasets/${fileId}/tables/${encodeURIComponent(id)}`
-        ).catch(() => null);
+        )
+          .then(body => resolveTablePayload(body))
+          .catch(() => null);
         const spec = (existing?.spec || {}) as {
           stubs?: { column?: string; nets?: { label: string; values: string[] }[] }[];
           banners?: unknown[];
@@ -2676,7 +2683,7 @@ export function TablesBuilder({
           patch.weight !== undefined
             ? patch.weight
             : storedWeightColumn(spec.weight) || weight || 'none';
-        await flowJson(`/datasets/${fileId}/tables`, {
+        await flowJson<Record<string, unknown>>(`/datasets/${fileId}/tables`, {
           method: 'POST',
           body: JSON.stringify({
             stubs: spec.stubs?.length ? spec.stubs : stubsForRun(stubColumn, []),
@@ -2715,7 +2722,7 @@ export function TablesBuilder({
                 : {}),
             save: true,
           }),
-        });
+        }).then(body => resolveTablePayload(body));
       }
       setSelectedSpecIds([]);
       setNote('Saved a new version of each selected table.');
@@ -2778,6 +2785,7 @@ export function TablesBuilder({
         save,
       }),
     })
+      .then(body => resolveTablePayload(body))
       .then(body => {
         if (token !== tableRequest.current) return;
         if (!save) {
@@ -2997,8 +3005,10 @@ export function TablesBuilder({
       // Reload the rail from classify so siblings keep their live state; do not
       // invent stale flags client-side after one rebuild.
       reloadSpecs();
-      const opened = await flowJson<Record<string, unknown>>(
-        `/datasets/${result.dataset_id || datasetId}/tables/${id}`
+      const opened = await resolveTablePayload(
+        await flowJson<Record<string, unknown>>(
+          `/datasets/${result.dataset_id || datasetId}/tables/${id}`
+        )
       );
       remember(opened);
       return true;
@@ -3028,17 +3038,21 @@ export function TablesBuilder({
       void rebuildSavedTable(id).finally(() => setOpening(false));
       return;
     }
+    setOpening(true);
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
-      .then(remember)
+      .then(body => resolveTablePayload(body))
+      .then(body => {
+        remember(body);
+      })
       .catch(err => {
         if (isTableSourceChanged(err)) {
           // Spec fingerprint drifted: rebuild on this file instead of asking the user.
-          setOpening(true);
-          void rebuildSavedTable(id).finally(() => setOpening(false));
+          void rebuildSavedTable(id);
           return;
         }
         setError(err instanceof Error ? err.message : 'Could not open that table');
-      });
+      })
+      .finally(() => setOpening(false));
   }
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
@@ -3233,6 +3247,7 @@ export function TablesBuilder({
           onOpenTable={id => {
             setView('table');
             void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
+              .then(body => resolveTablePayload(body))
               .then(remember)
               .catch(() => undefined);
           }}

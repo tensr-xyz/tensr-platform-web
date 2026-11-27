@@ -128,7 +128,13 @@ export function usePageTableBook(
 ) {
   return useQuery({
     queryKey: projectQueryKeys.pageTable(datasetId || '', pageId, specId),
-    queryFn: () => flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${specId}`),
+    queryFn: async () => {
+      const { resolveTablePayload } = await import('@/lib/tables-async');
+      const body = await flowJson<Record<string, unknown>>(
+        `/datasets/${datasetId}/tables/${specId}`
+      );
+      return resolveTablePayload(body);
+    },
     enabled: Boolean(datasetId && pageId && specId),
     staleTime: PROJECT_STALE_MS.page,
     refetchOnMount: true,

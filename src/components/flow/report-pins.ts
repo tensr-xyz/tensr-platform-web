@@ -16,6 +16,7 @@ type ServerPin = {
   keep_live?: boolean;
   bars?: { label?: string; percent?: number }[];
   base_footer?: string;
+  op?: string;
 };
 
 export type RunSummary = {
@@ -83,6 +84,7 @@ export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
               .map(bar => ({ label: String(bar.label), percent: Number(bar.percent) || 0 }))
           : [],
         baseFooter: typeof pin.base_footer === 'string' ? pin.base_footer : '',
+        op: typeof pin.op === 'string' ? pin.op : '',
       };
     });
 }
@@ -199,6 +201,7 @@ function serverBody(pin: ReportPin): ServerPin {
     keep_live: pin.keepLive,
     bars: (pin.bars || []).map(bar => ({ label: bar.label, percent: bar.percent })),
     base_footer: pin.baseFooter || '',
+    op: pin.op || '',
   };
 }
 

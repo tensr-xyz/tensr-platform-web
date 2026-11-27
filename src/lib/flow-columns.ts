@@ -506,9 +506,49 @@ export function looksLikeWeightColumn(
     .includes('weight');
 }
 
+/** True for SPSS-style short codes (S4, Q22, B1a) and snake_case column names. */
+function looksLikeSurveyCode(token: string): boolean {
+  const text = token.trim();
+  if (!text || text.includes(' ')) return false;
+  if (text.includes('_') || text.toLowerCase() === 'label') return true;
+  return /^[A-Za-z][A-Za-z._]*\d[\w.]*$/.test(text);
+}
+
+/** Drop ``[column_name]`` / ``(S4)`` codes from a label people read. */
+export function stripSurveyCodeBrackets(label: string, code = ''): string {
+  const text = String(label || '').trim();
+  if (!text) return text;
+  const cleaned = text.replace(/\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]/g, (match, right: string) => {
+    const token = String(right || '').trim();
+    if (code && token.toLowerCase() === code.toLowerCase()) return '';
+    if (looksLikeSurveyCode(token)) return '';
+    return match;
+  });
+  const shown = cleaned.replace(/\s+/g, ' ').trim();
+  return shown || text;
+}
+
+/** Drop export stem tags like (Brand) / (Total Reach); keep (UK) / (Digital, …). */
+export function stripStructuralItemQualifiers(label: string): string {
+  const text = String(label || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!text) return text;
+  const cleaned = text
+    .replace(/\s*\(\s*(?:Brand|Total\s+Reach)\s*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || text;
+}
+
+/** Question or item text a person reads: no survey codes, no structural stem tags. */
+export function cleanPersonLabel(label: string, code = ''): string {
+  return stripStructuralItemQualifiers(stripSurveyCodeBrackets(label, code));
+}
+
 /** Sentence-case a leading lowercase letter on set titles. */
 function sentenceCaseStem(label: string): string {
-  const text = label.trim().replace(/\s+/g, ' ');
+  const text = cleanPersonLabel(label.trim().replace(/\s+/g, ' '));
   if (!text) return text;
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
@@ -633,7 +673,7 @@ export function questionnaireOutline(
     const outlineLabel =
       isCodedOpenEndColumn(column) || isMainThemeColumnName(column.name)
         ? outlineCodedThemeLabel(column, kind)
-        : String(column.label || column.name);
+        : cleanPersonLabel(String(column.label || column.name), column.name);
     units.push({
       key: column.name,
       label: outlineLabel,

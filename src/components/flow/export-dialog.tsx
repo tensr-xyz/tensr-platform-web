@@ -321,6 +321,35 @@ export function uniqueSpecIds(ids: Array<string | null | undefined>): string[] {
   return out;
 }
 
+/** Safe download stem from a project or book label — never an audience dialog pick. */
+export function bannerBookFileStem(label?: string | null, fallback = 'banner-book'): string {
+  const cleaned = String(label || '')
+    .trim()
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return cleaned || fallback;
+}
+
+/**
+ * Overview Banner book card: always every saved table, stem from the project.
+ * Ignores which rows Overview opened or which audience the wave dialog last used.
+ */
+export function overviewBannerBookArgs(args: {
+  datasetId: string;
+  projectId?: string;
+  projectName?: string;
+}): { datasetId: string; stem: string; opts: { projectId?: string; everySaved: true } } {
+  return {
+    datasetId: args.datasetId,
+    stem: bannerBookFileStem(args.projectName),
+    opts: {
+      ...(args.projectId ? { projectId: args.projectId } : {}),
+      everySaved: true,
+    },
+  };
+}
+
 /**
  * Every saved table id for a banner book.
  * Dataset list first; project list when the dataset route fails or returns none.

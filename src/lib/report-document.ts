@@ -1310,9 +1310,52 @@ export function savePageAsTemplate(
 
 const BASE_CHART_LABEL =
   /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|deff|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
+const DEFF_LABEL = /^deff$/i;
+const TABLE_SLIDE_OPS =
+  /^(correlation|correlations|partial_correlation|canonical_correlation|spearman|pearson|kendall|ttest|ttest_indep|ttest_paired|mann_whitney|mann_whitney_u|wilcoxon|kruskal|anova|anova_oneway|anova_twoway|chi_square|chi_square_goodness|regression|linear_regression|logistic_regression|reliability|factor|pca|canonical)$/i;
 
 function isBaseChartLabel(label: string): boolean {
   return BASE_CHART_LABEL.test(label.trim());
+}
+
+function isDeffLabel(label: string): boolean {
+  return DEFF_LABEL.test(label.trim());
+}
+
+function pinForcesTableSlide(pin: PinLike): boolean {
+  const op = String(pin.op || pin.analysis_type || pin.analysisType || '').trim();
+  return TABLE_SLIDE_OPS.test(op);
+}
+
+function formatPinPeople(percent: number): string {
+  const abs = Math.abs(percent);
+  if (abs >= 1_000_000) {
+    const millions = percent / 1_000_000;
+    const places = abs >= 10_000_000 ? 1 : 2;
+    return `${millions.toFixed(places).replace(/\.?0+$/, '')}m`;
+  }
+  if (abs >= 10_000) return `${Math.round(percent / 1000).toLocaleString('en-GB')}k`;
+  return Math.round(percent).toLocaleString('en-GB');
+}
+
+function clientFooterFromPinBars(bars: PinLike['bars']): string {
+  let weighted: number | null = null;
+  let unweighted: number | null = null;
+  for (const bar of bars || []) {
+    const label = String(bar?.label || '').trim();
+    if (!label || !isBaseChartLabel(label) || isDeffLabel(label)) continue;
+    const percent = Number(bar?.percent);
+    if (!Number.isFinite(percent)) continue;
+    const folded = label.toLowerCase();
+    if (folded.startsWith('weighted')) weighted = percent;
+    else if (folded.startsWith('unweighted') || folded === 'base (n)' || folded === 'base')
+      unweighted = percent;
+  }
+  if (unweighted == null && weighted == null) return '';
+  const bits: string[] = [];
+  if (unweighted != null) bits.push(`n = ${Math.round(unweighted).toLocaleString('en-GB')}`);
+  if (weighted != null) bits.push(`weighted ${formatPinPeople(weighted)}`);
+  return bits.length ? `Base: ${bits.join(', ')}` : '';
 }
 
 function sanitizePinBars(bars: PinLike['bars']): {
@@ -1320,26 +1363,15 @@ function sanitizePinBars(bars: PinLike['bars']): {
   baseFooter: string;
 } {
   const chartBars: { label: string; percent: number }[] = [];
-  const footerParts: string[] = [];
   for (const bar of bars || []) {
     const label = String(bar?.label || '').trim();
     if (!label) continue;
     const percent = Number(bar?.percent);
     if (!Number.isFinite(percent)) continue;
-    if (isBaseChartLabel(label)) {
-      const shown =
-        Math.abs(percent) >= 1000 || Math.abs(percent - Math.round(percent)) < 1e-9
-          ? Math.round(percent).toLocaleString('en-GB')
-          : percent.toLocaleString('en-GB', {
-              minimumFractionDigits: Math.abs(percent) < 10 ? 2 : 1,
-              maximumFractionDigits: Math.abs(percent) < 10 ? 2 : 1,
-            });
-      footerParts.push(`${label} ${shown}`);
-      continue;
-    }
+    if (isBaseChartLabel(label)) continue;
     chartBars.push({ label, percent: Math.round(percent * 10) / 10 });
   }
-  return { chartBars, baseFooter: footerParts.join(' · ') };
+  return { chartBars, baseFooter: clientFooterFromPinBars(bars) };
 }
 
 export type PinLike = {
@@ -1357,6 +1389,9 @@ export type PinLike = {
   keep_live?: boolean;
   afterId?: string;
   after_id?: string;
+  op?: string;
+  analysis_type?: string;
+  analysisType?: string;
 };
 
 /** Chart when the pin has share bars; otherwise a live table for a run; else finding text. */
@@ -1367,7 +1402,7 @@ export function pinPagePlan(pin: PinLike): {
 } {
   const support = String(pin.support || '').trim();
   const { chartBars } = sanitizePinBars(pin.bars);
-  const hasChart = chartBars.length > 0;
+  const hasChart = chartBars.length > 0 && !pinForcesTableSlide(pin);
   const runId = String(pin.run_id || pin.runId || '').trim();
   if (hasChart) {
     return { layoutId: 'title_and_content', contentKind: 'chart', contentText: '' };
@@ -1449,7 +1484,7 @@ export function pageFromPin(pin: PinLike, options?: { pageId?: string }): Report
     }),
     content,
   ];
-  if (plan.contentKind === 'chart' && baseFooter) {
+  if ((plan.contentKind === 'chart' || plan.contentKind === 'table') && baseFooter) {
     content.frame = {
       ...content.frame,
       h: Math.max(0.12, content.frame.h - 0.1),

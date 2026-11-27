@@ -1202,10 +1202,27 @@ function succeeded(item: ToolResult): boolean {
   return nested.ok !== false && !nested.error;
 }
 
+/** Finished standout themes mean the scan landed (Paper 14b) — never keep Building up. */
+function itemHasFinishedThemes(item: ToolResult): boolean {
+  const nested = item.result || {};
+  const book =
+    nested.result && typeof nested.result === 'object'
+      ? (nested.result as Record<string, unknown>)
+      : nested;
+  const summary = summaryOf(item);
+  for (const source of [book, nested, summary]) {
+    const themes = (source as Record<string, unknown>).themes;
+    if (Array.isArray(themes) && themes.length > 0) return true;
+  }
+  return false;
+}
+
 /** True while a 202-queued analysis has not written its finished book (TEN-269 / 14b). */
 export function isAnalysisPending(results: ToolResult[] | undefined): boolean {
   return analysisItems(results).some(item => {
     if (!succeeded(item)) return false;
+    // Themes / finished book clear a stale pending flag so the Building card drops.
+    if (itemHasFinishedThemes(item)) return false;
     const nested = item.result || {};
     const summary = summaryOf(item);
     if (summary.pending === true || nested.pending === true) return true;
