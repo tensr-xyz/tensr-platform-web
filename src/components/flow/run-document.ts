@@ -270,6 +270,13 @@ const BASE_CHART_LABEL =
 /** Respondent counts (incl. Kish ESS) — whole numbers for the reader (TEN-242). */
 const COUNT_BASE_LABEL =
   /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
+const DEFF_LABEL = /^deff$/i;
+/** Ops whose slides are always a result / matrix table — never share % bars. */
+const TABLE_SLIDE_OPS =
+  /^(correlation|correlations|partial_correlation|canonical_correlation|spearman|pearson|kendall|ttest|ttest_indep|ttest_paired|mann_whitney|mann_whitney_u|wilcoxon|kruskal|anova|anova_oneway|anova_twoway|chi_square|chi_square_goodness|regression|linear_regression|logistic_regression|reliability|factor|pca|canonical)$/i;
+const INDEX_COLUMN = /\bindex\b|idx\b/i;
+const PEOPLE_COLUMN = /people|000s|projected|weighted\s*n|unweighted/i;
+const CELL_IDX_TAIL = /\s*(?:·\s*)?idx\s*[\d,]+(?:\.\d+)?\s*$/i;
 
 /** True when a stub label is a base / DEFF line, not a result item to chart. */
 export function isBaseChartLabel(label: string): boolean {
@@ -278,6 +285,15 @@ export function isBaseChartLabel(label: string): boolean {
 
 function isCountBaseLabel(label: string): boolean {
   return COUNT_BASE_LABEL.test(label.trim());
+}
+
+function isDeffLabel(label: string): boolean {
+  return DEFF_LABEL.test(label.trim());
+}
+
+/** Correlation / hypothesis-test outputs become tables on a slide, never % bars. */
+export function pinUsesTableSlide(op: string | undefined | null): boolean {
+  return TABLE_SLIDE_OPS.test(String(op || '').trim());
 }
 
 function formatBaseFooterValue(raw: string, label = ''): string {
@@ -300,6 +316,23 @@ function formatBaseFooterValue(raw: string, label = ''): string {
   });
 }
 
+/** Compact people count for a client slide footer (4.82m, 1,204). */
+export function formatWeightedPeople(raw: string): string {
+  const text = raw.replace(/%/g, '').replace(/,/g, '').trim();
+  const number = Number(text);
+  if (!Number.isFinite(number)) return raw.trim();
+  const abs = Math.abs(number);
+  if (abs >= 1_000_000) {
+    const millions = number / 1_000_000;
+    const places = abs >= 10_000_000 ? 1 : 2;
+    return `${millions.toFixed(places).replace(/\.?0+$/, '')}m`;
+  }
+  if (abs >= 10_000) {
+    return `${Math.round(number / 1000).toLocaleString('en-GB')}k`;
+  }
+  return Math.round(number).toLocaleString('en-GB');
+}
+
 /** Base / DEFF rows under a crosstab become a caption, never chart bars. */
 export function baseFooterFromTable(table: RunTable | undefined): string {
   if (!table) return '';
@@ -314,6 +347,156 @@ export function baseFooterFromTable(table: RunTable | undefined): string {
   return parts.join(' · ');
 }
 
+/**
+ * Client-slide base line: audience + n + weighted people. DEFF stays off the deck.
+ */
+export function clientBaseFooterFromTable(
+  table: RunTable | undefined,
+  options?: { audienceLabel?: string }
+): string {
+  if (!table) return '';
+  let weighted = '';
+  let unweighted = '';
+  let kish = '';
+  for (const row of table.rows) {
+    const label = (row[0] || '').trim();
+    if (!isBaseChartLabel(label) || isDeffLabel(label)) continue;
+    const value = formatBaseFooterValue(row[1] || '', label);
+    if (!value) continue;
+    const folded = label.toLowerCase();
+    if (folded.startsWith('weighted')) weighted = row[1] || value;
+    else if (folded.startsWith('unweighted') || folded === 'base (n)' || folded === 'base')
+      unweighted = value;
+    else if (folded.includes('kish') || folded.includes('effective')) kish = value;
+  }
+  const audience = String(options?.audienceLabel || '').trim();
+  if (unweighted || weighted) {
+    const bits: string[] = [];
+    if (audience) bits.push(audience);
+    if (unweighted) bits.push(`n = ${unweighted}`);
+    if (weighted) bits.push(`weighted ${formatWeightedPeople(String(weighted))}`);
+    else if (kish) bits.push(`Kish n = ${kish}`);
+    return bits.length ? `Base: ${bits.join(', ')}` : '';
+  }
+  // Fall back to the diagnostic line without DEFF.
+  const parts: string[] = [];
+  for (const row of table.rows) {
+    const label = (row[0] || '').trim();
+    if (!isBaseChartLabel(label) || isDeffLabel(label)) continue;
+    const value = formatBaseFooterValue(row[1] || '', label);
+    if (!value) continue;
+    parts.push(`${label} ${value}`);
+  }
+  return parts.join(' · ');
+}
+
+function looksLikeCorrelationTable(table: RunTable | undefined): boolean {
+  if (!table) return false;
+  const title = table.title.trim().toLowerCase();
+  if (/correlation|spearman|pearson|kendall|\brho\b|\bτ\b/.test(title)) return true;
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  if (headers.some(column => /^(ρ|r|τ|tau|p|p-value|n)$/i.test(column))) return true;
+  if (headers.some(column => /correlation/.test(column))) return true;
+  return false;
+}
+
+function looksLikeTestStatTable(table: RunTable | undefined): boolean {
+  if (!table) return false;
+  const title = table.title.trim().toLowerCase();
+  if (/\b(anova|t-?test|mann-?whitney|wilcoxon|kruskal|chi-?square|regression)\b/.test(title))
+    return true;
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  return headers.some(column => /^(u|h|f|t|z|w|χ²|chi|df|p|p-value|statistic)$/i.test(column));
+}
+
+/** Non-stub columns that look like share / percent series (not index or people). */
+export function shareSeriesIndexes(table: RunTable): number[] {
+  const width = Math.max(table.columns.length, ...table.rows.map(row => row.length), 0);
+  if (width < 2) return [];
+  const indexes: number[] = [];
+  for (let index = 1; index < width; index += 1) {
+    const header = (table.columns[index] || '').trim();
+    if (INDEX_COLUMN.test(header) || PEOPLE_COLUMN.test(header)) continue;
+    if (/%|percent|share/i.test(header)) {
+      indexes.push(index);
+      continue;
+    }
+    const sample = table.rows
+      .filter(row => !isBaseChartLabel((row[0] || '').trim()))
+      .map(row => (row[index] || '').trim())
+      .filter(Boolean);
+    if (!sample.length) continue;
+    if (sample.some(value => /%/.test(value))) {
+      indexes.push(index);
+      continue;
+    }
+    // Bare decimals can be shares or coefficients — only treat as shares when
+    // several values sit outside the correlation [-1, 1] band or look like %.
+    const numbers = sample
+      .map(value => Number(value.replace(/,/g, '').replace(/%/g, '')))
+      .filter(number => Number.isFinite(number));
+    if (
+      numbers.length &&
+      numbers.every(number => Math.abs(number) <= 100) &&
+      numbers.some(number => Math.abs(number) > 1)
+    ) {
+      indexes.push(index);
+    }
+  }
+  return indexes;
+}
+
+/** Drop embedded "idx 100" clutter from a slide cell; keep the percent / count. */
+export function stripSlideCellIndex(cell: string): string {
+  const text = String(cell || '').trim();
+  if (!text) return '';
+  return (
+    text
+      .replace(CELL_IDX_TAIL, '')
+      .replace(/\s+·\s+$/g, '')
+      .trim() || text
+  );
+}
+
+/**
+ * Crosstab / frequency grid for a client slide: every source column, no base
+ * rows, no idx tails. A lone "Total" header becomes the audience label when set.
+ */
+export function slideTableFromRunTable(
+  table: RunTable | undefined,
+  options?: { audienceLabel?: string }
+): { title: string; columns: string[]; rows: string[][] } | null {
+  if (!table) return null;
+  const audience = String(options?.audienceLabel || '').trim();
+  let columns = table.columns.map(column => column.trim());
+  const dataIndexes = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ index, column }) => index > 0 && !INDEX_COLUMN.test(column));
+  if (dataIndexes.length === 1 && audience) {
+    const only = dataIndexes[0]!;
+    if (/^total(?:\s*%)?$/i.test(only.column) || only.column === '%' || only.column === '') {
+      columns = columns.map((column, index) => (index === only.index ? audience : column));
+    }
+  }
+  // Drop dedicated index columns from the client slide (idx vs total is noise
+  // when the series is already the audience, and chat already showed %).
+  const keep = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column, index }) => index === 0 || !INDEX_COLUMN.test(column));
+  const body = table.rows
+    .filter(row => {
+      const label = (row[0] || '').trim();
+      return label && !isBaseChartLabel(label);
+    })
+    .map(row => keep.map(({ index }) => stripSlideCellIndex(row[index] || '')));
+  if (!body.length) return null;
+  return {
+    title: table.title,
+    columns: keep.map(({ column }) => column),
+    rows: body,
+  };
+}
+
 /** The lead and the share bars a report card shows for a saved run. */
 export function pinStory(document: RunDocument): {
   support: string;
@@ -322,11 +505,29 @@ export function pinStory(document: RunDocument): {
 } {
   const table =
     document.tables.find(item => item.columns.some(column => /%|percent|share/i.test(column))) ||
+    document.tables.find(item => !/^columns$/i.test(item.title.trim())) ||
     document.tables[0];
+  const audienceMatch = document.summary.match(
+    /(?:among|for|audience[:\s]+)\s*([^.(]{3,80}?)(?:\.|,|$)/i
+  );
+  const audienceLabel = audienceMatch?.[1]?.trim() || '';
+  const baseFooter = clientBaseFooterFromTable(table, { audienceLabel });
+  if (
+    pinUsesTableSlide(document.op) ||
+    looksLikeCorrelationTable(table) ||
+    looksLikeTestStatTable(table)
+  ) {
+    return { support: document.summary.trim(), bars: [], baseFooter };
+  }
+  const series = table ? shareSeriesIndexes(table) : [];
+  // Total + audience (or any multi-series crosstab) stays a labelled table.
+  if (series.length > 1) {
+    return { support: document.summary.trim(), bars: [], baseFooter };
+  }
   return {
     support: document.summary.trim(),
-    bars: shareBars(table),
-    baseFooter: baseFooterFromTable(table),
+    bars: shareBars(table, series[0]),
+    baseFooter,
   };
 }
 
@@ -338,34 +539,51 @@ export function enrichPinFromRunDocument(pin: ReportPin, document: RunDocument):
   const story = pinStory(document);
   const headline = (document.title || '').trim() || pin.headline;
   const support = story.support || pin.support;
-  const bars = story.bars.length
-    ? story.bars
-    : (pin.bars || []).filter(bar => !isBaseChartLabel(bar.label));
+  const forceTable = pinUsesTableSlide(document.op) || story.bars.length === 0;
+  const bars = forceTable
+    ? []
+    : story.bars.length
+      ? story.bars
+      : (pin.bars || []).filter(bar => !isBaseChartLabel(bar.label));
   return {
     ...pin,
     headline,
     support,
     bars,
+    op: document.op || pin.op || '',
     baseFooter: story.baseFooter || pin.baseFooter || '',
   };
 }
 
-function shareBars(table: RunTable | undefined): ReportPinBar[] {
+function shareBars(table: RunTable | undefined, percentAtHint?: number): ReportPinBar[] {
   if (!table) return [];
   // Rows keep the stub label in cell 0 even when an empty header was dropped.
   const width = Math.max(table.columns.length, ...table.rows.map(row => row.length), 0);
-  let percentAt = table.columns.findIndex(column => /%|percent|share/i.test(column));
+  let percentAt =
+    typeof percentAtHint === 'number' && percentAtHint >= 0
+      ? percentAtHint
+      : table.columns.findIndex(column => /%|percent|share/i.test(column));
   if (percentAt < 0 && width >= 2) {
-    const last = width - 1;
-    const sample = table.rows.map(row => row[last] || '');
-    if (sample.some(value => /%|\d+\.\d+/.test(value))) percentAt = last;
+    const series = shareSeriesIndexes(table);
+    if (series.length === 1) percentAt = series[0]!;
+    else if (series.length === 0) {
+      const last = width - 1;
+      const sample = table.rows.map(row => row[last] || '');
+      if (sample.some(value => /%/.test(value))) percentAt = last;
+    }
   }
   if (percentAt < 0) return [];
+  // Never chart a coefficient / p / n column as a share bar.
+  const header = (table.columns[percentAt] || '').trim();
+  if (/^(ρ|r|τ|tau|p|p-value|n|df)$/i.test(header) || /correlation/i.test(header)) return [];
   const bars: ReportPinBar[] = [];
   for (const row of table.rows) {
     const label = (row[0] || '').trim();
     if (!label || isBaseChartLabel(label)) continue;
-    const raw = (row[percentAt] || '').replace('%', '').replace(/,/g, '').trim();
+    const raw = stripSlideCellIndex(row[percentAt] || '')
+      .replace('%', '')
+      .replace(/,/g, '')
+      .trim();
     const percent = Number(raw);
     if (!Number.isFinite(percent)) continue;
     bars.push({ label, percent: Math.round(percent * 10) / 10 });
@@ -392,7 +610,9 @@ export type ReportPin = {
   topline: boolean;
   keepLive: boolean;
   bars?: ReportPinBar[];
-  /** Weighted / unweighted / Kish / DEFF caption under a slide chart. */
+  /** Analysis op — correlation / tests force a table slide. */
+  op?: string;
+  /** Base caption under a slide chart or table (no DEFF on the client deck). */
   baseFooter?: string;
 };
 

@@ -253,6 +253,55 @@ describe('labelledPageTableFromRunTables', () => {
     expect(grid[0]).toEqual(['', 'Total', 'Print']);
     expect(grid[1]?.[0]).toBe('Prefer this channel');
   });
+
+  it.each([
+    {
+      name: 'Total + audience',
+      columns: ['Item', 'Total %', 'Sector buyers %', 'Sector buyers index'],
+      rows: [
+        ['Title A', '18.6% idx 100', '49.7% idx 267', '267'],
+        ['Title B', '23.2% idx 100', '53.3% idx 230', '230'],
+        ['Weighted base', '105700000', '4822587', ''],
+        ['Unweighted base', '10100', '218', ''],
+        ['DEFF', '1.20', '1.07', ''],
+      ],
+      audience: 'Sector buyers',
+      expectHeader: ['Item', 'Total %', 'Sector buyers %'],
+    },
+    {
+      name: 'age banner',
+      columns: ['Stub', 'Total', '18–34', '35–54'],
+      rows: [
+        ['Aware', '62.0', '71.0', '58.0'],
+        ['Unweighted base', '1204', '310', '420'],
+      ],
+      audience: '',
+      expectHeader: ['Stub', 'Total', '18–34', '35–54'],
+    },
+    {
+      name: 'lone Total renamed',
+      columns: ['Item', 'Total'],
+      rows: [
+        ['Brand One', '41.2% idx 100'],
+        ['Unweighted base', '88'],
+        ['Weighted base', '2100000'],
+      ],
+      audience: 'Weekend travellers',
+      expectHeader: ['Item', 'Weekend travellers'],
+    },
+  ])(
+    'TEN-267: labelled slide table for $name keeps columns and drops bases/idx',
+    ({ columns, rows, audience, expectHeader }) => {
+      const labelled = labelledPageTableFromRunTables([{ title: 'Reach', columns, rows }], {
+        audienceLabel: audience,
+      });
+      expect(labelled?.rows[0]).toEqual(expectHeader);
+      expect(labelled?.rows.slice(1).every(row => !/base|deff/i.test(row[0] || ''))).toBe(true);
+      expect(JSON.stringify(labelled?.rows)).not.toMatch(/idx/i);
+      expect(labelled?.baseFooter).toMatch(/^Base:/);
+      expect(labelled?.baseFooter).not.toMatch(/deff/i);
+    }
+  );
 });
 
 describe('ReportEditor formatting', () => {

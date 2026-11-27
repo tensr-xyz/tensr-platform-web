@@ -209,15 +209,37 @@ describe('report document page model', () => {
         { label: 'The Wall Street Journal', percent: 49.7 },
         { label: 'Weighted base', percent: 4822587 },
         { label: 'Unweighted base', percent: 218 },
+        { label: 'DEFF', percent: 1.1 },
       ],
       deck: true,
     });
     expect(page?.layoutId).toBe('title_and_content');
     expect(page?.objects.map(obj => obj.kind)).toEqual(['text', 'chart', 'text']);
-    expect(page?.objects[2]?.text).toContain('Weighted base 4,822,587');
-    expect(page?.objects[2]?.text).toContain('Unweighted base 218');
+    expect(page?.objects[2]?.text).toMatch(/^Base:/);
+    expect(page?.objects[2]?.text).toContain('n = 218');
+    expect(page?.objects[2]?.text).not.toMatch(/deff/i);
     expect(page?.objects[2]?.textStyle.color).toBe('#6A6B66');
   });
+
+  it.each(['correlation', 'partial_correlation', 'mann_whitney_u'] as const)(
+    'TEN-267: %s pins stay a table even when bars sneak in',
+    op => {
+      const page = pageFromPin({
+        id: `pin-${op}`,
+        runId: `run-${op}`,
+        op,
+        headline: 'Result',
+        support: 'Coefficients for the asked variables.',
+        bars: [
+          { label: 'Satisfaction', percent: 0.7 },
+          { label: 'Trust', percent: 0.1 },
+        ],
+        deck: true,
+      });
+      expect(page?.layoutId).toBe('title_only');
+      expect(page?.objects.map(obj => obj.kind)).toEqual(['text', 'table']);
+    }
+  );
 
   it('reorders, duplicates, groups, sorts, and moves objects', () => {
     const doc = documentFromPins(pins);
