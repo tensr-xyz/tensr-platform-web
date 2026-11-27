@@ -26,7 +26,9 @@ export function formatMoverDetail(mover: WaveMover): string {
   return line;
 }
 
-/** Rank percent rows by absolute change. Optional n enables a pooled z-test at 95%. */
+/** Rank percent rows by absolute change. Optional n enables a pooled z-test at 95%.
+ * Last-wins on both sides so a flat multi-table list cannot pair different bases.
+ */
 export function rankWaveMovers(
   previous: { label: string; percent: number; n?: number }[],
   current: { label: string; percent: number; n?: number }[]
@@ -34,11 +36,13 @@ export function rankWaveMovers(
   const before = new Map(
     previous.filter(row => row.label.trim()).map(row => [row.label.trim(), row] as const)
   );
+  const after = new Map(
+    current.filter(row => row.label.trim()).map(row => [row.label.trim(), row] as const)
+  );
   const movers: WaveMover[] = [];
-  for (const row of current) {
-    const label = row.label.trim();
-    const prior = before.get(label);
-    if (!prior) continue;
+  for (const [label, prior] of before) {
+    const row = after.get(label);
+    if (!row) continue;
     const change = row.percent - prior.percent;
     if (Math.abs(change) < 0.05) continue;
     const item: WaveMover = {

@@ -31,4 +31,20 @@ describe('wave movers', () => {
     expect(movers[0].significant).toBeNull();
     expect(formatMoverDetail(movers[0])).toBe('30.0% → 40.0%');
   });
+
+  it('last-wins on both sides so duplicate labels keep the same base', () => {
+    const movers = rankWaveMovers(
+      [
+        { label: 'Brand', percent: 50, n: 100 },
+        { label: 'Brand', percent: 20, n: 400 },
+      ],
+      [
+        { label: 'Brand', percent: 51, n: 110 },
+        { label: 'Brand', percent: 21, n: 420 },
+      ]
+    );
+    expect(movers).toHaveLength(1);
+    expect(movers[0].from_percent).toBe(20);
+    expect(movers[0].to_percent).toBe(21);
+  });
 });
