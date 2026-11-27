@@ -81,7 +81,7 @@ import {
   type StoredChatTurn,
 } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
-import { clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
+import { clientDeckFinishedSummary, clientDeckNeedsLiveResolve } from '@/lib/client-deck-job';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -1308,6 +1308,7 @@ export function useAgentThread({
   }, [toolResults, answer, turn?.status, runBusy]);
   const kind = outputKind(toolResults);
   const clientDeck = isClientDeckResult(toolResults);
+  const clientDeckSummary = clientDeck ? clientDeckFinishedSummary(toolResults) : null;
   const title = clientDeck ? 'Client deck' : outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseClause(toolResults, answer);
@@ -1398,6 +1399,7 @@ export function useAgentThread({
     toolResults,
     kind,
     clientDeck,
+    clientDeckSummary,
     title,
     takeaway,
     baseNote,
@@ -1832,7 +1834,11 @@ export function AgentThreadColumn({
                 </span>
                 <div>
                   <strong>{thread.title}</strong>
-                  <div className="flow-muted">{thread.kind} · Output</div>
+                  <div className="flow-muted">
+                    {thread.clientDeckSummary?.slideCount
+                      ? `Done · ${thread.clientDeckSummary.slideCount} slides`
+                      : `${thread.kind} · Output`}
+                  </div>
                 </div>
               </Link>
             ) : (
@@ -1863,6 +1869,13 @@ export function AgentThreadColumn({
                 {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
               </Button>
             )}
+            {thread.clientDeck && thread.clientDeckSummary?.preview?.length ? (
+              <ul className="chat-deck-preview" aria-label="Executive summary preview">
+                {thread.clientDeckSummary.preview.map(bullet => (
+                  <li key={bullet}>{bullet}</li>
+                ))}
+              </ul>
+            ) : null}
             <div className="chat-result-actions">
               {asker ? (
                 <>
@@ -1926,11 +1939,28 @@ export function AgentThreadColumn({
                   <Link className="flow-btn primary" href={clientDeckReportHref(projectHref)}>
                     Open in Report
                   </Link>
-                  {thread.downloads[0] ? (
+                  {thread.downloads[0] || thread.clientDeckSummary?.canDownload ? (
                     <Button
                       className="flow-btn"
                       type="button"
-                      onClick={() => void openSignedDownload(thread.downloads[0])}
+                      onClick={() => {
+                        if (thread.downloads[0]) {
+                          void openSignedDownload(thread.downloads[0]);
+                          return;
+                        }
+                        if (!thread.datasetId) return;
+                        thread.setStatus('Downloading PowerPoint…');
+                        void import('@/lib/client-deck-job')
+                          .then(({ exportClientDeckAgain }) =>
+                            exportClientDeckAgain(thread.datasetId!, thread.turn?.tool_results, {
+                              onProgress: message => thread.setStatus(message),
+                            })
+                          )
+                          .then(() => thread.setStatus('PowerPoint downloaded.'))
+                          .catch(() =>
+                            thread.setStatus('That PowerPoint could not be downloaded.')
+                          );
+                      }}
                     >
                       Download .pptx
                     </Button>

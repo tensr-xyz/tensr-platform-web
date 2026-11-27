@@ -1,6 +1,8 @@
 import {
   applyClientDeckJobSnapshot,
   clientDeckExportRef,
+  clientDeckFinishedCardIsThin,
+  clientDeckFinishedSummary,
   clientDeckJobIsLive,
   clientDeckNeedsLiveResolve,
   clientDeckProgressLine,
@@ -104,6 +106,8 @@ describe('client-deck-job', () => {
             procedure: 'build_client_deck',
             job_id: 'job-done',
             dataset_id: 'ds-done',
+            n_slides: 41,
+            key: 'exports/excel/x/client-deck.pptx',
             answer_markdown: 'Done · 41 slides\nPowerPoint: client-deck.pptx',
           },
         },
@@ -117,6 +121,8 @@ describe('client-deck-job', () => {
             status: 'complete',
             procedure: 'build_client_deck',
             job_id: 'job-done',
+            n_slides: 41,
+            key: 'exports/excel/x/client-deck.pptx',
             answer_markdown: 'Done · 41 slides',
           },
         },
@@ -659,5 +665,140 @@ describe('client-deck-job', () => {
       { fill_report: false },
       undefined
     );
+  });
+
+  it('treats finished cards without download or slide count as thin', () => {
+    const cases = [
+      {
+        status: 'complete',
+        procedure: 'build_client_deck',
+        job_id: 'job-thin-a',
+        answer_markdown: 'Client deck ready',
+      },
+      {
+        status: 'complete',
+        procedure: 'build_client_deck',
+        job_id: 'job-thin-b',
+        export_id: 'exp-b',
+        answer_markdown: 'Saved',
+      },
+      {
+        status: 'complete',
+        procedure: 'build_client_deck',
+        job_id: 'job-thin-c',
+        key: 'exports/excel/c/deck.pptx',
+        n_slides: 12,
+        answer_markdown: 'Done · 12 slides\nPowerPoint: deck.pptx',
+      },
+    ];
+    expect(clientDeckFinishedCardIsThin(cases[0])).toBe(true);
+    expect(clientDeckFinishedCardIsThin(cases[1])).toBe(true);
+    expect(clientDeckFinishedCardIsThin(cases[2])).toBe(false);
+    expect(clientDeckNeedsLiveResolve([{ name: 'build_client_deck', result: cases[0] }])).toBe(
+      true
+    );
+    expect(clientDeckNeedsLiveResolve([{ name: 'build_client_deck', result: cases[2] }])).toBe(
+      false
+    );
+  });
+
+  it('finished summary surfaces slide count, preview, and download for varied decks', () => {
+    const decks = [
+      {
+        name: 'build_client_deck',
+        result: {
+          status: 'complete',
+          procedure: 'build_client_deck',
+          n_slides: 19,
+          key: 'exports/excel/a/a.pptx',
+          exec_summary_preview: ['A leads on trust.', 'West trails the total.'],
+        },
+      },
+      {
+        name: 'build_client_deck',
+        result: {
+          status: 'complete',
+          procedure: 'build_client_deck',
+          report_pages: 8,
+          export_id: 'exp-wave',
+          answer_markdown: 'Done · 8 slides\n• Wave awareness is flat.',
+        },
+      },
+      {
+        name: 'build_client_deck',
+        result: {
+          status: 'complete',
+          procedure: 'build_client_deck',
+          n_slides: 41,
+          exports: {
+            key: 'exports/excel/c/c.pptx',
+            filename: 'grid-deck.pptx',
+            export_id: 'exp-grid',
+          },
+          exec_summary_preview: ['Grid convenience differs most.', 'Other stays under 5%.'],
+        },
+      },
+    ];
+    const first = clientDeckFinishedSummary([decks[0]]);
+    expect(first.slideCount).toBe(19);
+    expect(first.preview).toEqual(['A leads on trust.', 'West trails the total.']);
+    expect(first.canDownload).toBe(true);
+
+    const second = clientDeckFinishedSummary([decks[1]]);
+    expect(second.slideCount).toBe(8);
+    expect(second.preview).toEqual(['Wave awareness is flat.']);
+    expect(second.canDownload).toBe(true);
+
+    const third = clientDeckFinishedSummary([decks[2]]);
+    expect(third.slideCount).toBe(41);
+    expect(third.canDownload).toBe(true);
+    expect(third.filename).toBe('grid-deck.pptx');
+  });
+
+  it('re-resolves a thin finished card from the live job result', async () => {
+    clientDeckJob.mockResolvedValueOnce({
+      status: 'complete',
+      result: {
+        ok: true,
+        key: 'exports/excel/x/client-deck.pptx',
+        filename: 'client-deck.pptx',
+        export_id: 'exp-thin',
+        n_slides: 14,
+        exec_summary_preview: [
+          'Dietitians recommend whole foods more often.',
+          'Networks are the top information source.',
+        ],
+      },
+    });
+
+    const out = await resolvePendingClientDeckInResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: 'Client deck · Output',
+        tool_results: [
+          {
+            name: 'build_client_deck',
+            result: {
+              status: 'complete',
+              procedure: 'build_client_deck',
+              job_id: 'job-thin',
+              dataset_id: 'ds-thin',
+              answer_markdown: 'Client deck · Output',
+            },
+          },
+        ],
+      },
+      { datasetId: 'ds-thin' }
+    );
+
+    expect(out.answer_markdown).toContain('Done · 14 slides');
+    expect(out.answer_markdown).toContain('Dietitians recommend whole foods more often.');
+    expect(out.tool_results?.[0]?.result?.exports).toMatchObject({
+      key: 'exports/excel/x/client-deck.pptx',
+      export_id: 'exp-thin',
+    });
+    const withDownloads = out.tool_results?.[0] as { downloads?: Array<{ key: string }> };
+    expect(withDownloads.downloads?.[0]?.key).toBe('exports/excel/x/client-deck.pptx');
   });
 });

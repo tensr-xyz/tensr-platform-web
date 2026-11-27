@@ -34,6 +34,107 @@ export type ClientDeckJobSnapshot = {
   result?: Record<string, unknown>;
 };
 
+/** Finished deck card missing slide count, exec preview, or a downloadable file. */
+export function clientDeckFinishedCardIsThin(
+  payload: Record<string, unknown> | null | undefined
+): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const status = String(payload.status || '');
+  if (payload.pending === true || status === 'pending' || status === 'running') return false;
+  if (status === 'failed' || payload.ok === false) return false;
+  const exports =
+    payload.exports && typeof payload.exports === 'object'
+      ? (payload.exports as Record<string, unknown>)
+      : null;
+  const hasDownload = Boolean(
+    String(payload.key || exports?.key || '').trim() ||
+    String(payload.export_id || exports?.export_id || '').trim()
+  );
+  const slides =
+    typeof payload.n_slides === 'number' && payload.n_slides > 0
+      ? payload.n_slides
+      : typeof payload.report_pages === 'number' && payload.report_pages > 0
+        ? payload.report_pages
+        : 0;
+  const answer = String(payload.answer_markdown || '');
+  const answerHasDone = /Done\s*·\s*\d+\s*slides/i.test(answer);
+  // Missing download or slide count means the finished card is still thin.
+  // Exec preview is best-effort (some decks have none) — do not loop forever for it.
+  return !hasDownload || (slides <= 0 && !answerHasDone);
+}
+
+/** Slide count + exec bullets for the finished chat card (Paper 2c + TEN-240). */
+export function clientDeckFinishedSummary(results: AgentLoopToolResult[] | undefined): {
+  slideCount: number | null;
+  preview: string[];
+  canDownload: boolean;
+  exportId: string;
+  key: string;
+  filename: string;
+} {
+  const empty = {
+    slideCount: null as number | null,
+    preview: [] as string[],
+    canDownload: false,
+    exportId: '',
+    key: '',
+    filename: 'client-deck.pptx',
+  };
+  if (!results?.length) return empty;
+  for (const entry of results) {
+    const payload = entry?.result;
+    if (!payload || typeof payload !== 'object') continue;
+    const procedure = String(entry.name || payload.procedure || '');
+    if (procedure !== 'build_client_deck' && payload.procedure !== 'build_client_deck') {
+      continue;
+    }
+    const exports =
+      payload.exports && typeof payload.exports === 'object'
+        ? (payload.exports as Record<string, unknown>)
+        : null;
+    const key = String(payload.key || exports?.key || '').trim();
+    const exportId = String(payload.export_id || exports?.export_id || '').trim();
+    const filename =
+      String(payload.filename || exports?.filename || 'client-deck.pptx').trim() ||
+      'client-deck.pptx';
+    const slides =
+      typeof payload.n_slides === 'number' && payload.n_slides > 0
+        ? payload.n_slides
+        : typeof payload.report_pages === 'number' && payload.report_pages > 0
+          ? payload.report_pages
+          : null;
+    const preview = Array.isArray(payload.exec_summary_preview)
+      ? payload.exec_summary_preview
+          .map(item =>
+            String(item || '')
+              .replace(/^[\s•\-*–—]+/, '')
+              .trim()
+          )
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+    // Fallback: bullets already written into the answer when the structured field was stripped.
+    if (!preview.length) {
+      const answer = String(payload.answer_markdown || '');
+      for (const line of answer.split('\n')) {
+        const trimmed = line.trim();
+        if (!/^[•\-*–—]/.test(trimmed)) continue;
+        const text = trimmed.replace(/^[\s•\-*–—]+/, '').trim();
+        if (text && preview.length < 2) preview.push(text);
+      }
+    }
+    return {
+      slideCount: slides,
+      preview,
+      canDownload: Boolean(key || exportId),
+      exportId,
+      key,
+      filename,
+    };
+  }
+  return empty;
+}
+
 /** True when a saved deck turn still needs a live job peek (mid-build or stale copy). */
 export function clientDeckNeedsLiveResolve(results: AgentLoopToolResult[] | undefined): boolean {
   if (!results?.length) return false;
@@ -59,9 +160,15 @@ export function clientDeckNeedsLiveResolve(results: AgentLoopToolResult[] | unde
     const answer = String(
       payload.answer_markdown || payload.progress_message || payload.message || ''
     );
-    return /computing tables|writing insights|building the (powerpoint|deck)|still being built|report pages:\s*\d+/i.test(
-      answer
-    );
+    if (
+      /computing tables|writing insights|building the (powerpoint|deck)|still being built|report pages:\s*\d+/i.test(
+        answer
+      )
+    ) {
+      return true;
+    }
+    // Finished but thin: re-fetch so the card gets slide count, preview, Download.
+    return clientDeckFinishedCardIsThin(payload);
   });
 }
 

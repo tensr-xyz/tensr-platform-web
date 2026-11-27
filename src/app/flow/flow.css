@@ -3846,6 +3846,21 @@ select.flow-input {
   gap: 8px;
 }
 
+.chat-deck-preview {
+  margin: 0;
+  padding: 0 0 0 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.chat-deck-preview li::marker {
+  color: var(--color-muted);
+}
+
 button.chat-result-top,
 a.chat-result-top {
   width: 100%;
