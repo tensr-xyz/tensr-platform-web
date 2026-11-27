@@ -267,18 +267,30 @@ export type ReportPinBar = { label: string; percent: number };
 
 const BASE_CHART_LABEL =
   /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|deff|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
+/** Respondent counts (incl. Kish ESS) — whole numbers for the reader (TEN-242). */
+const COUNT_BASE_LABEL =
+  /^(weighted\s+base|unweighted\s+base|effective\s+base(?:\s*\(kish\))?|base\s*\(n\)|base\s*:?|kish(?:\s+effective(?:\s+(?:base|n))?)?)$/i;
 
 /** True when a stub label is a base / DEFF line, not a result item to chart. */
 export function isBaseChartLabel(label: string): boolean {
   return BASE_CHART_LABEL.test(label.trim());
 }
 
-function formatBaseFooterValue(raw: string): string {
+function isCountBaseLabel(label: string): boolean {
+  return COUNT_BASE_LABEL.test(label.trim());
+}
+
+function formatBaseFooterValue(raw: string, label = ''): string {
   const text = raw.replace(/%/g, '').replace(/,/g, '').trim();
   if (!text || text === '—' || text === '-') return '';
   const number = Number(text);
   if (!Number.isFinite(number)) return raw.trim();
-  if (Math.abs(number) >= 1000 || Math.abs(number - Math.round(number)) < 1e-9) {
+  // Kish / base counts are whole; DEFF keeps decimals (TEN-242).
+  if (
+    isCountBaseLabel(label) ||
+    Math.abs(number) >= 1000 ||
+    Math.abs(number - Math.round(number)) < 1e-9
+  ) {
     return Math.round(number).toLocaleString('en-GB');
   }
   const places = Math.abs(number) < 10 ? 2 : 1;
@@ -295,7 +307,7 @@ export function baseFooterFromTable(table: RunTable | undefined): string {
   for (const row of table.rows) {
     const label = (row[0] || '').trim();
     if (!isBaseChartLabel(label)) continue;
-    const value = formatBaseFooterValue(row[1] || '');
+    const value = formatBaseFooterValue(row[1] || '', label);
     if (!value) continue;
     parts.push(`${label} ${value}`);
   }

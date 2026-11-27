@@ -1,4 +1,5 @@
 import {
+  baseFooterFromTable,
   documentApa,
   documentCsv,
   documentMarkdown,
@@ -228,7 +229,9 @@ describe('saved run document', () => {
     expect(story.bars.map(bar => bar.percent)).toEqual([53.3, 49.7]);
     expect(story.baseFooter).toContain('Weighted base 4,822,587');
     expect(story.baseFooter).toContain('Unweighted base 218');
-    expect(story.baseFooter).toContain('Effective base (Kish) 204.2');
+    // Kish effective n is a whole count even when the stored cell had a decimal.
+    expect(story.baseFooter).toContain('Effective base (Kish) 204');
+    expect(story.baseFooter).not.toContain('204.2');
     expect(story.baseFooter).toMatch(/DEFF 1\.1/);
     expect(story.baseFooter).not.toContain('%');
     const enriched = enrichPinFromRunDocument(
@@ -251,5 +254,26 @@ describe('saved run document', () => {
       'The Wall Street Journal',
     ]);
     expect(enriched.baseFooter).toContain('Weighted base 4,822,587');
+  });
+
+  it.each([
+    { ess: '204.2', expect: '204' },
+    { ess: '6347.8', expect: '6,348' },
+    { ess: '88.4', expect: '88' },
+  ])('TEN-242: Kish footer rounds $ess to a whole count', ({ ess, expect: shown }) => {
+    const footer = baseFooterFromTable({
+      title: 'Reach',
+      columns: ['Item', 'Total'],
+      rows: [
+        ['Title A', '40.0'],
+        ['Weighted base', '1200'],
+        ['Unweighted base', '100'],
+        ['Effective base (Kish)', ess],
+        ['DEFF', '1.20'],
+      ],
+    });
+    expect(footer).toContain(`Effective base (Kish) ${shown}`);
+    expect(footer).not.toContain(ess);
+    expect(footer).toMatch(/DEFF 1\.2/);
   });
 });
