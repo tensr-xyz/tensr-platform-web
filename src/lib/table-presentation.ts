@@ -776,6 +776,64 @@ function resolveBannerId(book: BannerBookLike, hint: string | null | undefined):
   return text;
 }
 
+/** Banner ids that can feed a difference column (excludes Total and derived). */
+export function comparableBannerIds(book: BannerBookLike | null | undefined): string[] {
+  if (!book || typeof book !== 'object') return [];
+  return (
+    (book.banner_columns || []).filter(col => col && typeof col === 'object') as Array<
+      Record<string, unknown>
+    >
+  )
+    .filter(col => {
+      const id = String(col.id || '').trim();
+      return id && id.toLowerCase() !== 'total' && !col.derived;
+    })
+    .map(col => String(col.id || ''));
+}
+
+/**
+ * Why a presentation rule cannot change the rendered table, or null when it can.
+ * Labels only — never codes or variable names.
+ */
+export function tableRuleSkipReason(
+  book: BannerBookLike | null | undefined,
+  rule: TableRule | null | undefined
+): string | null {
+  if (!rule || !rule.enabled) return null;
+  if (rule.type === 'add_difference_column') {
+    let leftId = book ? resolveBannerId(book, rule.leftColumnId) : null;
+    let rightId = book ? resolveBannerId(book, rule.rightColumnId) : null;
+    if (!leftId || !rightId) {
+      const clean = comparableBannerIds(book);
+      if (!leftId && clean.length >= 1) leftId = clean[0]!;
+      if (!rightId && clean.length >= 2) rightId = clean[1]!;
+    }
+    if (!leftId || !rightId || leftId === rightId) {
+      return 'Need two banner columns besides Total to compare.';
+    }
+    return null;
+  }
+  if (rule.type === 'add_rank_column') {
+    if (!book || typeof book !== 'object') return null;
+    const rows = (Array.isArray(book.rows) ? book.rows : []).filter(
+      row => row && typeof row === 'object'
+    ) as Array<Record<string, unknown>>;
+    const protect = rule.protectNets !== false;
+    const byHint = String(rule.by || 'average').trim() || 'average';
+    const by = resolveBannerId(book, byHint) || byHint;
+    const statistic = rule.statistic || 'percent';
+    const hasScore = rows.some(row => {
+      if (protect && isProtectedRow(row)) return false;
+      return rowStatValue(row, by, statistic) != null;
+    });
+    if (!hasScore) {
+      return 'No rows to rank on this table.';
+    }
+    return null;
+  }
+  return null;
+}
+
 function rowStatValue(row: Record<string, unknown>, by: string, statistic: string): number | null {
   const cells = (Array.isArray(row.cells) ? row.cells : []).filter(
     cell => cell && typeof cell === 'object'
@@ -1425,16 +1483,7 @@ export function applyTablePresentation(
       let leftId = resolveBannerId(out, rule.leftColumnId);
       let rightId = resolveBannerId(out, rule.rightColumnId);
       if (!leftId || !rightId) {
-        const clean = (
-          (out.banner_columns || []).filter(col => col && typeof col === 'object') as Array<
-            Record<string, unknown>
-          >
-        )
-          .filter(col => {
-            const id = String(col.id || '').trim();
-            return id && id.toLowerCase() !== 'total' && !col.derived;
-          })
-          .map(col => String(col.id || ''));
+        const clean = comparableBannerIds(out);
         if (!leftId && clean.length >= 1) leftId = clean[0]!;
         if (!rightId && clean.length >= 2) rightId = clean[1]!;
       }

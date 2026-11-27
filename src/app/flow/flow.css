@@ -16810,15 +16810,28 @@ button.audience-op {
   background: var(--color-well);
 }
 
+.report-editor-rule-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .report-editor-rule-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.report-editor-rule-row[data-enabled='false'] .report-editor-rule-label {
+.report-editor-rule-block[data-enabled='false'] .report-editor-rule-label {
   color: var(--color-muted);
   text-decoration: line-through;
+}
+
+.report-editor-rule-skip {
+  margin: 0;
+  padding-left: 0;
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .report-editor-rule-label {

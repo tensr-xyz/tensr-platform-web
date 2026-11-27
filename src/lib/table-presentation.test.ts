@@ -1,9 +1,11 @@
 import {
   applyTablePresentation,
+  comparableBannerIds,
   normalizeTableEdits,
   normalizeTableRules,
   normalizeTableStyle,
   tableRuleLabel,
+  tableRuleSkipReason,
   tableStylePresetLabel,
 } from './table-presentation';
 
@@ -262,4 +264,172 @@ describe('table presentation engine', () => {
       'Add rank column (Rank)'
     );
   });
+
+  it.each([
+    {
+      name: 'Total-only topline',
+      book: {
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            id: 'yes',
+            label: 'Yes',
+            kind: 'category',
+            cells: [{ stub_row_id: 'yes', banner_id: 'total', percent: 71.2, unweighted_n: 140 }],
+          },
+          {
+            id: 'no',
+            label: 'No',
+            kind: 'category',
+            cells: [{ stub_row_id: 'no', banner_id: 'total', percent: 28.8, unweighted_n: 140 }],
+          },
+          {
+            id: 'base',
+            label: 'Base',
+            kind: 'base',
+            cells: [{ stub_row_id: 'base', banner_id: 'total', percent: null, unweighted_n: 280 }],
+          },
+        ],
+      },
+      expectDiffSkip: 'Need two banner columns besides Total to compare.',
+      expectRankSkip: null as string | null,
+      expectRank: { yes: 1, no: 2, base: null as number | null },
+    },
+    {
+      name: 'weighted two-banner',
+      book: {
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'east', label: 'East' },
+          { id: 'west', label: 'West' },
+        ],
+        rows: [
+          {
+            id: 'item_a',
+            label: 'Item A',
+            kind: 'category',
+            cells: [
+              {
+                stub_row_id: 'item_a',
+                banner_id: 'total',
+                percent: 50,
+                unweighted_n: 100,
+                weighted_n: 120,
+              },
+              {
+                stub_row_id: 'item_a',
+                banner_id: 'east',
+                percent: 60,
+                unweighted_n: 55,
+                weighted_n: 70,
+              },
+              {
+                stub_row_id: 'item_a',
+                banner_id: 'west',
+                percent: 40,
+                unweighted_n: 45,
+                weighted_n: 50,
+              },
+            ],
+          },
+          {
+            id: 'item_b',
+            label: 'Item B',
+            kind: 'category',
+            cells: [
+              {
+                stub_row_id: 'item_b',
+                banner_id: 'total',
+                percent: 35,
+                unweighted_n: 80,
+                weighted_n: 90,
+              },
+              {
+                stub_row_id: 'item_b',
+                banner_id: 'east',
+                percent: 25,
+                unweighted_n: 30,
+                weighted_n: 35,
+              },
+              {
+                stub_row_id: 'item_b',
+                banner_id: 'west',
+                percent: 45,
+                unweighted_n: 50,
+                weighted_n: 55,
+              },
+            ],
+          },
+        ],
+      },
+      expectDiffSkip: null as string | null,
+      expectRankSkip: null as string | null,
+      expectRank: { item_a: 1, item_b: 2, base: undefined },
+    },
+    {
+      name: 'empty stub book',
+      book: {
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'a', label: 'Segment A' },
+          { id: 'b', label: 'Segment B' },
+        ],
+        rows: [],
+      },
+      expectDiffSkip: null as string | null,
+      expectRankSkip: 'No rows to rank on this table.',
+      expectRank: {},
+    },
+  ])(
+    'skip reasons and rank apply for $name',
+    ({ book, expectDiffSkip, expectRankSkip, expectRank }) => {
+      const diffRule = {
+        id: 'd1',
+        type: 'add_difference_column' as const,
+        enabled: true,
+      };
+      const rankRule = {
+        id: 'r1',
+        type: 'add_rank_column' as const,
+        enabled: true,
+        by: 'average',
+        label: 'Rank',
+        protectNets: true,
+      };
+      expect(tableRuleSkipReason(book, diffRule)).toBe(expectDiffSkip);
+      expect(tableRuleSkipReason(book, rankRule)).toBe(expectRankSkip);
+
+      if (Object.keys(expectRank).length === 0) return;
+
+      const presented = applyTablePresentation(book, { rules: [rankRule, diffRule] });
+      const rankCol = (presented.banner_columns || []).find(
+        col => (col as { kind?: string }).kind === 'rank'
+      ) as { id?: string; label?: string } | undefined;
+      expect(rankCol?.label).toBe('Rank');
+      const rankId = String(rankCol?.id || '');
+      const cellValue = (rowId: string) => {
+        const row = presented.rows.find(item => item.id === rowId) as
+          | { cells: Array<{ banner_id?: string; percent?: number | null }> }
+          | undefined;
+        return row?.cells.find(cell => cell.banner_id === rankId)?.percent ?? null;
+      };
+      for (const [rowId, expected] of Object.entries(expectRank)) {
+        if (expected === undefined) continue;
+        expect(cellValue(rowId)).toBe(expected);
+      }
+      if (expectDiffSkip) {
+        expect(
+          (presented.banner_columns || []).some(
+            col => (col as { kind?: string }).kind === 'difference'
+          )
+        ).toBe(false);
+      } else if (comparableBannerIds(book).length >= 2) {
+        expect(
+          (presented.banner_columns || []).some(
+            col => (col as { kind?: string }).kind === 'difference'
+          )
+        ).toBe(true);
+      }
+    }
+  );
 });

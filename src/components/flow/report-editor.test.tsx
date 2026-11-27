@@ -3,13 +3,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { flowJson } from '@/lib/flow-api';
 import {
+  formatPreviewCell,
   labelledPageTableFromRunTables,
   preferAffirmativeRowFirst,
+  previewGridForTableObject,
   previewGridFromBannerBook,
   ReportEditor,
   shareBarsFromBannerBook,
 } from './report-editor';
 import { tablePreviewTitle } from '@/lib/report-document';
+import { DEFAULT_TABLE_STYLE, normalizeTableEdits } from '@/lib/table-presentation';
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(),
@@ -104,6 +107,172 @@ function renderEditor(ui: ReactElement) {
 
 beforeEach(() => {
   mockedFlowJson.mockImplementation(defaultFlowJson as typeof flowJson);
+});
+
+describe('previewGridForTableObject presentation rules', () => {
+  const emptyEdits = normalizeTableEdits({});
+
+  it.each([
+    {
+      name: 'one-column Total ranks high then low',
+      book: {
+        banner_columns: [{ id: 'total', label: 'Total' }],
+        rows: [
+          {
+            id: 'high',
+            label: 'High',
+            kind: 'category',
+            cells: [{ banner_id: 'total', percent: 53.3 }],
+          },
+          {
+            id: 'low',
+            label: 'Low',
+            kind: 'category',
+            cells: [{ banner_id: 'total', percent: 49.7 }],
+          },
+          {
+            id: 'base',
+            label: 'Base',
+            kind: 'base',
+            cells: [{ banner_id: 'total', percent: null }],
+          },
+        ],
+      },
+      rules: [
+        {
+          id: 'rank-1',
+          type: 'add_rank_column' as const,
+          enabled: true,
+          by: 'average',
+          label: 'Rank',
+          protectNets: true,
+        },
+      ],
+      expectHeader: ['', 'Total', 'Rank'],
+      expectRows: [
+        ['High', '53.3%', '1'],
+        ['Low', '49.7%', '2'],
+        ['Base', '—', '—'],
+      ],
+    },
+    {
+      name: 'multi-banner difference uses labels not codes',
+      book: {
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'north', label: 'North' },
+          { id: 'south', label: 'South' },
+        ],
+        rows: [
+          {
+            id: 'aware',
+            label: 'Aware',
+            kind: 'category',
+            cells: [
+              { banner_id: 'total', percent: 40 },
+              { banner_id: 'north', percent: 55 },
+              { banner_id: 'south', percent: 25 },
+            ],
+          },
+          {
+            id: 'unaware',
+            label: 'Unaware',
+            kind: 'category',
+            cells: [
+              { banner_id: 'total', percent: 60 },
+              { banner_id: 'north', percent: 45 },
+              { banner_id: 'south', percent: 75 },
+            ],
+          },
+        ],
+      },
+      rules: [
+        {
+          id: 'diff-1',
+          type: 'add_difference_column' as const,
+          enabled: true,
+          statistic: 'percent' as const,
+        },
+      ],
+      expectHeader: ['', 'Total', 'North', 'South', 'North − South'],
+      expectRows: [
+        ['Aware', '40%', '55%', '25%', '+30'],
+        ['Unaware', '60%', '45%', '75%', '-30'],
+      ],
+    },
+    {
+      name: 'rank by named banner with NET left blank',
+      book: {
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'buyers', label: 'Buyers' },
+        ],
+        rows: [
+          {
+            id: 'brand_x',
+            label: 'Brand X',
+            kind: 'category',
+            cells: [
+              { banner_id: 'total', percent: 22 },
+              { banner_id: 'buyers', percent: 31 },
+            ],
+          },
+          {
+            id: 'brand_y',
+            label: 'Brand Y',
+            kind: 'category',
+            cells: [
+              { banner_id: 'total', percent: 18 },
+              { banner_id: 'buyers', percent: 44 },
+            ],
+          },
+          {
+            id: 'net_top',
+            label: 'NET Top brands',
+            kind: 'net',
+            cells: [
+              { banner_id: 'total', percent: 40 },
+              { banner_id: 'buyers', percent: 75 },
+            ],
+          },
+        ],
+      },
+      rules: [
+        {
+          id: 'rank-buyers',
+          type: 'add_rank_column' as const,
+          enabled: true,
+          by: 'buyers',
+          label: 'Rank',
+          protectNets: true,
+        },
+      ],
+      expectHeader: ['', 'Total', 'Buyers', 'Rank'],
+      expectRows: [
+        ['Brand X', '22%', '31%', '2'],
+        ['Brand Y', '18%', '44%', '1'],
+        ['NET Top brands', '40%', '75%', '—'],
+      ],
+    },
+  ])('applies rules on page preview for $name', ({ book, rules, expectHeader, expectRows }) => {
+    const grid = previewGridForTableObject(book, {
+      tableStyle: DEFAULT_TABLE_STYLE,
+      tableRules: rules,
+      tableEdits: emptyEdits,
+    });
+    expect(grid[0]).toEqual(expectHeader);
+    expect(grid.slice(1)).toEqual(expectRows);
+    expect(JSON.stringify(grid)).not.toMatch(/%1%|%2%/);
+  });
+
+  it('formats rank and difference cells without percent signs', () => {
+    expect(formatPreviewCell(1, 'rank')).toBe('1');
+    expect(formatPreviewCell(2.4, 'rank')).toBe('2');
+    expect(formatPreviewCell(12.5, 'difference')).toBe('+12.5');
+    expect(formatPreviewCell(-3, 'difference')).toBe('-3');
+    expect(formatPreviewCell(49.7, 'percent')).toBe('49.7%');
+    expect(formatPreviewCell(null, 'rank')).toBe('—');
+  });
 });
 
 describe('previewGridFromBannerBook', () => {
