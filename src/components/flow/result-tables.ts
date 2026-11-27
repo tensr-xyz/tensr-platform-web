@@ -1249,11 +1249,15 @@ function audienceColumnBase(
   const audienceLabel = cell(record.audience_label).toLowerCase();
   if (!audienceLabel) return null;
   const columns = Array.isArray(record.banner_columns) ? record.banner_columns : [];
+  const cells = Array.isArray(record.cells) ? record.cells : [];
   for (const item of columns) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const column = item as {
       id?: unknown;
       label?: unknown;
+      filter?: unknown;
+      clause?: unknown;
+      audience?: unknown;
       bases?: { column?: { unweighted_n?: unknown; weighted_n?: unknown } };
     };
     const id = cell(column.id).toLowerCase();
@@ -1263,12 +1267,32 @@ function audienceColumnBase(
       label === audienceLabel ||
       label.includes(audienceLabel) ||
       audienceLabel.includes(label) ||
-      id === 'audience';
+      id === 'audience' ||
+      id.startsWith('logic:') ||
+      column.filter != null ||
+      column.clause != null ||
+      cell(column.audience) !== '';
     if (!matches) continue;
     const base = column.bases?.column;
-    const unweighted = wholeNumber(base?.unweighted_n);
+    let unweighted = wholeNumber(base?.unweighted_n);
+    let weighted = wholeNumber(base?.weighted_n);
+    // Older books omitted leaf bases — recover from any cell on that banner.
+    if (unweighted == null) {
+      const bannerId = cell(column.id);
+      for (const raw of cells) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const entry = raw as {
+          banner_id?: unknown;
+          bases?: { column?: { unweighted_n?: unknown; weighted_n?: unknown } };
+        };
+        if (cell(entry.banner_id) !== bannerId) continue;
+        unweighted = wholeNumber(entry.bases?.column?.unweighted_n);
+        weighted = wholeNumber(entry.bases?.column?.weighted_n);
+        if (unweighted != null) break;
+      }
+    }
     if (unweighted == null) continue;
-    return { unweighted, weighted: wholeNumber(base?.weighted_n) };
+    return { unweighted, weighted };
   }
   // Fall back to answered_n when the book already restricted rows to the audience.
   const answered = typeof record.answered_n === 'number' ? wholeNumber(record.answered_n) : null;
