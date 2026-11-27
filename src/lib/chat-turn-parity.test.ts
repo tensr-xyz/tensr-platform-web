@@ -69,6 +69,30 @@ describe('numberedNextStepsFromTurn', () => {
     expect(steps.some(step => step.label === 'Summarise what changed')).toBe(true);
   });
 
+  it('keeps edit chips when the project already has a report (no stale deck prompts)', () => {
+    const steps = numberedNextStepsFromTurn({
+      hasReportPins: true,
+      toolResults: [
+        {
+          name: 'data_edit',
+          args: { operation: 'recode', dataset_id: 'parent' },
+          result: {
+            ok: true,
+            executed: true,
+            operation: 'recode',
+            answer_markdown: 'New variable visit_group from Visit frequency.',
+            parent_dataset_id: 'parent',
+            derived_dataset_id: 'child',
+          },
+        },
+      ],
+    });
+    expect(steps).toHaveLength(3);
+    expect(steps.map(step => step.label)).not.toContain('Board version (5 slides)');
+    expect(steps.some(step => step.label === 'Summarise what changed')).toBe(true);
+    expect(steps.some(step => step.label === 'Check the bases')).toBe(true);
+  });
+
   it('pads to three next steps after a plain reply', () => {
     const steps = numberedNextStepsFromTurn({
       hasOutput: false,

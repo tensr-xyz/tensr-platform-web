@@ -1424,11 +1424,29 @@ export function useAgentThread({
 
 export type AgentThreadState = ReturnType<typeof useAgentThread>;
 
-function planCopy(answer: string): string {
+function planCopy(answer: string, pending?: AgentLoopResponse['pending_approvals']): string {
   let text = answer.trim();
   const waiting = 'Waiting for approval:';
   if (text.startsWith(waiting)) text = text.slice(waiting.length).trim();
   if (text === 'Plan' || text.startsWith('Plan\n')) text = text.slice(4).trim();
+  if (!text.trim()) {
+    // Rebuild from the signed batch when answer_markdown was only the Plan header.
+    const batch =
+      pending && !Array.isArray(pending) && Array.isArray(pending.batch) ? pending.batch : null;
+    if (batch?.length) {
+      const lines = batch
+        .map((step, index) => {
+          if (!step || typeof step !== 'object') return '';
+          const row = step as { plain?: unknown; procedure?: unknown; params?: unknown };
+          const plain = String(row.plain || '').trim();
+          if (plain) return `${index + 1}. ${plain}`;
+          const procedure = String(row.procedure || 'step').replace(/_/g, ' ');
+          return `${index + 1}. ${procedure}`;
+        })
+        .filter(Boolean);
+      text = lines.join('\n');
+    }
+  }
   return guardUserText(text);
 }
 
@@ -1644,7 +1662,9 @@ export function AgentThreadColumn({
         {thread.plan ? (
           <div className="chat-plan">
             <strong>{thread.approving ? 'Approved · Plan' : 'Waiting for approval · Plan'}</strong>
-            <FlowMarkdown>{planCopy(thread.plan.answer_markdown || '')}</FlowMarkdown>
+            <FlowMarkdown>
+              {planCopy(thread.plan.answer_markdown || '', thread.plan.pending_approvals)}
+            </FlowMarkdown>
             {thread.approving ? null : (
               <div className="flow-row">
                 <Button className="flow-btn primary" type="button" onClick={thread.approve}>
